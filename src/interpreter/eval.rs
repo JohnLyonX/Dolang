@@ -216,6 +216,75 @@ pub fn eval_expr(
                     }
                 }
             } else {
+                // String methods - strings are any value that doesn't start with special prefixes
+                // and wasn't parsed as Number or Bool
+                let s = &obj_val;
+                if !s.starts_with("__LST__:") && !s.starts_with("__MAP__:")
+                    && s.parse::<f64>().is_err() && *s != "true" && *s != "false" {
+                    // It's a string
+                    match call.method.as_str() {
+                        "len" | "length" => {
+                            return Some(s.len().to_string());
+                        }
+                        "upper" => {
+                            return Some(s.to_uppercase());
+                        }
+                        "lower" => {
+                            return Some(s.to_lowercase());
+                        }
+                        "trim" => {
+                            return Some(s.trim().to_string());
+                        }
+                        "contains" => {
+                            if arg_vals.is_empty() {
+                                return Some("[ERROR] method 'contains' requires 1 argument".to_string());
+                            }
+                            return Some(s.contains(&arg_vals[0]).to_string());
+                        }
+                        "starts_with" => {
+                            if arg_vals.is_empty() {
+                                return Some("[ERROR] method 'starts_with' requires 1 argument".to_string());
+                            }
+                            return Some(s.starts_with(&arg_vals[0]).to_string());
+                        }
+                        "ends_with" => {
+                            if arg_vals.is_empty() {
+                                return Some("[ERROR] method 'ends_with' requires 1 argument".to_string());
+                            }
+                            return Some(s.ends_with(&arg_vals[0]).to_string());
+                        }
+                        "replace" => {
+                            if arg_vals.len() < 2 {
+                                return Some("[ERROR] method 'replace' requires 2 arguments".to_string());
+                            }
+                            return Some(s.replace(&arg_vals[0], &arg_vals[1]));
+                        }
+                        "split" => {
+                            if arg_vals.is_empty() {
+                                return Some("[ERROR] method 'split' requires 1 argument".to_string());
+                            }
+                            let parts: Vec<String> = s.split(&arg_vals[0]).map(|s| s.to_string()).collect();
+                            return Some(super::env::serialize_list(&parts));
+                        }
+                        "slice" => {
+                            if arg_vals.len() < 2 {
+                                return Some("[ERROR] method 'slice' requires 2 arguments".to_string());
+                            }
+                            let start = arg_vals[0].parse::<usize>().ok();
+                            let end = arg_vals[1].parse::<usize>().ok();
+                            if let (Some(si), Some(ei)) = (start, end) {
+                                if si < s.len() && ei <= s.len() && si < ei {
+                                    return Some(s[si..ei].to_string());
+                                }
+                            }
+                            return Some("[ERROR] invalid slice indices".to_string());
+                        }
+                        _ => {
+                            return Some(format!("[ERROR] string has no method '{}'", call.method));
+                        }
+                    }
+                }
+
                 // Try to determine the type and report error
                 let type_name = if obj_val.parse::<f64>().is_ok() {
                     "Number"

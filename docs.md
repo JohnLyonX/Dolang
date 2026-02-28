@@ -547,6 +547,9 @@ $>> arr.reverse();      // 反转
 
 $>> arr.join(", ");     // 拼接为字符串
 3, 1, 2
+
+$>> arr.pop();          // 移除并返回末尾元素
+2
 ```
 
 #### 字典方法
@@ -564,6 +567,9 @@ $>> user.values();      // 获取所有值
 
 $>> user.contains_key("name");  // 判断键是否存在
 true
+
+$>> user.remove("age");  // 删除键值对
+{name: Tom}
 ```
 
 ---

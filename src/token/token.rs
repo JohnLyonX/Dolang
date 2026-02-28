@@ -47,6 +47,7 @@ pub enum Type {
     RParen,     // )
     LBracket,   // [
     RBracket,   // ]
+    Colon,      // :
     Comma,      // ,
     Arrow,      // ->
 
@@ -104,6 +105,7 @@ impl fmt::Display for Type {
             Type::RParen => write!(f, ")"),
             Type::LBracket => write!(f, "["),
             Type::RBracket => write!(f, "]"),
+            Type::Colon => write!(f, ":"),
             Type::Comma => write!(f, ","),
             Type::Arrow => write!(f, "->"),
             Type::PlusAssign => write!(f, "+="),

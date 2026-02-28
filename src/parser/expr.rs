@@ -2,7 +2,7 @@
 use std::borrow::Cow;
 
 use crate::ast::{
-    BinaryExpr, BoolLiteral, CharLiteral, Expr, FnCallExpr, IndexAccess, ListLiteral, NumberLiteral,
+    BinaryExpr, BoolLiteral, CharLiteral, Expr, FnCallExpr, IndexAccess, ListLiteral, MapLiteral, NumberLiteral,
     Span, Spanned, StringLiteral, UnaryExpr, VarLookup,
 };
 use crate::error::{Error, ParseError};
@@ -346,6 +346,56 @@ impl<'a> ExprParser<'a> {
                 Ok(Box::new(Expr::ListLiteral(ListLiteral {
                     span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
                     elements,
+                })))
+            }
+            // Map literal: { "key": expr, "key": expr, ... }
+            Type::LBrace => {
+                let start = tok.pos;
+                let mut entries: Vec<(String, Expr)> = Vec::new();
+
+                // Check for empty map: {}
+                if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::RBrace {
+                    self.pos += 1; // consume '}'
+                    return Ok(Box::new(Expr::MapLiteral(MapLiteral {
+                        span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                        entries,
+                    })));
+                }
+
+                // Parse key-value pairs
+                loop {
+                    // Expect string key
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::String {
+                        return Err(self.error_expected("expected string key in map literal", "string"));
+                    }
+                    let key = self.tokens[self.pos].literal.clone();
+                    self.pos += 1; // consume string
+
+                    // Expect colon
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Colon {
+                        return Err(self.error_expected("expected ':' in map literal", ":"));
+                    }
+                    self.pos += 1; // consume ':'
+
+                    // Parse value expression
+                    let value = self.parse_expr()?;
+                    entries.push((key, *value));
+
+                    // Check for comma or closing brace
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma {
+                        break;
+                    }
+                    self.pos += 1; // consume ','
+                }
+
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RBrace {
+                    return Err(self.error_expected("expected closing brace in map literal", "}"));
+                }
+                self.pos += 1; // consume '}'
+
+                Ok(Box::new(Expr::MapLiteral(MapLiteral {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    entries,
                 })))
             }
             _ => Err(self.error(&format!("unexpected token: {:?} {}", tok.typ, tok.literal))),

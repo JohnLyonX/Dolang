@@ -1,5 +1,6 @@
 // Environment management - types for variables and functions.
 use crate::ast::FnDeclStmt;
+use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -10,7 +11,12 @@ pub enum ValueType {
     String,
     Bool,
     List,
+    Map,
 }
+
+/// Represents a runtime Map value
+#[derive(Clone, Debug, PartialEq)]
+pub struct MapValue(pub IndexMap<String, String>);
 
 /// Represents a value that can be either a variable or constant
 #[derive(Clone)]
@@ -44,8 +50,12 @@ pub fn detect_type(value: &str) -> ValueType {
         return ValueType::Number;
     }
     // List values are serialized with a special prefix
-    if value.starts_with(LIST_PREFIX) {
+    if value.starts_with("__LST__:") {
         return ValueType::List;
+    }
+    // Map values are serialized with a special prefix
+    if value.starts_with("__MAP__:") {
+        return ValueType::Map;
     }
     ValueType::String
 }
@@ -146,4 +156,105 @@ pub fn list_set(value: &str, index: usize, new_value: String) -> Option<String> 
     }
     list[index] = new_value;
     Some(serialize_list(&list))
+}
+
+/// Map prefix for serialization
+const MAP_PREFIX: &str = "__MAP__:";
+const MAP_ESCAPE: &str = "__X__";
+
+/// Serialize a map to string using indexmap
+pub fn serialize_map(values: &IndexMap<String, String>) -> String {
+    let mut result = MAP_PREFIX.to_string();
+    for (key, val) in values {
+        // Escape key and value
+        let escaped_key = key.replace(MAP_ESCAPE, &format!("{}X__", MAP_ESCAPE))
+                            .replace(MAP_PREFIX, &format!("{}MAP__:", MAP_ESCAPE));
+        let escaped_val = val.replace(MAP_ESCAPE, &format!("{}X__", MAP_ESCAPE))
+                            .replace(MAP_PREFIX, &format!("{}MAP__:", MAP_ESCAPE));
+        result.push_str(&escaped_key.len().to_string());
+        result.push(':');
+        result.push_str(&escaped_key);
+        result.push(':');
+        result.push_str(&escaped_val.len().to_string());
+        result.push(':');
+        result.push_str(&escaped_val);
+        result.push(':');
+    }
+    result
+}
+
+/// Deserialize a string to a map
+pub fn deserialize_map(value: &str) -> Option<IndexMap<String, String>> {
+    if !value.starts_with(MAP_PREFIX) {
+        return None;
+    }
+    let content = &value[MAP_PREFIX.len()..];
+    if content.is_empty() {
+        return Some(IndexMap::new());
+    }
+
+    let mut results = IndexMap::new();
+    let mut remaining = content;
+
+    while !remaining.is_empty() {
+        // Parse key
+        if let Some(colon_pos) = remaining.find(':') {
+            let key_len = remaining[..colon_pos].parse::<usize>().ok()?;
+            let after_key_len = &remaining[colon_pos + 1..];
+
+            if after_key_len.len() < key_len {
+                return None;
+            }
+            let key = &after_key_len[..key_len];
+            let unescaped_key = key.replace(&format!("{}X__", MAP_ESCAPE), MAP_ESCAPE)
+                                   .replace(&format!("{}MAP__:", MAP_ESCAPE), MAP_PREFIX);
+
+            // Move to value
+            let after_key = &after_key_len[key_len..];
+            if after_key.is_empty() || !after_key.starts_with(':') {
+                return None;
+            }
+            let val_part = &after_key[1..];
+
+            // Parse value
+            if let Some(val_colon_pos) = val_part.find(':') {
+                let val_len = val_part[..val_colon_pos].parse::<usize>().ok()?;
+                let after_val_len = &val_part[val_colon_pos + 1..];
+
+                if after_val_len.len() < val_len {
+                    return None;
+                }
+                let val = &after_val_len[..val_len];
+                let unescaped_val = val.replace(&format!("{}X__", MAP_ESCAPE), MAP_ESCAPE)
+                                       .replace(&format!("{}MAP__:", MAP_ESCAPE), MAP_PREFIX);
+
+                results.insert(unescaped_key, unescaped_val);
+
+                // Move past this entry
+                remaining = &after_val_len[val_len..];
+                if !remaining.is_empty() && remaining.starts_with(':') {
+                    remaining = &remaining[1..];
+                }
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    Some(results)
+}
+
+/// Get a value from map by key
+pub fn map_get(value: &str, key: &str) -> Option<String> {
+    let map = deserialize_map(value)?;
+    map.get(key).cloned()
+}
+
+/// Set a value in map (returns new serialized map)
+pub fn map_set(value: &str, key: String, new_value: String) -> Option<String> {
+    let mut map = deserialize_map(value)?;
+    map.insert(key, new_value);
+    Some(serialize_map(&map))
 }

@@ -3,7 +3,7 @@ use crate::ast::{Expr, FnDeclStmt};
 use crate::error::Error;
 use crate::token::Type;
 
-use super::env::{generate_fn_name, list_get, list_len, serialize_list, to_bool, Env, FnEnv};
+use super::env::{generate_fn_name, list_get, list_len, map_get, serialize_list, serialize_map, to_bool, Env, FnEnv};
 
 /// Smart number formatting - follows these rules:
 /// 1. Integer results: no decimal point (5.0 → 5)
@@ -102,27 +102,35 @@ pub fn eval_expr(
             }
             Some(serialize_list(&elements))
         }
+        Expr::MapLiteral(map) => {
+            use indexmap::IndexMap;
+            // Evaluate each value and create map
+            let mut entries: IndexMap<String, String> = IndexMap::new();
+            for (key, value_expr) in &map.entries {
+                if let Some(val) = eval_expr(value_expr, env, fns, w, false) {
+                    entries.insert(key.clone(), val);
+                } else {
+                    return None;
+                }
+            }
+            Some(serialize_map(&entries))
+        }
         Expr::IndexAccess(idx) => {
-            // Evaluate the object (must be a list) - use false to get the variable's value
+            // Evaluate the object - use false to get the variable's value
             let obj_val = eval_expr(&idx.object, env, fns, w, false)?;
-            // Evaluate the index
+            // Evaluate the index/key
             let idx_val = eval_expr(&idx.index, env, fns, w, false)?;
 
-            // Parse index as integer
-            let idx = idx_val.parse::<usize>().ok()?;
-
-            // Get element from list
-            match list_get(&obj_val, idx) {
-                Some(v) => Some(v),
-                None => {
-                    // Check if it's a valid list but out of bounds
-                    if obj_val.starts_with("__LIST__:") {
-                        let len = list_len(&obj_val).unwrap_or(0);
-                        return None; // Will be caught by caller with proper error
-                    }
-                    // Not a list at all
-                    None
-                }
+            // Check if it's a list (numeric index) or map (string key)
+            if obj_val.starts_with("__LST__:") {
+                // List access - parse index as integer
+                let idx = idx_val.parse::<usize>().ok()?;
+                list_get(&obj_val, idx)
+            } else if obj_val.starts_with("__MAP__:") {
+                // Map access - use key directly
+                map_get(&obj_val, &idx_val)
+            } else {
+                None
             }
         }
         Expr::VarLookup(v) => {

@@ -32,6 +32,7 @@ pub enum Expr {
     Bool(BoolLiteral),
     StringLiteral(StringLiteral),
     ListLiteral(ListLiteral),
+    MapLiteral(MapLiteral),
     VarLookup(VarLookup),
     IndexAccess(IndexAccess),
     Binary(BinaryExpr),
@@ -94,6 +95,12 @@ pub struct StringLiteral {
 pub struct ListLiteral {
     pub span: Span,
     pub elements: Vec<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MapLiteral {
+    pub span: Span,
+    pub entries: Vec<(String, Expr)>,  // (key, value expression)
 }
 
 #[derive(Debug, Clone)]
@@ -264,6 +271,12 @@ impl Spanned for ListLiteral {
     }
 }
 
+impl Spanned for MapLiteral {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Spanned for IndexAccess {
     fn span(&self) -> Span {
         self.span
@@ -399,6 +412,7 @@ impl Expr {
             Expr::Bool(b) => b.span(),
             Expr::StringLiteral(s) => s.span(),
             Expr::ListLiteral(l) => l.span(),
+            Expr::MapLiteral(m) => m.span(),
             Expr::IndexAccess(i) => i.span(),
             Expr::VarLookup(v) => v.span(),
             Expr::Binary(b) => b.span(),

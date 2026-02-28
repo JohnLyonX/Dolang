@@ -4,7 +4,7 @@ use crate::error::Error;
 use std::collections::HashMap;
 use std::io::{self, Write};
 
-use super::env::{detect_type, list_len, list_set, to_bool, ValueType, VarValue};
+use super::env::{detect_type, list_len, list_set, map_set, to_bool, ValueType, VarValue};
 use super::eval::{check_eval_result, eval_expr};
 
 pub type Env = HashMap<String, VarValue>;
@@ -106,7 +106,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
         }
 
         Stmt::Assign(st) => {
-            // Check if this is an index assignment: arr[0] = value
+            // Check if this is an index assignment: arr[0] = value OR map["key"] = value
             if let Expr::IndexAccess(idx) = &*st.name {
                 // Get the variable name (object)
                 let var_name = match eval_expr(&idx.object, env, fns, w, true) {
@@ -114,14 +114,10 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     None => return Flow::Err(Error::InvalidAssignment(None)),
                 };
 
-                // Get the index
+                // Get the index/key
                 let idx_val = match eval_expr(&idx.index, env, fns, w, false) {
                     Some(v) => v,
                     None => return Flow::Err(Error::InvalidAssignment(None)),
-                };
-                let index = match idx_val.parse::<usize>() {
-                    Ok(i) => i,
-                    Err(_) => return Flow::Err(Error::InvalidAssignment(None)),
                 };
 
                 // Get the new value
@@ -131,7 +127,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     Err(e) => return Flow::Err(e),
                 };
 
-                // Get existing list and modify
+                // Get existing value and check type
                 let existing = match env.get(&var_name) {
                     Some(e) => e,
                     None => return Flow::Err(Error::Interpreter(format!("variable '{}' not found", var_name))),
@@ -141,24 +137,35 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     return Flow::Err(Error::Interpreter(format!("cannot modify constant '{}'", var_name)));
                 }
 
-                if existing.value_type != ValueType::List {
-                    return Flow::Err(Error::Interpreter(format!("cannot index into non-list type")));
+                // Handle List or Map assignment
+                if existing.value_type == ValueType::List {
+                    // List assignment: arr[0] = value
+                    let index = match idx_val.parse::<usize>() {
+                        Ok(i) => i,
+                        Err(_) => return Flow::Err(Error::Interpreter("list index must be an integer".to_string())),
+                    };
+
+                    let new_list = match list_set(&existing.value, index, val.clone()) {
+                        Some(l) => l,
+                        None => return Flow::Err(Error::Interpreter(format!(
+                            "index out of bounds: list length is {} but index is {}",
+                            list_len(&existing.value).unwrap_or(0),
+                            index
+                        ))),
+                    };
+
+                    env.insert(var_name, VarValue { value: new_list, value_type: ValueType::List, is_const: false });
+                } else if existing.value_type == ValueType::Map {
+                    // Map assignment: map["key"] = value
+                    let new_map = match map_set(&existing.value, idx_val, val.clone()) {
+                        Some(m) => m,
+                        None => return Flow::Err(Error::Interpreter("failed to set map value".to_string())),
+                    };
+
+                    env.insert(var_name, VarValue { value: new_map, value_type: ValueType::Map, is_const: false });
+                } else {
+                    return Flow::Err(Error::Interpreter(format!("cannot index into type {:?}", existing.value_type)));
                 }
-
-                // Try to set the element
-                let new_list = match list_set(&existing.value, index, val.clone()) {
-                    Some(l) => l,
-                    None => return Flow::Err(Error::Interpreter(format!(
-                        "index out of bounds: list length is {} but index is {}",
-                        list_len(&existing.value).unwrap_or(0),
-                        index
-                    ))),
-                };
-
-                // Check type compatibility
-                let new_type = detect_type(&val);
-                // For lists, we need to check the element type - for simplicity, accept any type
-                env.insert(var_name, VarValue { value: new_list, value_type: ValueType::List, is_const: false });
 
                 return Flow::Normal;
             }
@@ -395,6 +402,7 @@ pub fn call_fn(
                             ValueType::String => "String",
                             ValueType::Bool => "Bool",
                             ValueType::List => "List",
+                            ValueType::Map => "Map",
                         };
                         return Err(Error::Interpreter(format!(
                             "function '{}' expects return type '{}' but got '{}'",

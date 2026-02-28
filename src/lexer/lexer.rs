@@ -187,6 +187,10 @@ impl Lexer {
                 self.advance();
                 Ok(Token::new(Type::Comma, ",", start))
             }
+            ':' => {
+                self.advance();
+                Ok(Token::new(Type::Colon, ":", start))
+            }
             '$' => self.read_dollar(start),
             '"' => self.read_string(start),
             '\'' => self.read_char(start),

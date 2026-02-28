@@ -48,6 +48,13 @@ pub enum Type {
     Comma,      // ,
     Arrow,      // ->
 
+    // Compound assignment operators
+    PlusAssign,   // +=
+    MinusAssign,  // -=
+    MulAssign,    // *=
+    DivAssign,    // /=
+    ModAssign,    // %=
+
     // Literals
     Number,
     Char,
@@ -95,6 +102,11 @@ impl fmt::Display for Type {
             Type::RParen => write!(f, ")"),
             Type::Comma => write!(f, ","),
             Type::Arrow => write!(f, "->"),
+            Type::PlusAssign => write!(f, "+="),
+            Type::MinusAssign => write!(f, "-="),
+            Type::MulAssign => write!(f, "*="),
+            Type::DivAssign => write!(f, "/="),
+            Type::ModAssign => write!(f, "%="),
             Type::Number => write!(f, "NUMBER"),
             Type::Char => write!(f, "CHAR"),
             Type::Bool => write!(f, "BOOL"),

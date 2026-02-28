@@ -1,7 +1,7 @@
 // Statement parser - handles all statement parsing.
 use crate::ast::{
-    AssignStmt, BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, FnDeclStmt, ForStmt,
-    IfBranch, IfStmt, LoopStmt, ReturnStmt, Stmt, VarDeclStmt, WhileStmt,
+    AssignStmt, BinaryExpr, BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, Expr, FnDeclStmt, ForStmt,
+    IfBranch, IfStmt, LoopStmt, ReturnStmt, Span, Stmt, VarDeclStmt, WhileStmt,
 };
 use crate::error::Error;
 use crate::parser::parse_expr_tokens;
@@ -51,7 +51,7 @@ impl<'a> StmtParser<'a> {
     /// Expect a token of the given type, consume it, or return an error.
     pub fn expect(&mut self, typ: Type) -> Result<&Token, Error> {
         if self.at_end() || self.peek().typ != typ {
-            return Err(Error::InvalidStatement);
+            return Err(Error::InvalidStatement(None));
         }
         Ok(self.advance())
     }
@@ -138,33 +138,36 @@ impl<'a> StmtParser<'a> {
 
         // --- $# return ---
         if typ == Type::Return {
+            let start = self.peek().pos;
             self.advance(); // consume $#
             if !self.at_end() && self.peek().typ == Type::Semicolon {
                 self.skip_semis();
-                return Ok(Some(Stmt::Return(ReturnStmt { value: None })));
+                return Ok(Some(Stmt::Return(ReturnStmt { span: Span::from_token(start), value: None })));
             }
             let expr_toks = self.collect_until_semi();
             if expr_toks.is_empty() {
                 self.skip_semis();
-                return Ok(Some(Stmt::Return(ReturnStmt { value: None })));
+                return Ok(Some(Stmt::Return(ReturnStmt { span: Span::from_token(start), value: None })));
             }
             let expr = parse_expr_tokens(&expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::Return(ReturnStmt { value: Some(expr) })));
+            return Ok(Some(Stmt::Return(ReturnStmt { span: Span::from_token(start), value: Some(expr) })));
         }
 
         // --- $break ---
         if typ == Type::Break {
+            let start = self.peek().pos;
             self.advance();
             self.skip_semis();
-            return Ok(Some(Stmt::Break(BreakStmt {})));
+            return Ok(Some(Stmt::Break(BreakStmt { span: Span::from_token(start) })));
         }
 
         // --- $continue ---
         if typ == Type::Continue {
+            let start = self.peek().pos;
             self.advance();
             self.skip_semis();
-            return Ok(Some(Stmt::Continue(ContinueStmt {})));
+            return Ok(Some(Stmt::Continue(ContinueStmt { span: Span::from_token(start) })));
         }
 
         // --- Exit ---
@@ -174,56 +177,60 @@ impl<'a> StmtParser<'a> {
                 "exit" | "exit()" | "quit"
             )
         {
+            let start = self.peek().pos;
             self.advance();
             self.skip_semis();
-            return Ok(Some(Stmt::Exit(ExitStmt {})));
+            return Ok(Some(Stmt::Exit(ExitStmt { span: Span::from_token(start) })));
         }
 
         // --- $>> print ---
         if typ == Type::Print {
+            let start = self.peek().pos;
             self.advance(); // consume $>>
             let expr_toks = self.collect_until_semi();
             if expr_toks.is_empty() {
-                return Err(Error::InvalidExpression);
+                return Err(Error::InvalidExpression(None));
             }
             let expr = parse_expr_tokens(&expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::Print(crate::ast::PrintStmt { value: expr })));
+            return Ok(Some(Stmt::Print(crate::ast::PrintStmt { span: Span::from_token(start), value: expr })));
         }
 
         // --- $ varDecl ---
         if typ == Type::VarDecl {
+            let start = self.peek().pos;
             self.advance(); // consume $
             if self.at_end() || self.peek().typ != Type::Ident {
-                return Err(Error::InvalidStatement);
+                return Err(Error::InvalidStatement(None));
             }
             let name = self.advance().literal.clone();
             // expect <&
             if self.at_end() || self.peek().typ != Type::Assign {
-                return Err(Error::InvalidStatement);
+                return Err(Error::InvalidStatement(None));
             }
             self.advance(); // consume <&
             let expr_toks = self.collect_until_semi();
             let expr = parse_expr_tokens(&expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::VarDecl(VarDeclStmt { name, value: expr })));
+            return Ok(Some(Stmt::VarDecl(VarDeclStmt { span: Span::from_token(start), name, value: expr })));
         }
 
         // --- $@ constDecl ---
         if typ == Type::ConstDecl {
+            let start = self.peek().pos;
             self.advance(); // consume $@
             if self.at_end() || self.peek().typ != Type::Ident {
-                return Err(Error::InvalidStatement);
+                return Err(Error::InvalidStatement(None));
             }
             let name = self.advance().literal.clone();
             if self.at_end() || self.peek().typ != Type::Assign {
-                return Err(Error::InvalidStatement);
+                return Err(Error::InvalidStatement(None));
             }
             self.advance(); // consume <&
             let expr_toks = self.collect_until_semi();
             let expr = parse_expr_tokens(&expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::ConstDecl(ConstDeclStmt { name, value: expr })));
+            return Ok(Some(Stmt::ConstDecl(ConstDeclStmt { span: Span::from_token(start), name, value: expr })));
         }
 
         // --- Function call as statement: name(args); ---
@@ -245,14 +252,37 @@ impl<'a> StmtParser<'a> {
         }
 
         // --- Assign: ident <& expr  OR  var-read <& expr ---
+        // --- Compound assign: ident += expr, -= expr, *= expr, /= expr, %= expr ---
         let saved_pos = self.pos;
         let stmt_toks = self.collect_until_semi();
         self.skip_semis();
 
+        // First check for compound assignment (+=, -=, *=, /=, %=)
+        if let Some((assign_idx, op)) = find_compound_assign(&stmt_toks) {
+            let start = stmt_toks.first().map(|t| t.pos).unwrap_or(0);
+            let name_expr = parse_expr_tokens(&stmt_toks[..assign_idx])?;
+            let value_expr = parse_expr_tokens(&stmt_toks[assign_idx + 1..])?;
+            // Transform: i += j  =>  Assign(i, BinaryExpr(i, Plus, j))
+            let binary_expr = BinaryExpr {
+                span: Span::from_token(start),
+                left: name_expr.clone(),
+                right: value_expr,
+                op,
+            };
+            return Ok(Some(Stmt::Assign(AssignStmt {
+                span: Span::from_token(start),
+                name: name_expr,
+                value: Box::new(Expr::Binary(binary_expr)),
+            })));
+        }
+
+        // Then check for regular assignment (= or <&)
         if let Some(assign_idx) = find_token(&stmt_toks, Type::Assign) {
+            let start = stmt_toks.first().map(|t| t.pos).unwrap_or(0);
             let name_expr = parse_expr_tokens(&stmt_toks[..assign_idx])?;
             let value_expr = parse_expr_tokens(&stmt_toks[assign_idx + 1..])?;
             return Ok(Some(Stmt::Assign(AssignStmt {
+                span: Span::from_token(start),
                 name: name_expr,
                 value: value_expr,
             })));
@@ -266,11 +296,12 @@ impl<'a> StmtParser<'a> {
         }
 
         let _ = saved_pos;
-        Err(Error::InvalidStatement)
+        Err(Error::InvalidStatement(None))
     }
 
     /// Parse a full $if ... { } [$elif ... { }]* [$else { }] statement.
     pub fn parse_if_stmt(&mut self) -> Result<Stmt, Error> {
+        let start = self.peek().pos;
         let mut branches: Vec<IfBranch> = Vec::new();
         let mut else_body: Vec<Stmt> = Vec::new();
 
@@ -278,11 +309,11 @@ impl<'a> StmtParser<'a> {
         self.advance(); // consume `$if`
         let cond_toks = self.collect_until_lbrace();
         if cond_toks.is_empty() {
-            return Err(Error::InvalidExpression);
+            return Err(Error::InvalidExpression(None));
         }
         let cond = parse_expr_tokens(&cond_toks)?;
         let body = self.parse_block()?;
-        branches.push(IfBranch { condition: cond, body });
+        branches.push(IfBranch { span: Span::from_token(0), condition: cond, body });
 
         // Zero or more $elif branches
         loop {
@@ -291,11 +322,11 @@ impl<'a> StmtParser<'a> {
                 self.advance(); // consume `$elif`
                 let cond_toks = self.collect_until_lbrace();
                 if cond_toks.is_empty() {
-                    return Err(Error::InvalidExpression);
+                    return Err(Error::InvalidExpression(None));
                 }
                 let cond = parse_expr_tokens(&cond_toks)?;
                 let body = self.parse_block()?;
-                branches.push(IfBranch { condition: cond, body });
+                branches.push(IfBranch { span: Span::from_token(0), condition: cond, body });
             } else {
                 break;
             }
@@ -308,7 +339,7 @@ impl<'a> StmtParser<'a> {
             else_body = self.parse_block()?;
         }
 
-        Ok(Stmt::If(IfStmt { branches, else_body }))
+        Ok(Stmt::If(IfStmt { span: Span::from_token(start), branches, else_body }))
     }
 
     /// Collect tokens up to the next `{` (not consuming it).
@@ -325,25 +356,28 @@ impl<'a> StmtParser<'a> {
 
     /// Parse: $while condition { body }
     pub fn parse_while_stmt(&mut self) -> Result<Stmt, Error> {
+        let start = self.peek().pos;
         self.advance(); // consume `$while`
         let cond_toks = self.collect_until_lbrace();
         if cond_toks.is_empty() {
-            return Err(Error::InvalidExpression);
+            return Err(Error::InvalidExpression(None));
         }
         let condition = parse_expr_tokens(&cond_toks)?;
         let body = self.parse_block()?;
-        Ok(Stmt::While(WhileStmt { condition, body }))
+        Ok(Stmt::While(WhileStmt { span: Span::from_token(start), condition, body }))
     }
 
     /// Parse: $loop { body }
     pub fn parse_loop_stmt(&mut self) -> Result<Stmt, Error> {
+        let start = self.peek().pos;
         self.advance(); // consume `$loop`
         let body = self.parse_block()?;
-        Ok(Stmt::Loop(LoopStmt { body }))
+        Ok(Stmt::Loop(LoopStmt { span: Span::from_token(start), body }))
     }
 
     /// Parse: $for [init;] [condition;] [update] { body }
     pub fn parse_for_stmt(&mut self) -> Result<Stmt, Error> {
+        let start = self.peek().pos;
         self.advance(); // consume `$for`
 
         // Collect everything between `$for` and `{`
@@ -385,6 +419,7 @@ impl<'a> StmtParser<'a> {
 
         let body = self.parse_block()?;
         Ok(Stmt::For(ForStmt {
+            span: Span::from_token(start),
             init,
             condition,
             update,
@@ -394,11 +429,12 @@ impl<'a> StmtParser<'a> {
 
     /// Parse: $fn name(param1, param2) -> return_type { body }
     pub fn parse_fn_decl(&mut self) -> Result<Stmt, Error> {
+        let start = self.peek().pos;
         self.advance(); // consume `$fn`
 
         // Expect function name
         if self.at_end() || self.peek().typ != Type::Ident {
-            return Err(Error::InvalidStatement);
+            return Err(Error::InvalidStatement(None));
         }
         let name = self.advance().literal.clone();
 
@@ -410,7 +446,7 @@ impl<'a> StmtParser<'a> {
         if !self.at_end() && self.peek().typ != Type::RParen {
             loop {
                 if self.at_end() || self.peek().typ != Type::Ident {
-                    return Err(Error::InvalidStatement);
+                    return Err(Error::InvalidStatement(None));
                 }
                 params.push(self.advance().literal.clone());
                 if self.at_end() || self.peek().typ != Type::Comma {
@@ -427,7 +463,7 @@ impl<'a> StmtParser<'a> {
         let return_type = if !self.at_end() && self.peek().typ == Type::Arrow {
             self.advance(); // consume '->'
             if self.at_end() || self.peek().typ != Type::Ident {
-                return Err(Error::InvalidStatement);
+                return Err(Error::InvalidStatement(None));
             }
             Some(self.advance().literal.clone())
         } else {
@@ -438,6 +474,7 @@ impl<'a> StmtParser<'a> {
         let body = self.parse_block()?;
 
         Ok(Stmt::FnDecl(FnDeclStmt {
+            span: Span::from_token(start),
             name,
             params,
             return_type,
@@ -449,6 +486,24 @@ impl<'a> StmtParser<'a> {
 /// Find a token of a specific type in a slice.
 fn find_token(toks: &[Token], t: Type) -> Option<usize> {
     toks.iter().position(|tok| tok.typ == t)
+}
+
+/// Find a compound assignment token and return its index and the corresponding binary operator.
+fn find_compound_assign(toks: &[Token]) -> Option<(usize, Type)> {
+    for (i, tok) in toks.iter().enumerate() {
+        let binary_op = match tok.typ {
+            Type::PlusAssign => Some(Type::Plus),
+            Type::MinusAssign => Some(Type::Minus),
+            Type::MulAssign => Some(Type::Mul),
+            Type::DivAssign => Some(Type::Div),
+            Type::ModAssign => Some(Type::Mod),
+            _ => None,
+        };
+        if let Some(op) = binary_op {
+            return Some((i, op));
+        }
+    }
+    None
 }
 
 /// Split a token slice by Semicolon into parts.
@@ -476,22 +531,25 @@ fn parse_init_or_update(toks: &[Token]) -> Result<Option<Box<Stmt>>, Error> {
     // VarDecl: starts with $
     if toks[0].typ == Type::VarDecl {
         if toks.len() < 3 || toks[1].typ != Type::Ident || toks[2].typ != Type::Assign {
-            return Err(Error::InvalidStatement);
+            return Err(Error::InvalidStatement(None));
         }
+        let start = toks[0].pos;
         let name = toks[1].literal.clone();
         let expr = parse_expr_tokens(&toks[3..])?;
-        return Ok(Some(Box::new(Stmt::VarDecl(VarDeclStmt { name, value: expr }))));
+        return Ok(Some(Box::new(Stmt::VarDecl(VarDeclStmt { span: Span::from_token(start), name, value: expr }))));
     }
 
     // Assign: look for <&
     if let Some(idx) = find_token(toks, Type::Assign) {
+        let start = toks.first().map(|t| t.pos).unwrap_or(0);
         let name_expr = parse_expr_tokens(&toks[..idx])?;
         let value_expr = parse_expr_tokens(&toks[idx + 1..])?;
         return Ok(Some(Box::new(Stmt::Assign(AssignStmt {
+            span: Span::from_token(start),
             name: name_expr,
             value: value_expr,
         }))));
     }
 
-    Err(Error::InvalidStatement)
+    Err(Error::InvalidStatement(None))
 }

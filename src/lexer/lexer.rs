@@ -45,10 +45,20 @@ impl Lexer {
             }
             '+' => {
                 self.advance();
+                // Check for += (compound assignment)
+                if self.peek() == '=' {
+                    self.advance();
+                    return Ok(Token::new(Type::PlusAssign, "+=", start));
+                }
                 Ok(Token::new(Type::Plus, "+", start))
             }
             '-' => {
                 self.advance();
+                // Check for -= (compound assignment)
+                if self.pos < self.input.len() && self.peek() == '=' {
+                    self.advance();
+                    return Ok(Token::new(Type::MinusAssign, "-=", start));
+                }
                 // Check for -> (arrow)
                 if self.pos < self.input.len() && self.peek() == '>' {
                     self.advance();
@@ -58,6 +68,11 @@ impl Lexer {
             }
             '*' => {
                 self.advance();
+                // Check for *= (compound assignment)
+                if self.peek() == '=' {
+                    self.advance();
+                    return Ok(Token::new(Type::MulAssign, "*=", start));
+                }
                 Ok(Token::new(Type::Mul, "*", start))
             }
             '/' => {
@@ -74,10 +89,20 @@ impl Lexer {
                     self.skip_multi_line_comment()?;
                     return self.next_token();
                 }
+                // Check for /= (compound assignment)
+                if self.peek() == '=' {
+                    self.advance();
+                    return Ok(Token::new(Type::DivAssign, "/=", start));
+                }
                 Ok(Token::new(Type::Div, "/", start))
             }
             '%' => {
                 self.advance();
+                // Check for %= (compound assignment)
+                if self.peek() == '=' {
+                    self.advance();
+                    return Ok(Token::new(Type::ModAssign, "%=", start));
+                }
                 Ok(Token::new(Type::Mod, "%", start))
             }
             '!' => {
@@ -89,11 +114,15 @@ impl Lexer {
                 Ok(Token::new(Type::Not, "!", start))
             }
             '<' => {
-                // Check for <=
+                // Check for <= or <&
                 self.advance();
                 if self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::Lte, "<=", start));
+                }
+                if self.peek() == '&' {
+                    self.advance();
+                    return Ok(Token::new(Type::Assign, "<&", start));
                 }
                 Ok(Token::new(Type::Lt, "<", start))
             }

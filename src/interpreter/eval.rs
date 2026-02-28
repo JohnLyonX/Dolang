@@ -189,6 +189,30 @@ pub fn eval_expr(
                         // Actually, we need to return the popped value, not the modified list
                         return Some(popped);
                     }
+                    "contains" => {
+                        // contains(value) - check if list contains value
+                        if arg_vals.is_empty() {
+                            return Some("[ERROR] method 'contains' requires 1 argument".to_string());
+                        }
+                        let list = super::env::deserialize_list(&obj_val).unwrap_or_default();
+                        return Some(list.contains(&arg_vals[0]).to_string());
+                    }
+                    "reverse" => {
+                        // reverse() - return reversed list
+                        let mut list = super::env::deserialize_list(&obj_val).unwrap_or_default();
+                        list.reverse();
+                        return Some(super::env::serialize_list(&list));
+                    }
+                    "join" => {
+                        // join(separator) - join list elements into string
+                        let sep = if arg_vals.is_empty() {
+                            "".to_string()
+                        } else {
+                            arg_vals[0].clone()
+                        };
+                        let list = super::env::deserialize_list(&obj_val).unwrap_or_default();
+                        return Some(list.join(&sep));
+                    }
                     _ => {
                         return Some(format!("[ERROR] list has no method '{}'", call.method));
                     }
@@ -210,6 +234,27 @@ pub fn eval_expr(
                         let map = super::env::deserialize_map(&obj_val).unwrap_or_default();
                         let values: Vec<String> = map.values().cloned().collect();
                         return Some(super::env::serialize_list(&values));
+                    }
+                    "contains_key" => {
+                        // contains_key(key) - check if key exists
+                        if arg_vals.is_empty() {
+                            return Some("[ERROR] method 'contains_key' requires 1 argument".to_string());
+                        }
+                        let map = super::env::deserialize_map(&obj_val).unwrap_or_default();
+                        return Some(map.contains_key(&arg_vals[0]).to_string());
+                    }
+                    "remove" => {
+                        // remove(key) - remove key and return value
+                        if arg_vals.is_empty() {
+                            return Some("[ERROR] method 'remove' requires 1 argument".to_string());
+                        }
+                        let mut map = super::env::deserialize_map(&obj_val).unwrap_or_default();
+                        if let Some(removed) = map.remove(&arg_vals[0]) {
+                            // Return a new map without the key
+                            return Some(super::env::serialize_map(&map));
+                        } else {
+                            return Some("[ERROR] key not found".to_string());
+                        }
                     }
                     _ => {
                         return Some(format!("[ERROR] map has no method '{}'", call.method));

@@ -1,10 +1,10 @@
 // Statement execution - executes AST statements.
-use crate::ast::{Expr, FnDeclStmt, IndexAccess, Stmt};
+use crate::ast::{Expr, FnDeclStmt, ForInStmt, ForStmt, Stmt};
 use crate::error::Error;
 use std::collections::HashMap;
 use std::io::{self, Write};
 
-use super::env::{detect_type, list_len, list_set, map_set, to_bool, ValueType, VarValue};
+use super::env::{detect_type, format_list, format_map, list_len, list_set, map_set, to_bool, ValueType, VarValue};
 use super::eval::{check_eval_result, eval_expr};
 
 pub type Env = HashMap<String, VarValue>;
@@ -62,7 +62,15 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
         Stmt::Print(st) => {
             match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
                 Ok(Some(val)) => {
-                    if writeln!(w, "{}", val).is_err() {
+                    // Format list and map values for display
+                    let display_val = if val.starts_with("__LST__:") {
+                        format_list(&val)
+                    } else if val.starts_with("__MAP__:") {
+                        format_map(&val)
+                    } else {
+                        val
+                    };
+                    if writeln!(w, "{}", display_val).is_err() {
                         return Flow::Err(Error::InvalidStatement(None));
                     }
                     Flow::Normal
@@ -285,6 +293,91 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     }
                 }
             }
+            Flow::Normal
+        }
+
+        Stmt::ForIn(st) => {
+            // Evaluate the iterable
+            let iterable_val = match eval_expr(&st.iterable, env, fns, w, false) {
+                Some(v) => v,
+                None => return Flow::Err(Error::InvalidExpression(None)),
+            };
+
+            // Determine what to iterate over
+            if iterable_val.starts_with("__LST__:") {
+                // Iterate over list elements
+                let list = super::env::deserialize_list(&iterable_val).unwrap_or_default();
+                for item in list {
+                    // Bind the loop variable
+                    env.insert(st.var.clone(), VarValue {
+                        value: item.clone(),
+                        value_type: super::env::detect_type(&item),
+                        is_const: false,
+                    });
+
+                    // Execute body
+                    match exec_block(&st.body, env, fns, w) {
+                        Flow::Break => break,
+                        Flow::Exit => return Flow::Exit,
+                        Flow::Err(e) => return Flow::Err(e),
+                        Flow::Return(v) => return Flow::Return(v),
+                        Flow::Continue | Flow::Normal => {}
+                    }
+                }
+            } else if iterable_val.starts_with("__MAP__:") {
+                // Iterate over map keys
+                let map = super::env::deserialize_map(&iterable_val).unwrap_or_default();
+                for key in map.keys() {
+                    // Bind the loop variable (key)
+                    env.insert(st.var.clone(), VarValue {
+                        value: key.clone(),
+                        value_type: super::env::detect_type(key),
+                        is_const: false,
+                    });
+
+                    // Execute body
+                    match exec_block(&st.body, env, fns, w) {
+                        Flow::Break => break,
+                        Flow::Exit => return Flow::Exit,
+                        Flow::Err(e) => return Flow::Err(e),
+                        Flow::Return(v) => return Flow::Return(v),
+                        Flow::Continue | Flow::Normal => {}
+                    }
+                }
+            } else if !iterable_val.starts_with("__LST__:") && !iterable_val.starts_with("__MAP__:")
+                && iterable_val.parse::<f64>().is_err() && iterable_val != "true" && iterable_val != "false" {
+                // Iterate over string characters
+                for ch in iterable_val.chars() {
+                    let ch_str = ch.to_string();
+                    // Bind the loop variable
+                    env.insert(st.var.clone(), VarValue {
+                        value: ch_str.clone(),
+                        value_type: super::env::detect_type(&ch_str),
+                        is_const: false,
+                    });
+
+                    // Execute body
+                    match exec_block(&st.body, env, fns, w) {
+                        Flow::Break => break,
+                        Flow::Exit => return Flow::Exit,
+                        Flow::Err(e) => return Flow::Err(e),
+                        Flow::Return(v) => return Flow::Return(v),
+                        Flow::Continue | Flow::Normal => {}
+                    }
+                }
+            } else {
+                return Flow::Err(Error::Interpreter(format!(
+                    "cannot iterate over value of type '{}'",
+                    if iterable_val.parse::<f64>().is_ok() {
+                        "Number"
+                    } else if iterable_val == "true" || iterable_val == "false" {
+                        "Bool"
+                    } else {
+                        "Unknown"
+                    }
+                )));
+            }
+
             Flow::Normal
         }
 

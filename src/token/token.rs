@@ -35,6 +35,7 @@ pub enum Type {
     While,      // $while
     Loop,       // $loop
     For,        // $for
+    In,         // $in (for-in iteration)
     Break,      // $break
     Continue,   // $continue
     Fn,         // $fn
@@ -96,6 +97,7 @@ impl fmt::Display for Type {
             Type::While => write!(f, "$while"),
             Type::Loop => write!(f, "$loop"),
             Type::For => write!(f, "$for"),
+            Type::In => write!(f, "$in"),
             Type::Break => write!(f, "$break"),
             Type::Continue => write!(f, "$continue"),
             Type::Fn => write!(f, "$fn"),

@@ -52,6 +52,7 @@ pub enum Stmt {
     While(WhileStmt),       // $while condition { ... }
     Loop(LoopStmt),         // $loop { ... }
     For(ForStmt),           // $for init; condition; update { ... }
+    ForIn(ForInStmt),       // $for item in iterable { ... }
     Break(BreakStmt),       // $break;
     Continue(ContinueStmt), // $continue;
     Exit(ExitStmt),
@@ -194,6 +195,16 @@ pub struct ForStmt {
     pub init: Option<Box<Stmt>>,
     pub condition: Option<Box<Expr>>,
     pub update: Option<Box<Stmt>>,
+    pub body: Vec<Stmt>,
+}
+
+/// $for item in iterable { body }
+/// item is the loop variable, iterable is List, Map, or String
+#[derive(Debug, Clone)]
+pub struct ForInStmt {
+    pub span: Span,
+    pub var: String,           // loop variable name
+    pub iterable: Box<Expr>,   // expression to iterate over
     pub body: Vec<Stmt>,
 }
 
@@ -382,6 +393,12 @@ impl Spanned for ForStmt {
     }
 }
 
+impl Spanned for ForInStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Spanned for BreakStmt {
     fn span(&self) -> Span {
         self.span
@@ -450,6 +467,7 @@ impl Stmt {
             Stmt::While(s) => s.span(),
             Stmt::Loop(s) => s.span(),
             Stmt::For(s) => s.span(),
+            Stmt::ForIn(s) => s.span(),
             Stmt::Break(s) => s.span(),
             Stmt::Continue(s) => s.span(),
             Stmt::Exit(s) => s.span(),

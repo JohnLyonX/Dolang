@@ -1,6 +1,6 @@
 // Statement parser - handles all statement parsing.
 use crate::ast::{
-    AssignStmt, BinaryExpr, BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, Expr, FnDeclStmt, ForStmt,
+    AssignStmt, BinaryExpr, BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, Expr, FnDeclStmt, ForInStmt, ForStmt,
     IfBranch, IfStmt, LoopStmt, ReturnStmt, Span, Stmt, VarDeclStmt, WhileStmt,
 };
 use crate::error::Error;
@@ -376,6 +376,7 @@ impl<'a> StmtParser<'a> {
     }
 
     /// Parse: $for [init;] [condition;] [update] { body }
+    /// Or: $for item in iterable { body }
     pub fn parse_for_stmt(&mut self) -> Result<Stmt, Error> {
         let start = self.peek().pos;
         self.advance(); // consume `$for`
@@ -383,6 +384,53 @@ impl<'a> StmtParser<'a> {
         // Collect everything between `$for` and `{`
         let header_toks = self.collect_until_lbrace();
 
+        // Check if this is a for-in loop (contains $in keyword)
+        let has_in = header_toks.iter().any(|t| t.typ == Type::In);
+
+        if has_in {
+            // Parse: $for item in iterable { body }
+            // Split by $in
+            let parts: Vec<&[Token]> = header_toks
+                .split(|t| t.typ == Type::In)
+                .collect();
+
+            if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "invalid for-in syntax, expected: $for item in iterable { ... }".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("variable and iterable".to_string()),
+                }));
+            }
+
+            // First part should be the variable name
+            let var_toks = parts[0];
+            if var_toks.len() != 1 || var_toks[0].typ != Type::Ident {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected loop variable name".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: Some(format!("{:?}", var_toks.first().map(|t| &t.typ))),
+                    expected: Some("identifier".to_string()),
+                }));
+            }
+            let var = var_toks[0].literal.clone();
+
+            // Second part should be the iterable expression
+            let iterable = parse_expr_tokens(parts[1])?;
+
+            let body = self.parse_block()?;
+
+            return Ok(Stmt::ForIn(ForInStmt {
+                span: Span::from_token(start),
+                var,
+                iterable,
+                body,
+            }));
+        }
+
+        // Traditional for loop: $for init; condition; update { body }
         // Split header by `;` into (up to) 3 parts
         let parts = split_by_semi(&header_toks);
 

@@ -210,6 +210,10 @@ impl Lexer {
                 if lit == "false" {
                     return Ok(Token::new(Type::Bool, "false", start));
                 }
+                // Check for 'in' keyword (for-in loop)
+                if lit == "in" {
+                    return Ok(Token::new(Type::In, "in", start));
+                }
                 Ok(Token::new(Type::Ident, &lit, start))
             }
         }

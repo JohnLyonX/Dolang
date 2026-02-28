@@ -504,11 +504,23 @@ HELLO, WORLD
 $>> s.lower();           // 转小写
 hello, world
 
+$>> "  hello  ".trim();  // 去除首尾空格
+hello
+
 $>> s.contains("World"); // 判断包含
 true
 
 $>> s.replace("World", "Dolang");  // 替换
 Hello, Dolang
+
+$>> "hello".starts_with("he");  // 判断前缀
+true
+
+$>> "hello".ends_with("lo");   // 判断后缀
+true
+
+$>> "hello".slice(1, 4);      // 截取子串
+ell
 
 $>> "a,b,c".split(",");  // 分割成列表
 [a, b, c]

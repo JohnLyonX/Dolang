@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    ".", # 解释器
+    "crates/dolang-lsp", # lsp
+]
+
+[package]
+name = "dolang"
+version = "1.1.0"
+edition = "2024"
+
+[dependencies]
+atty = "0.2"
+crossterm = "0.29"
+libc = "0.2"

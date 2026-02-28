@@ -191,6 +191,10 @@ impl Lexer {
                 self.advance();
                 Ok(Token::new(Type::Colon, ":", start))
             }
+            '.' => {
+                self.advance();
+                Ok(Token::new(Type::Dot, ".", start))
+            }
             '$' => self.read_dollar(start),
             '"' => self.read_string(start),
             '\'' => self.read_char(start),
@@ -424,5 +428,5 @@ impl Lexer {
 fn is_delimiter(ch: char) -> bool {
     matches!(ch, ' ' | '\t' | '\n' | '\r' | ';' | '+' | '-' | '*' | '/' | '%'
         | '<' | '>' | '=' | '!' | '&' | '|' | '$' | '"' | '\'' | '{' | '}'
-        | '(' | ')' | '[' | ']' | ',')
+        | '(' | ')' | '[' | ']' | ',' | '.')
 }

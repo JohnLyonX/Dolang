@@ -3,7 +3,7 @@ use crate::ast::{Expr, FnDeclStmt};
 use crate::error::Error;
 use crate::token::Type;
 
-use super::env::{generate_fn_name, list_get, list_len, map_get, serialize_list, serialize_map, to_bool, Env, FnEnv};
+use super::env::{generate_fn_name, list_get, list_len, map_get, map_len, serialize_list, serialize_map, to_bool, Env, FnEnv};
 
 /// Smart number formatting - follows these rules:
 /// 1. Integer results: no decimal point (5.0 → 5)
@@ -124,13 +124,107 @@ pub fn eval_expr(
             // Check if it's a list (numeric index) or map (string key)
             if obj_val.starts_with("__LST__:") {
                 // List access - parse index as integer
-                let idx = idx_val.parse::<usize>().ok()?;
+                let idx = match idx_val.parse::<usize>() {
+                    Ok(i) => i,
+                    Err(_) => return Some(format!("[ERROR] invalid list index: must be a non-negative integer")),
+                };
+                // Check bounds
+                let len = list_len(&obj_val).unwrap_or(0);
+                if idx >= len {
+                    return Some(format!("[ERROR] list index {} out of bounds (length: {})", idx, len));
+                }
                 list_get(&obj_val, idx)
             } else if obj_val.starts_with("__MAP__:") {
                 // Map access - use key directly
-                map_get(&obj_val, &idx_val)
+                match map_get(&obj_val, &idx_val) {
+                    Some(val) => Some(val),
+                    None => {
+                        let len = map_len(&obj_val).unwrap_or(0);
+                        Some(format!("[ERROR] map key '{}' not found", idx_val))
+                    }
+                }
             } else {
                 None
+            }
+        }
+        Expr::MethodCall(call) => {
+            // First, evaluate the object
+            let obj_val = eval_expr(&call.object, env, fns, w, false)?;
+
+            // Then evaluate the arguments
+            let mut arg_vals: Vec<String> = Vec::new();
+            for arg in &call.args {
+                if let Some(val) = eval_expr(arg, env, fns, w, false) {
+                    arg_vals.push(val);
+                } else {
+                    return None;
+                }
+            }
+
+            // Dispatch to method based on object type and method name
+            if obj_val.starts_with("__LST__:") {
+                // List methods
+                match call.method.as_str() {
+                    "len" | "length" => {
+                        return Some(list_len(&obj_val).unwrap_or(0).to_string());
+                    }
+                    "push" => {
+                        // push(value) - append to list
+                        if arg_vals.is_empty() {
+                            return Some("[ERROR] method 'push' requires 1 argument".to_string());
+                        }
+                        // Deserialize, add, serialize back
+                        let mut list = super::env::deserialize_list(&obj_val).unwrap_or_default();
+                        list.push(arg_vals[0].clone());
+                        return Some(super::env::serialize_list(&list));
+                    }
+                    "pop" => {
+                        // pop() - remove last element
+                        let mut list = super::env::deserialize_list(&obj_val).unwrap_or_default();
+                        if list.is_empty() {
+                            return Some("[ERROR] cannot pop from empty list".to_string());
+                        }
+                        let popped = list.pop().unwrap();
+                        // Store modified list back would require mutation - for now return popped value
+                        // Actually, we need to return the popped value, not the modified list
+                        return Some(popped);
+                    }
+                    _ => {
+                        return Some(format!("[ERROR] list has no method '{}'", call.method));
+                    }
+                }
+            } else if obj_val.starts_with("__MAP__:") {
+                // Map methods
+                match call.method.as_str() {
+                    "len" | "length" => {
+                        return Some(map_len(&obj_val).unwrap_or(0).to_string());
+                    }
+                    "keys" => {
+                        // Return keys as a list
+                        let map = super::env::deserialize_map(&obj_val).unwrap_or_default();
+                        let keys: Vec<String> = map.keys().cloned().collect();
+                        return Some(super::env::serialize_list(&keys));
+                    }
+                    "values" => {
+                        // Return values as a list
+                        let map = super::env::deserialize_map(&obj_val).unwrap_or_default();
+                        let values: Vec<String> = map.values().cloned().collect();
+                        return Some(super::env::serialize_list(&values));
+                    }
+                    _ => {
+                        return Some(format!("[ERROR] map has no method '{}'", call.method));
+                    }
+                }
+            } else {
+                // Try to determine the type and report error
+                let type_name = if obj_val.parse::<f64>().is_ok() {
+                    "Number"
+                } else if obj_val == "true" || obj_val == "false" {
+                    "Bool"
+                } else {
+                    "Unknown"
+                };
+                return Some(format!("[ERROR] '{}' has no method '{}'", type_name, call.method));
             }
         }
         Expr::VarLookup(v) => {

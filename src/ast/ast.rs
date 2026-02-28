@@ -35,6 +35,7 @@ pub enum Expr {
     MapLiteral(MapLiteral),
     VarLookup(VarLookup),
     IndexAccess(IndexAccess),
+    MethodCall(MethodCall),
     Binary(BinaryExpr),
     Unary(UnaryExpr),
     FnCall(FnCallExpr),
@@ -108,6 +109,14 @@ pub struct IndexAccess {
     pub span: Span,
     pub object: Box<Expr>,
     pub index: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MethodCall {
+    pub span: Span,
+    pub object: Box<Expr>,
+    pub method: String,
+    pub args: Vec<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -283,6 +292,12 @@ impl Spanned for IndexAccess {
     }
 }
 
+impl Spanned for MethodCall {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Spanned for VarLookup {
     fn span(&self) -> Span {
         self.span
@@ -414,6 +429,7 @@ impl Expr {
             Expr::ListLiteral(l) => l.span(),
             Expr::MapLiteral(m) => m.span(),
             Expr::IndexAccess(i) => i.span(),
+            Expr::MethodCall(m) => m.span(),
             Expr::VarLookup(v) => v.span(),
             Expr::Binary(b) => b.span(),
             Expr::Unary(u) => u.span(),

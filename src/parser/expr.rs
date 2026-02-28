@@ -2,7 +2,7 @@
 use std::borrow::Cow;
 
 use crate::ast::{
-    BinaryExpr, BoolLiteral, CharLiteral, Expr, FnCallExpr, IndexAccess, ListLiteral, MapLiteral, NumberLiteral,
+    BinaryExpr, BoolLiteral, CharLiteral, Expr, FnCallExpr, IndexAccess, ListLiteral, MapLiteral, MethodCall, NumberLiteral,
     Span, Spanned, StringLiteral, UnaryExpr, VarLookup,
 };
 use crate::error::{Error, ParseError};
@@ -95,7 +95,7 @@ impl<'a> ExprParser<'a> {
         let mut left = self.parse_and_expr()?;
 
         while self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Or {
-            let op_pos = self.tokens[self.pos].pos;
+            let _op_pos = self.tokens[self.pos].pos;
             self.pos += 1;
             let right = self.parse_and_expr()?;
             let span = Span::new(left.span().start, right.span().end);
@@ -113,7 +113,7 @@ impl<'a> ExprParser<'a> {
         let mut left = self.parse_equality_expr()?;
 
         while self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::And {
-            let op_pos = self.tokens[self.pos].pos;
+            let _op_pos = self.tokens[self.pos].pos;
             self.pos += 1;
             let right = self.parse_equality_expr()?;
             let span = Span::new(left.span().start, right.span().end);
@@ -133,7 +133,7 @@ impl<'a> ExprParser<'a> {
         while self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Eq || *typ == Type::Ne {
-                let op_pos = self.tokens[self.pos].pos;
+                let _op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_comparison_expr()?;
                 let span = Span::new(left.span().start, right.span().end);
@@ -156,7 +156,7 @@ impl<'a> ExprParser<'a> {
         while self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Gt || *typ == Type::Lt || *typ == Type::Gte || *typ == Type::Lte {
-                let op_pos = self.tokens[self.pos].pos;
+                let _op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_additive_expr()?;
                 let span = Span::new(left.span().start, right.span().end);
@@ -179,7 +179,7 @@ impl<'a> ExprParser<'a> {
         while self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Plus || *typ == Type::Minus {
-                let op_pos = self.tokens[self.pos].pos;
+                let _op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_multiplicative_expr()?;
                 let span = Span::new(left.span().start, right.span().end);
@@ -202,7 +202,7 @@ impl<'a> ExprParser<'a> {
         while self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Mul || *typ == Type::Div || *typ == Type::Mod {
-                let op_pos = self.tokens[self.pos].pos;
+                let _op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_unary_expr()?;
                 let span = Span::new(left.span().start, right.span().end);
@@ -223,10 +223,10 @@ impl<'a> ExprParser<'a> {
         if self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Not || *typ == Type::Minus {
-                let op_pos = self.tokens[self.pos].pos;
+                let _op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_unary_expr()?;
-                let span = Span::new(op_pos, right.span().end);
+                let span = Span::new(_op_pos, right.span().end);
                 return Ok(Box::new(Expr::Unary(UnaryExpr {
                     span,
                     op: typ.clone(),
@@ -253,6 +253,49 @@ impl<'a> ExprParser<'a> {
                 span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
                 object: expr,
                 index,
+            }));
+        }
+
+        // Handle chained method calls: expr.method(args).method(args)...
+        while self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Dot {
+            let start = self.tokens[self.pos].pos;
+            self.pos += 1; // consume '.'
+
+            // Expect method name
+            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Ident {
+                return Err(self.error_expected("expected method name after '.'", "identifier"));
+            }
+            let method = self.tokens[self.pos].literal.clone();
+            self.pos += 1; // consume method name
+
+            // Check for parentheses with arguments
+            let mut args: Vec<Expr> = Vec::new();
+            if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::LParen {
+                self.pos += 1; // consume '('
+
+                // Parse arguments
+                if self.pos < self.tokens.len() && self.tokens[self.pos].typ != Type::RParen {
+                    loop {
+                        let arg = self.parse_expr()?;
+                        args.push(*arg);
+                        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma {
+                            break;
+                        }
+                        self.pos += 1; // consume ','
+                    }
+                }
+
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                    return Err(self.error_expected("expected closing parenthesis in method call", ")"));
+                }
+                self.pos += 1; // consume ')'
+            }
+
+            expr = Box::new(Expr::MethodCall(MethodCall {
+                span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                object: expr,
+                method,
+                args,
             }));
         }
 

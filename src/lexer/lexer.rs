@@ -175,6 +175,14 @@ impl Lexer {
                 self.advance();
                 Ok(Token::new(Type::RParen, ")", start))
             }
+            '[' => {
+                self.advance();
+                Ok(Token::new(Type::LBracket, "[", start))
+            }
+            ']' => {
+                self.advance();
+                Ok(Token::new(Type::RBracket, "]", start))
+            }
             ',' => {
                 self.advance();
                 Ok(Token::new(Type::Comma, ",", start))
@@ -412,5 +420,5 @@ impl Lexer {
 fn is_delimiter(ch: char) -> bool {
     matches!(ch, ' ' | '\t' | '\n' | '\r' | ';' | '+' | '-' | '*' | '/' | '%'
         | '<' | '>' | '=' | '!' | '&' | '|' | '$' | '"' | '\'' | '{' | '}'
-        | '(' | ')' | ',')
+        | '(' | ')' | '[' | ']' | ',')
 }

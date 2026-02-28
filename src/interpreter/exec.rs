@@ -1,10 +1,10 @@
 // Statement execution - executes AST statements.
-use crate::ast::{Expr, FnDeclStmt, Stmt};
+use crate::ast::{Expr, FnDeclStmt, IndexAccess, Stmt};
 use crate::error::Error;
 use std::collections::HashMap;
 use std::io::{self, Write};
 
-use super::env::{detect_type, to_bool, ValueType, VarValue};
+use super::env::{detect_type, list_len, list_set, to_bool, ValueType, VarValue};
 use super::eval::{check_eval_result, eval_expr};
 
 pub type Env = HashMap<String, VarValue>;
@@ -51,7 +51,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                 Some(expr) => {
                     match check_eval_result(eval_expr(expr, env, fns, w, false)) {
                         Ok(Some(val)) => Flow::Return(Some(val)),
-                        Ok(None) => Flow::Err(Error::InvalidExpression),
+                        Ok(None) => Flow::Err(Error::InvalidExpression(None)),
                         Err(e) => Flow::Err(e),
                     }
                 }
@@ -63,7 +63,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
             match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
                 Ok(Some(val)) => {
                     if writeln!(w, "{}", val).is_err() {
-                        return Flow::Err(Error::InvalidStatement);
+                        return Flow::Err(Error::InvalidStatement(None));
                     }
                     Flow::Normal
                 }
@@ -74,7 +74,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                             v.name
                         )))
                     } else {
-                        Flow::Err(Error::InvalidExpression)
+                        Flow::Err(Error::InvalidExpression(None))
                     }
                 }
                 Err(e) => Flow::Err(e),
@@ -88,7 +88,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     env.insert(st.name.clone(), VarValue { value: val, value_type, is_const: false });
                     Flow::Normal
                 }
-                Ok(None) => Flow::Err(Error::InvalidAssignment),
+                Ok(None) => Flow::Err(Error::InvalidAssignment(None)),
                 Err(e) => Flow::Err(e),
             }
         }
@@ -100,19 +100,77 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     env.insert(st.name.clone(), VarValue { value: val, value_type, is_const: true });
                     Flow::Normal
                 }
-                Ok(None) => Flow::Err(Error::InvalidAssignment),
+                Ok(None) => Flow::Err(Error::InvalidAssignment(None)),
                 Err(e) => Flow::Err(e),
             }
         }
 
         Stmt::Assign(st) => {
+            // Check if this is an index assignment: arr[0] = value
+            if let Expr::IndexAccess(idx) = &*st.name {
+                // Get the variable name (object)
+                let var_name = match eval_expr(&idx.object, env, fns, w, true) {
+                    Some(n) => n,
+                    None => return Flow::Err(Error::InvalidAssignment(None)),
+                };
+
+                // Get the index
+                let idx_val = match eval_expr(&idx.index, env, fns, w, false) {
+                    Some(v) => v,
+                    None => return Flow::Err(Error::InvalidAssignment(None)),
+                };
+                let index = match idx_val.parse::<usize>() {
+                    Ok(i) => i,
+                    Err(_) => return Flow::Err(Error::InvalidAssignment(None)),
+                };
+
+                // Get the new value
+                let val = match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
+                    Ok(Some(v)) => v,
+                    Ok(None) => return Flow::Err(Error::InvalidAssignment(None)),
+                    Err(e) => return Flow::Err(e),
+                };
+
+                // Get existing list and modify
+                let existing = match env.get(&var_name) {
+                    Some(e) => e,
+                    None => return Flow::Err(Error::Interpreter(format!("variable '{}' not found", var_name))),
+                };
+
+                if existing.is_const {
+                    return Flow::Err(Error::Interpreter(format!("cannot modify constant '{}'", var_name)));
+                }
+
+                if existing.value_type != ValueType::List {
+                    return Flow::Err(Error::Interpreter(format!("cannot index into non-list type")));
+                }
+
+                // Try to set the element
+                let new_list = match list_set(&existing.value, index, val.clone()) {
+                    Some(l) => l,
+                    None => return Flow::Err(Error::Interpreter(format!(
+                        "index out of bounds: list length is {} but index is {}",
+                        list_len(&existing.value).unwrap_or(0),
+                        index
+                    ))),
+                };
+
+                // Check type compatibility
+                let new_type = detect_type(&val);
+                // For lists, we need to check the element type - for simplicity, accept any type
+                env.insert(var_name, VarValue { value: new_list, value_type: ValueType::List, is_const: false });
+
+                return Flow::Normal;
+            }
+
+            // Regular assignment: name = value
             let name = match eval_expr(&st.name, env, fns, w, true) {
                 Some(n) => n,
-                None => return Flow::Err(Error::InvalidAssignment),
+                None => return Flow::Err(Error::InvalidAssignment(None)),
             };
             let val = match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
                 Ok(Some(v)) => v,
-                Ok(None) => return Flow::Err(Error::InvalidAssignment),
+                Ok(None) => return Flow::Err(Error::InvalidAssignment(None)),
                 Err(e) => return Flow::Err(e),
             };
 
@@ -264,7 +322,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                             "variable '{}' is not defined",
                             v.name
                         ))),
-                        _ => Flow::Err(Error::InvalidExpression),
+                        _ => Flow::Err(Error::InvalidExpression(None)),
                     }
                 }
                 Err(e) => Flow::Err(e),
@@ -336,6 +394,7 @@ pub fn call_fn(
                             ValueType::Number => "Int",
                             ValueType::String => "String",
                             ValueType::Bool => "Bool",
+                            ValueType::List => "List",
                         };
                         return Err(Error::Interpreter(format!(
                             "function '{}' expects return type '{}' but got '{}'",

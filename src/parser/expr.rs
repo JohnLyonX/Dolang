@@ -1,7 +1,9 @@
 // Expression parser - handles all expression parsing.
+use std::borrow::Cow;
+
 use crate::ast::{
-    BinaryExpr, BoolLiteral, CharLiteral, Expr, FnCallExpr, NumberLiteral,
-    StringLiteral, UnaryExpr, VarLookup,
+    BinaryExpr, BoolLiteral, CharLiteral, Expr, FnCallExpr, IndexAccess, ListLiteral, NumberLiteral,
+    Span, Spanned, StringLiteral, UnaryExpr, VarLookup,
 };
 use crate::error::{Error, ParseError};
 use crate::parser::calc_line_col;
@@ -93,9 +95,12 @@ impl<'a> ExprParser<'a> {
         let mut left = self.parse_and_expr()?;
 
         while self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Or {
+            let op_pos = self.tokens[self.pos].pos;
             self.pos += 1;
             let right = self.parse_and_expr()?;
+            let span = Span::new(left.span().start, right.span().end);
             left = Box::new(Expr::Binary(BinaryExpr {
+                span,
                 left,
                 right,
                 op: Type::Or,
@@ -108,9 +113,12 @@ impl<'a> ExprParser<'a> {
         let mut left = self.parse_equality_expr()?;
 
         while self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::And {
+            let op_pos = self.tokens[self.pos].pos;
             self.pos += 1;
             let right = self.parse_equality_expr()?;
+            let span = Span::new(left.span().start, right.span().end);
             left = Box::new(Expr::Binary(BinaryExpr {
+                span,
                 left,
                 right,
                 op: Type::And,
@@ -125,9 +133,12 @@ impl<'a> ExprParser<'a> {
         while self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Eq || *typ == Type::Ne {
+                let op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_comparison_expr()?;
+                let span = Span::new(left.span().start, right.span().end);
                 left = Box::new(Expr::Binary(BinaryExpr {
+                    span,
                     left,
                     right,
                     op: typ.clone(),
@@ -145,9 +156,12 @@ impl<'a> ExprParser<'a> {
         while self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Gt || *typ == Type::Lt || *typ == Type::Gte || *typ == Type::Lte {
+                let op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_additive_expr()?;
+                let span = Span::new(left.span().start, right.span().end);
                 left = Box::new(Expr::Binary(BinaryExpr {
+                    span,
                     left,
                     right,
                     op: typ.clone(),
@@ -165,9 +179,12 @@ impl<'a> ExprParser<'a> {
         while self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Plus || *typ == Type::Minus {
+                let op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_multiplicative_expr()?;
+                let span = Span::new(left.span().start, right.span().end);
                 left = Box::new(Expr::Binary(BinaryExpr {
+                    span,
                     left,
                     right,
                     op: typ.clone(),
@@ -185,9 +202,12 @@ impl<'a> ExprParser<'a> {
         while self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Mul || *typ == Type::Div || *typ == Type::Mod {
+                let op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_unary_expr()?;
+                let span = Span::new(left.span().start, right.span().end);
                 left = Box::new(Expr::Binary(BinaryExpr {
+                    span,
                     left,
                     right,
                     op: typ.clone(),
@@ -203,15 +223,40 @@ impl<'a> ExprParser<'a> {
         if self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Not || *typ == Type::Minus {
+                let op_pos = self.tokens[self.pos].pos;
                 self.pos += 1;
                 let right = self.parse_unary_expr()?;
+                let span = Span::new(op_pos, right.span().end);
                 return Ok(Box::new(Expr::Unary(UnaryExpr {
+                    span,
                     op: typ.clone(),
                     right,
                 })));
             }
         }
-        self.parse_primary()
+        // Parse primary expression and then handle postfix index access
+        let mut expr = self.parse_primary()?;
+
+        // Handle chained index access: expr[expr][expr]...
+        while self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::LBracket {
+            let start = self.tokens[self.pos].pos;
+            self.pos += 1; // consume '['
+
+            let index = self.parse_expr()?;
+
+            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RBracket {
+                return Err(self.error_expected("expected closing bracket in index access", "]"));
+            }
+            self.pos += 1; // consume ']'
+
+            expr = Box::new(Expr::IndexAccess(IndexAccess {
+                span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                object: expr,
+                index,
+            }));
+        }
+
+        Ok(expr)
     }
 
     pub fn parse_primary(&mut self) -> Result<Box<Expr>, Error> {
@@ -222,13 +267,13 @@ impl<'a> ExprParser<'a> {
         self.pos += 1;
 
         match tok.typ {
-            Type::Number => Ok(Box::new(Expr::Number(NumberLiteral { value: tok.literal }))),
-            Type::Char => Ok(Box::new(Expr::Char(CharLiteral { value: tok.literal }))),
+            Type::Number => Ok(Box::new(Expr::Number(NumberLiteral { span: Span::from_token(tok.pos), value: Cow::Owned(tok.literal) }))),
+            Type::Char => Ok(Box::new(Expr::Char(CharLiteral { span: Span::from_token(tok.pos), value: Cow::Owned(tok.literal) }))),
             Type::Bool => {
                 let value = tok.literal == "true";
-                Ok(Box::new(Expr::Bool(BoolLiteral { value })))
+                Ok(Box::new(Expr::Bool(BoolLiteral { span: Span::from_token(tok.pos), value })))
             }
-            Type::String => Ok(Box::new(Expr::StringLiteral(StringLiteral { value: tok.literal }))),
+            Type::String => Ok(Box::new(Expr::StringLiteral(StringLiteral { span: Span::from_token(tok.pos), value: Cow::Owned(tok.literal) }))),
             // $fn: anonymous function literal
             Type::Fn => self.parse_fn_literal(),
             // Ident: check if followed by '(' for function call
@@ -252,11 +297,12 @@ impl<'a> ExprParser<'a> {
                     }
                     self.pos += 1; // consume ')'
                     Ok(Box::new(Expr::FnCall(FnCallExpr {
+                        span: Span::from_token(tok.pos),
                         name: tok.literal,
                         args,
                     })))
                 } else {
-                    Ok(Box::new(Expr::VarLookup(VarLookup { name: tok.literal })))
+                    Ok(Box::new(Expr::VarLookup(VarLookup { span: Span::from_token(tok.pos), name: Cow::Owned(tok.literal) })))
                 }
             }
             // Parenthesized expression
@@ -267,6 +313,40 @@ impl<'a> ExprParser<'a> {
                 }
                 self.pos += 1; // consume ')'
                 Ok(expr)
+            }
+            // List literal: [expr, expr, ...]
+            Type::LBracket => {
+                let start = tok.pos;
+                let mut elements: Vec<Expr> = Vec::new();
+
+                // Check for empty list: []
+                if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::RBracket {
+                    self.pos += 1; // consume ']'
+                    return Ok(Box::new(Expr::ListLiteral(ListLiteral {
+                        span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                        elements,
+                    })));
+                }
+
+                // Parse elements
+                loop {
+                    let elem = self.parse_expr()?;
+                    elements.push(*elem);
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma {
+                        break;
+                    }
+                    self.pos += 1; // consume ','
+                }
+
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RBracket {
+                    return Err(self.error_expected("expected closing bracket in list literal", "]"));
+                }
+                self.pos += 1; // consume ']'
+
+                Ok(Box::new(Expr::ListLiteral(ListLiteral {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    elements,
+                })))
             }
             _ => Err(self.error(&format!("unexpected token: {:?} {}", tok.typ, tok.literal))),
         }

@@ -3,7 +3,7 @@ use crate::ast::{Expr, FnDeclStmt};
 use crate::error::Error;
 use crate::token::Type;
 
-use super::env::{generate_fn_name, to_bool, Env, FnEnv};
+use super::env::{generate_fn_name, list_get, list_len, serialize_list, to_bool, Env, FnEnv};
 
 /// Smart number formatting - follows these rules:
 /// 1. Integer results: no decimal point (5.0 → 5)
@@ -86,15 +86,50 @@ pub fn eval_expr(
     as_identifier: bool,
 ) -> Option<String> {
     match e {
-        Expr::Number(n) => Some(n.value.clone()),
-        Expr::Char(c) => Some(c.value.clone()),
+        Expr::Number(n) => Some(n.value.as_ref().to_string()),
+        Expr::Char(c) => Some(c.value.as_ref().to_string()),
         Expr::Bool(b) => Some(b.value.to_string()),
-        Expr::StringLiteral(s) => Some(s.value.clone()),
+        Expr::StringLiteral(s) => Some(s.value.as_ref().to_string()),
+        Expr::ListLiteral(list) => {
+            // Evaluate each element and serialize to list
+            let mut elements: Vec<String> = Vec::new();
+            for elem in &list.elements {
+                if let Some(val) = eval_expr(elem, env, fns, w, false) {
+                    elements.push(val);
+                } else {
+                    return None;
+                }
+            }
+            Some(serialize_list(&elements))
+        }
+        Expr::IndexAccess(idx) => {
+            // Evaluate the object (must be a list) - use false to get the variable's value
+            let obj_val = eval_expr(&idx.object, env, fns, w, false)?;
+            // Evaluate the index
+            let idx_val = eval_expr(&idx.index, env, fns, w, false)?;
+
+            // Parse index as integer
+            let idx = idx_val.parse::<usize>().ok()?;
+
+            // Get element from list
+            match list_get(&obj_val, idx) {
+                Some(v) => Some(v),
+                None => {
+                    // Check if it's a valid list but out of bounds
+                    if obj_val.starts_with("__LIST__:") {
+                        let len = list_len(&obj_val).unwrap_or(0);
+                        return None; // Will be caught by caller with proper error
+                    }
+                    // Not a list at all
+                    None
+                }
+            }
+        }
         Expr::VarLookup(v) => {
             if as_identifier {
-                Some(v.name.clone())
+                Some(v.name.as_ref().to_string())
             } else {
-                match env.get(&v.name) {
+                match env.get(v.name.as_ref()) {
                     Some(val) => Some(val.value.clone()),
                     None => None,
                 }
@@ -192,6 +227,7 @@ pub fn eval_expr(
         Expr::FnLiteral(lit) => {
             let fn_name = generate_fn_name();
             let fn_decl = FnDeclStmt {
+                span: lit.span,
                 name: fn_name.clone(),
                 params: lit.params.clone(),
                 return_type: lit.return_type.clone(),

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DoLang — 代码即是财富</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=IM+Fell+English:ital@0;1&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/dolang.css">
+
+  <!-- 图标集 -->
+  <link rel="apple-touch-icon" sizes="180x180" href="ico/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="ico/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="ico/favicon-16x16.png">
+  <link rel="manifest" href="ico/site.webmanifest">
+  <link rel="shortcut icon" href="ico/favicon.ico">
+  <meta name="theme-color" content="#F5F2E9">
+</head>
+
+<body>
+
+  <!-- ── 滚动进度 ── -->
+  <div id="progress"></div>
+
+  <!-- ══════════════════════════════════════════
+     导航栏
+══════════════════════════════════════════ -->
+  <nav id="nav">
+    <a href="#" class="nav-logo">Do<span class="accent">Lang</span></a>
+    <ul class="nav-links">
+      <li><a href="#features">特性</a></li>
+      <li><a href="#showcase">语法</a></li>
+      <li><a href="#syntax">参考</a></li>
+      <li><a href="#install">安装</a></li>
+      <li><a href="#" target="_blank">GitHub</a></li>
+    </ul>
+    <div class="nav-lang">
+      <div class="lang-current">简体中文 <span class="lang-arrow">▼</span></div>
+      <div class="lang-menu">
+        <a href="dolang.html">English</a>
+        <a href="dolang-cn.html" class="active">简体中文</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════════
+     首屏区域
+══════════════════════════════════════════ -->
+  <section id="hero">
+    <div class="hero-ring" id="heroRing">$</div>
+
+    <div class="hero-content">
+      <!-- <div class="hero-eyebrow">Indie Hacker Language · Rust-Powered · v1.2</div> -->
+
+      <h1 class="hero-title">
+        代码即<br><em>Money</em>
+      </h1>
+
+      <p class="hero-tagline">
+        从想法到收入，一个文件。
+      </p>
+
+      <p class="hero-desc">
+        几行代码就是一个 API，不需要框架，没有繁琐的配置。
+        五分钟上手，当天发布。
+      </p>
+
+      <div class="hero-actions">
+        <a href="#install" class="btn-primary">开始盈利 &nbsp;→</a>
+        <a href="#showcase" class="btn-secondary">探索语法</a>
+      </div>
+    </div>
+
+    <div class="hero-code-wrap" id="heroCode">
+      <div class="vintage-paper">
+        <div class="vintage-header">
+          <span>Dolang 交互式书写器</span>
+          <span class="vintage-date">v1.2</span>
+        </div>
+        <div class="vintage-content" id="heroTerminal">
+          <div class="hero-editor">
+            <textarea id="heroReplInput" autocomplete="off" spellcheck="false" placeholder="墨已干涸，在此书写你的表达式...">$ name = "Dolang";
+$>> name;</textarea>
+            <pre id="heroReplHighlight" aria-hidden="true"></pre>
+          </div>
+
+          <div
+            style="display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid rgba(166, 139, 79, 0.15); padding-top: 1rem; margin-top: auto;">
+            <div id="heroReplOutput" class="vintage-out" style="flex: 1; margin: 0; min-height: 1.8rem;"></div>
+            <button id="heroRunBtn" class="btn-primary"
+              style="padding: 0.55rem 1.4rem; font-size: 0.75rem; letter-spacing: 0.12em; border-radius: 2px;">执行脚本</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     跑马灯
+══════════════════════════════════════════ -->
+  <div class="marquee-band">
+    <div class="marquee-track">
+      <div class="marquee-item">符号化语法</div>
+      <div class="marquee-item">Rust 驱动</div>
+      <div class="marquee-item">变量遮蔽</div>
+      <div class="marquee-item">常量保护</div>
+      <div class="marquee-item">类型安全</div>
+      <div class="marquee-item">REPL 交互</div>
+      <div class="marquee-item">零依赖</div>
+      <div class="marquee-item">MIT 许可</div>
+      <div class="marquee-item">符号化语法</div>
+      <div class="marquee-item">Rust 驱动</div>
+      <div class="marquee-item">变量遮蔽</div>
+      <div class="marquee-item">常量保护</div>
+      <div class="marquee-item">类型安全</div>
+      <div class="marquee-item">REPL 交互</div>
+      <div class="marquee-item">零依赖</div>
+      <div class="marquee-item">MIT 许可</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+     特性
+══════════════════════════════════════════ -->
+  <section id="features">
+    <div class="features-header reveal">
+      <div class="sec-label">核心理念</div>
+      <h2 class="sec-title">基于<em>六个符号</em>，<br>几分钟即可掌握</h2>
+    </div>
+
+    <div class="features-grid">
+      <div class="feat-card">
+        <div class="feat-badge">§ 01 · 语法</div>
+        <h3 class="feat-name">极简符号语法</h3>
+        <p class="feat-desc">Dolang 的核心理念围绕几个独特的符号展开，如 <code
+            style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--rust);">$  $@  $>>  =  $fn  $#</code>。
+          无需忍受复杂的样板代码。五分钟即可掌握全部语法。</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 02 · 变量</div>
+        <h3 class="feat-name">变量遮蔽</h3>
+        <p class="feat-desc">使用 <code
+            style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--rust);">$</code> 重新声明任何变量即可完全遮蔽它
+          —— 甚至可以跨越类型。数值变量可以优雅地变成字符串。按设计，赋予你灵活性。</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 03 · 常量</div>
+        <h3 class="feat-name">常量保护</h3>
+        <p class="feat-desc">使用 <code
+            style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--rust);">$@</code>
+          声明不可变值，解释器保证它们不受任何修改。任何重新赋值的尝试都会立即产生清晰的错误 —— 绝无静默损坏。</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 04 · 数据类型</div>
+        <h3 class="feat-name">集合与类型</h3>
+        <p class="feat-desc">开箱即用的运行时动态类型、列表、映射、字符串和数字支持。无缝混用。使用 `for-in` 循环迭代或使用内置方法即时修改。</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 05 · REPL</div>
+        <h3 class="feat-name">专业级 REPL</h3>
+        <p class="feat-desc">功能完备的交互式Shell，支持命令历史导航、光标编辑、Ctrl+A/E 跳转行，以及优雅的中断处理。它甚至原生支持多行函数声明。</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 06 · 引擎</div>
+        <h3 class="feat-name">Rust 驱动内核</h3>
+        <p class="feat-desc">解释器完全使用 Rust 编写 —— 内存安全、无垃圾回收器、原生高性能。在 macOS/Linux 上几秒即可编译。准备部署为快速脚本引擎。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     统计数据
+══════════════════════════════════════════ -->
+  <section id="stats" style="padding:5rem;">
+    <div class="stats-inner">
+      <div class="stat-cell">
+        <span class="stat-num" data-target="6">0</span>
+        <span class="stat-lbl">核心符号</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-num" data-target="0">0</span>
+        <span class="stat-lbl">必需配置</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-num" data-target="1">0</span>
+        <span class="stat-lbl">单一二进制</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-num" data-target="100" data-suffix="%">0</span>
+        <span class="stat-lbl">开源</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     理念引用
+══════════════════════════════════════════ -->
+  <div id="philosophy">
+    <p class="phil-quote reveal">
+      "我们在乎的是以最快的方式将创意转化为收益。为追求速度的独立开发者而写。"
+    </p>
+    <p class="phil-attr">— Dolang 设计原则</p>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+     代码展示
+══════════════════════════════════════════ -->
+  <section id="showcase">
+    <div class="showcase-wrap">
+      <div class="showcase-text reveal">
+        <div class="sec-label">优美的句法</div>
+        <h2 class="sec-title">代码读起来<br>像<em>深思熟虑的散文</em></h2>
+        <p class="showcase-desc">
+          每个 DoLang 结构都精确且有目的。<code
+            style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--gold-light);">$</code>
+          系列的运算符将所有声明统一在单一的视觉词汇下 —— 使意图一目了然。
+        </p>
+        <div class="tab-row">
+          <button class="tab-btn active" data-tab="basics">基础</button>
+          <button class="tab-btn" data-tab="functions">函数</button>
+          <button class="tab-btn" data-tab="collections">集合</button>
+          <button class="tab-btn" data-tab="const">常量</button>
+        </div>
+      </div>
+
+      <div class="show-window-wrap" id="showcaseWin">
+        <div class="show-window">
+          <div class="code-titlebar">
+            <div class="cdot cdot-r"></div>
+            <div class="cdot cdot-y"></div>
+            <div class="cdot cdot-g"></div>
+            <span class="code-fname" id="showcaseFname">basics.dal</span>
+          </div>
+          <div class="tw-code" id="typewriterOut">
+            <span class="tw-cursor"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     语法参考
+══════════════════════════════════════════ -->
+  <section id="syntax">
+    <div class="syntax-wrap">
+      <div class="reveal">
+        <div class="sec-label">语言参考</div>
+        <h2 class="sec-title">全部六个符号，<br><em>一目了然</em></h2>
+        <p
+          style="font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:300;color:var(--iron-mid);line-height:1.9;margin-top:1.2rem;">
+          DoLang 的完整语法收录于一张表格。这不是限制 —— 而是设计。每一项语言特性都能在瞬间发现，几分钟记住，一个下午就能完全掌握。
+        </p>
+      </div>
+
+      <div class="reveal">
+        <table class="syntax-table">
+          <thead>
+            <tr>
+              <th>符号</th>
+              <th>功能</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="syn-kw">$</span></td>
+              <td><span class="syn-desc">声明可变变量</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">$@</span></td>
+              <td><span class="syn-desc">声明不可变常量</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">$fn</span></td>
+              <td><span class="syn-desc">声明函数</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">$#</span></td>
+              <td><span class="syn-desc">从函数返回值</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">$>></span></td>
+              <td><span class="syn-desc">打印表达式到标准输出</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">=</span></td>
+              <td><span class="syn-desc">为变量赋值</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">;</span></td>
+              <td><span class="syn-desc">语句结束符（必填）</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- <div
+          style="margin-top:1.8rem;background:var(--iron);border:1px solid rgba(166,139,79,0.2);border-radius:4px;overflow:hidden;">
+          <div class="code-titlebar">
+            <div class="cdot cdot-r"></div>
+            <div class="cdot cdot-y"></div>
+            <div class="cdot cdot-g"></div>
+            <span class="code-fname">error-types.dol</span>
+          </div>
+          <div class="code-body" style="font-size:0.7rem;line-height:1.85;">
+            <span class="cc">// Type mismatch</span><br>
+            <span class="ck">$</span> a <span class="ck">=</span> <span class="cn">1</span>;<br>
+            a <span class="ck">=</span> <span class="cs">"hello"</span>; <span class="cc">// ERROR: type
+              mismatch</span><br>
+            <br>
+            <span class="cc">// Constant reassignment</span><br>
+            <span class="ck">$@</span> PI <span class="ck">=</span> <span class="cn">3.14</span>;<br>
+            PI <span class="ck">=</span> <span class="cn">99</span>; <span class="cc">// ERROR: cannot reassign
+              constant</span>
+          </div>
+        </div> -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     安装
+══════════════════════════════════════════ -->
+  <section id="install">
+    <div class="install-header reveal">
+      <div class="sec-label" style="justify-content:center;">快速开始</div>
+      <!-- <h2 class="sec-title" style="text-align:center;">一行命令<br><em>入门</em></h2> -->
+      <h2 class="sec-title" style="text-align:center;">选择版本<br><em>下载</em></h2>
+      <p
+        style="text-align:center;font-family:'IM Fell English',serif;font-style:italic;font-size:1.05rem;color:var(--iron-light);margin-top:0.5rem;">
+        支持 Windows · macOS</p>
+    </div>
+
+    <div class="download-actions reveal"
+      style="display: flex; justify-content: center; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 2rem;">
+      <a href="download/dolang" download class="btn-primary" style="padding: 0.8rem 1.8rem; border-radius: 4px;">↓ 下载
+        macOS 版本</a>
+      <a href="download/dolang.exe" download class="btn-secondary" style="padding: 0.8rem 1.8rem; border-radius: 4px;">↓
+        下载
+        Windows 版本</a>
+    </div>
+
+    <!-- <div class="install-steps reveal" id="installStepsMac">
+      <div class="install-step">
+        <span class="step-num">§ 01 · curl 下载</span>
+        <div class="step-cmd" onclick="copyCmd(this, 'git clone https://github.com/your-repo/Dolang.git && cd Dolang')">
+          <span class="step-prompt">$</span>
+          <span class="step-text">git clone …/Dolang.git &amp;&amp; cd Dolang</span>
+          <span class="copy-icon">复制</span>
+        </div>
+      </div>
+    </div> -->
+
+    <!-- <div class="install-steps reveal" id="installStepsWin" style="display: none;">
+      <div class="install-step">
+        <span class="step-num">§ 01 · PowerShell 下载</span>
+        <div class="step-cmd" onclick="copyCmd(this, 'git clone https://github.com/your-repo/Dolang.git')">
+          <span class="step-prompt">&gt;</span>
+          <span class="step-text">git clone …/Dolang.git</span>
+          <span class="copy-icon">复制</span>
+        </div>
+      </div>
+    </div> -->
+    <!-- <div class="install-step">
+        <span class="step-num">§ 02 · Build</span>
+        <div class="step-cmd" onclick="copyCmd(this, 'cargo build')">
+          <span class="step-prompt">$</span>
+          <span class="step-text">cargo build</span>
+          <span class="copy-icon">copy</span>
+        </div>
+      </div>
+      <div class="install-step">
+        <span class="step-num">§ 03 · Launch REPL</span>
+        <div class="step-cmd" onclick="copyCmd(this, 'cargo run')">
+          <span class="step-prompt">$</span>
+          <span class="step-text">cargo run</span>
+          <span class="copy-icon">copy</span>
+        </div>
+      </div> -->
+    <!-- </div> -->
+
+    <p class="install-note reveal">
+      <!-- 或直接运行二进制文件：<code>./target/debug/Dolang</code> -->
+    </p>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     页脚
+══════════════════════════════════════════ -->
+  <footer>
+    <div class="footer-top">
+      <div>
+        <div class="footer-brand-name">Do<span class="accent">lang</span></div>
+        <p class="footer-tagline">为独立开发者打造的快速构建脚本语言。</p>
+      </div>
+      <div class="footer-col">
+        <h4>资源</h4>
+        <ul>
+          <li><a href="#showcase">语法参考</a></li>
+          <li><a href="#install">安装指南</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>项目</h4>
+        <ul>
+          <li><a href="#" target="_blank">GitHub 仓库</a></li>
+          <li><a href="#">MIT 许可</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© MMXXVI Dolang · MIT 许可 · Rust 构建</span>
+      <div class="footer-badge">
+        <span class="badge">v1.6</span>
+        <span class="badge">Rust 1.70+</span>
+        <span class="badge">MIT</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ══════════════════════════════════════════
+     JavaScript
+══════════════════════════════════════════ -->
+  <script src="js/dolang-cn.js"></script>
+</body>
+
+</html>

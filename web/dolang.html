@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DoLang — Code is Money.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=IM+Fell+English:ital@0;1&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/dolang.css">
+
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="ico/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="ico/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="ico/favicon-16x16.png">
+  <link rel="manifest" href="ico/site.webmanifest">
+  <link rel="shortcut icon" href="ico/favicon.ico">
+  <meta name="theme-color" content="#F5F2E9">
+</head>
+
+<body>
+
+  <!-- ── SCROLL PROGRESS ── -->
+  <div id="progress"></div>
+
+  <!-- ══════════════════════════════════════════
+     NAVIGATION
+══════════════════════════════════════════ -->
+  <nav id="nav">
+    <a href="#" class="nav-logo">Do<span class="accent">Lang</span></a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#showcase">Syntax</a></li>
+      <li><a href="#syntax">Reference</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#" target="_blank">GitHub</a></li>
+    </ul>
+    <div class="nav-lang">
+      <div class="lang-current">English <span class="lang-arrow">▼</span></div>
+      <div class="lang-menu">
+        <a href="dolang.html" class="active">English</a>
+        <a href="dolang-cn.html">简体中文</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════════
+     HERO
+══════════════════════════════════════════ -->
+  <section id="hero">
+    <div class="hero-ring" id="heroRing">$</div>
+
+    <div class="hero-content">
+      <!-- <div class="hero-eyebrow">Indie Hacker Language · Rust-Powered · v1.2</div> -->
+
+      <h1 class="hero-title">
+        Code is<br><em>Money</em>
+      </h1>
+
+      <p class="hero-tagline">
+        From idea to income. One file.
+      </p>
+
+      <p class="hero-desc">
+        A few lines of code. A live API.
+        No frameworks, no config, no noise.
+        Learn in five minutes. Ship today.
+
+      </p>
+
+      <div class="hero-actions">
+        <a href="#install" class="btn-primary">Start Monetizing &nbsp;→</a>
+        <a href="#showcase" class="btn-secondary">Explore Syntax</a>
+      </div>
+    </div>
+
+    <div class="hero-code-wrap" id="heroCode">
+      <div class="vintage-paper">
+        <div class="vintage-header">
+          <span>Dolang Interactive Writer</span>
+          <span class="vintage-date">v1.2</span>
+        </div>
+        <div class="vintage-content" id="heroTerminal">
+          <div class="hero-editor">
+            <textarea id="heroReplInput" autocomplete="off" spellcheck="false"
+              placeholder="The ink is dry. Write your expressions here...">$ name = "Dolang";
+$>> name;</textarea>
+            <pre id="heroReplHighlight" aria-hidden="true"></pre>
+          </div>
+
+          <div
+            style="display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid rgba(166, 139, 79, 0.15); padding-top: 1rem; margin-top: auto;">
+            <div id="heroReplOutput" class="vintage-out" style="flex: 1; margin: 0; min-height: 1.8rem;"></div>
+            <button id="heroRunBtn" class="btn-primary"
+              style="padding: 0.55rem 1.4rem; font-size: 0.75rem; letter-spacing: 0.12em; border-radius: 2px;">Execute
+              Script</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     MARQUEE
+══════════════════════════════════════════ -->
+  <div class="marquee-band">
+    <div class="marquee-track">
+      <div class="marquee-item">Symbolic Syntax</div>
+      <div class="marquee-item">Rust-Powered</div>
+      <div class="marquee-item">Variable Shadowing</div>
+      <div class="marquee-item">Constant Protection</div>
+      <div class="marquee-item">Type Safety</div>
+      <div class="marquee-item">REPL Interaction</div>
+      <div class="marquee-item">Zero Dependencies</div>
+      <div class="marquee-item">MIT License</div>
+      <div class="marquee-item">Symbolic Syntax</div>
+      <div class="marquee-item">Rust-Powered</div>
+      <div class="marquee-item">Variable Shadowing</div>
+      <div class="marquee-item">Constant Protection</div>
+      <div class="marquee-item">Type Safety</div>
+      <div class="marquee-item">REPL Interaction</div>
+      <div class="marquee-item">Zero Dependencies</div>
+      <div class="marquee-item">MIT License</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+     FEATURES
+══════════════════════════════════════════ -->
+  <section id="features">
+    <div class="features-header reveal">
+      <div class="sec-label">Core Philosophy</div>
+      <h2 class="sec-title">Built on <em>six symbols</em>,<br>mastered in minutes</h2>
+    </div>
+
+    <div class="features-grid">
+      <div class="feat-card">
+        <div class="feat-badge">§ 01 · Syntax</div>
+        <h3 class="feat-name">Minimal Symbol Grammar</h3>
+        <p class="feat-desc">Dolang's core philosophy centers on a few distinct symbols like <code
+            style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--rust);">$  $@  $>>  =  $fn  $#</code>.
+          No complex boilerplate to endure. You can learn the entire grammar in five minutes.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 02 · Variables</div>
+        <h3 class="feat-name">Variable Shadowing</h3>
+        <p class="feat-desc">Re-declare any variable with <code
+            style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--rust);">$</code> to shadow it
+          entirely — even across types. A numeric variable may become a string without ceremony. Flexibility, by design.
+        </p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 03 · Constants</div>
+        <h3 class="feat-name">Constant Protection</h3>
+        <p class="feat-desc">Declare immutable values with <code
+            style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--rust);">$@</code> and the
+          interpreter guarantees they remain untouched. Any reassignment attempt yields a clear, immediate error — no
+          silent corruption.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 04 · Data Types</div>
+        <h3 class="feat-name">Collections & Types</h3>
+        <p class="feat-desc">Out of the box support for runtime dynamic typing, Lists, Maps, Strings, and Numbers.
+          Mix them seamlessly. Iterate with `for-in` loops or modify with built-in methods instantaneously.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 05 · REPL</div>
+        <h3 class="feat-name">Professional REPL</h3>
+        <p class="feat-desc">A fully-featured interactive shell with command history navigation, cursor editing,
+          Ctrl+A/E line jumps, and graceful interrupt handling. It even supports multi-line functional declarations
+          natively.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-badge">§ 06 · Engine</div>
+        <h3 class="feat-name">Rust-Powered Core</h3>
+        <p class="feat-desc">The interpreter is written entirely in Rust — memory safe, garbage-collector free, and
+          natively performant. Compile in seconds on macOS/Linux. Ready to be deployed as a fast script engine.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     STATS
+══════════════════════════════════════════ -->
+  <section id="stats" style="padding:5rem;">
+    <div class="stats-inner">
+      <div class="stat-cell">
+        <span class="stat-num" data-target="6">0</span>
+        <span class="stat-lbl">Core Symbols</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-num" data-target="0">0</span>
+        <span class="stat-lbl">Required Configs</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-num" data-target="1">0</span>
+        <span class="stat-lbl">Single Binary</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-num" data-target="100" data-suffix="%">0</span>
+        <span class="stat-lbl">Open Source</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     PHILOSOPHY QUOTE
+══════════════════════════════════════════ -->
+  <div id="philosophy">
+    <p class="phil-quote reveal">
+      "We care about turning ideas into revenue the fastest way possible. Written
+      for indie developers who seek speed."
+    </p>
+    <p class="phil-attr"> Dolang Design Principles</p>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+     CODE SHOWCASE
+══════════════════════════════════════════ -->
+  <section id="showcase">
+    <div class="showcase-wrap">
+      <div class="showcase-text reveal">
+        <div class="sec-label">Eloquent Syntax</div>
+        <h2 class="sec-title">Code that reads<br>like <em>considered prose</em></h2>
+        <p class="showcase-desc">
+          Each DoLang construct is precise and purposeful. The <code
+            style="font-family:'JetBrains Mono',monospace;font-size:0.85em;color:var(--gold-light);">$</code> family of
+          operators unifies every declaration under a single visual vocabulary — making intent immediately legible.
+        </p>
+        <div class="tab-row">
+          <button class="tab-btn active" data-tab="basics">Basics</button>
+          <button class="tab-btn" data-tab="functions">Functions</button>
+          <button class="tab-btn" data-tab="collections">Collections</button>
+          <button class="tab-btn" data-tab="const">Constants</button>
+        </div>
+      </div>
+
+      <div class="show-window-wrap" id="showcaseWin">
+        <div class="show-window">
+          <div class="code-titlebar">
+            <div class="cdot cdot-r"></div>
+            <div class="cdot cdot-y"></div>
+            <div class="cdot cdot-g"></div>
+            <span class="code-fname" id="showcaseFname">basics.dao</span>
+          </div>
+          <div class="tw-code" id="typewriterOut">
+            <span class="tw-cursor"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     SYNTAX REFERENCE
+══════════════════════════════════════════ -->
+  <section id="syntax">
+    <div class="syntax-wrap">
+      <div class="reveal">
+        <div class="sec-label">Language Reference</div>
+        <h2 class="sec-title">All six symbols,<br><em>catalogued</em></h2>
+        <p
+          style="font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-weight:300;color:var(--iron-mid);line-height:1.9;margin-top:1.2rem;">
+          The complete grammar of DoLang fits in a single table. This is not a limitation — it is the design. Every
+          language feature is discoverable in moments, memorable in minutes, and internalized in an afternoon.
+        </p>
+      </div>
+
+      <div class="reveal">
+        <table class="syntax-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Function</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="syn-kw">$</span></td>
+              <td><span class="syn-desc">Declare a mutable variable</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">$@</span></td>
+              <td><span class="syn-desc">Declare an immutable constant</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">$fn</span></td>
+              <td><span class="syn-desc">Declare a function</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">$#</span></td>
+              <td><span class="syn-desc">Return value from function</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">$>></span></td>
+              <td><span class="syn-desc">Print expression to stdout</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">=</span></td>
+              <td><span class="syn-desc">Assign a value to a variable</span></td>
+            </tr>
+            <tr>
+              <td><span class="syn-kw">;</span></td>
+              <td><span class="syn-desc">Statement terminator (required)</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- <div
+          style="margin-top:1.8rem;background:var(--iron);border:1px solid rgba(166,139,79,0.2);border-radius:4px;overflow:hidden;">
+          <div class="code-titlebar">
+            <div class="cdot cdot-r"></div>
+            <div class="cdot cdot-y"></div>
+            <div class="cdot cdot-g"></div>
+            <span class="code-fname">error-types.dol</span>
+          </div>
+          <div class="code-body" style="font-size:0.7rem;line-height:1.85;">
+            <span class="cc">// Type mismatch</span><br>
+            <span class="ck">$</span> a <span class="ck">=</span> <span class="cn">1</span>;<br>
+            a <span class="ck">=</span> <span class="cs">"hello"</span>; <span class="cc">// ERROR: type
+              mismatch</span><br>
+            <br>
+            <span class="cc">// Constant reassignment</span><br>
+            <span class="ck">$@</span> PI <span class="ck">=</span> <span class="cn">3.14</span>;<br>
+            PI <span class="ck">=</span> <span class="cn">99</span>; <span class="cc">// ERROR: cannot reassign
+              constant</span>
+          </div>
+        </div> -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     INSTALL
+══════════════════════════════════════════ -->
+  <section id="install">
+    <div class="install-header reveal">
+      <div class="sec-label" style="justify-content:center;">Quick Start</div>
+      <!-- <h2 class="sec-title" style="text-align:center;">One commands<br>to <em>the Way</em></h2> -->
+      <h2 class="sec-title" style="text-align:center;">Select version<br><em>Download</em></h2>
+      <p
+        style="text-align:center;font-family:'IM Fell English',serif;font-style:italic;font-size:1.05rem;color:var(--iron-light);margin-top:0.5rem;">
+        Support Windows · macOS</p>
+    </div>
+
+    <div class="download-actions reveal"
+      style="display: flex; justify-content: center; gap: 1.2rem; flex-wrap: wrap; margin-bottom: 2rem;">
+      <a href="download/dolang" download class="btn-primary" style="padding: 0.8rem 1.8rem; border-radius: 4px;">↓
+        Download for
+        macOS</a>
+      <a href="download/dolang.exe" download class="btn-secondary" style="padding: 0.8rem 1.8rem; border-radius: 4px;">↓
+        Download
+        for Windows</a>
+    </div>
+
+    <!-- <div class="install-steps reveal" id="installStepsMac">
+      <div class="install-step">
+        <span class="step-num">§ 01 · curl download</span>
+        <div class="step-cmd" onclick="copyCmd(this, 'git clone https://github.com/your-repo/Dolang.git && cd Dolang')">
+          <span class="step-prompt">$</span>
+          <span class="step-text">git clone …/Dolang.git &amp;&amp; cd Dolang</span>
+          <span class="copy-icon">copy</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="install-steps reveal" id="installStepsWin" style="display: none;">
+      <div class="install-step">
+        <span class="step-num">§ 01 · PowerShell download</span>
+        <div class="step-cmd" onclick="copyCmd(this, 'git clone https://github.com/your-repo/Dolang.git')">
+          <span class="step-prompt">&gt;</span>
+          <span class="step-text">git clone …/Dolang.git</span>
+          <span class="copy-icon">copy</span>
+        </div>
+      </div>
+    </div> -->
+
+    <p class="install-note reveal">
+      <!-- Or run the binary directly: <code>./target/debug/Dolang</code> -->
+    </p>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+     FOOTER
+══════════════════════════════════════════ -->
+  <footer>
+    <div class="footer-top">
+      <div>
+        <div class="footer-brand-name">Do<span class="accent">lang</span></div>
+        <p class="footer-tagline">The script language for indie developers building fast.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="#showcase">Syntax Reference</a></li>
+          <li><a href="#install">Installation</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Project</h4>
+        <ul>
+          <li><a href="#" target="_blank">GitHub Repository</a></li>
+          <li><a href="#">MIT License</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© MMXXVI Dolang · MIT License · Built with Rust</span>
+      <div class="footer-badge">
+        <span class="badge">v1.6</span>
+        <span class="badge">Rust 1.70+</span>
+        <span class="badge">MIT</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ══════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════ -->
+  <script src="js/dolang.js"></script>
+</body>
+
+</html>

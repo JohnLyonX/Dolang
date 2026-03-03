@@ -7,7 +7,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// Represents the type of a value
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValueType {
-    Number,
+    Dynamic,  // No type annotation, can change freely
+    Int,
+    Float,
     String,
     Bool,
     List,
@@ -46,8 +48,17 @@ pub fn detect_type(value: &str) -> ValueType {
     if value == "true" || value == "false" {
         return ValueType::Bool;
     }
-    if value.parse::<f64>().is_ok() {
-        return ValueType::Number;
+    // String values are serialized with a special prefix
+    if value.starts_with("__STR__:") {
+        return ValueType::String;
+    }
+    if let Ok(n) = value.parse::<f64>() {
+        // Check if it's an integer (no decimal point)
+        if n.fract() == 0.0 && n.is_finite() {
+            return ValueType::Int;
+        } else {
+            return ValueType::Float;
+        }
     }
     // List values are serialized with a special prefix
     if value.starts_with("__LST__:") {
@@ -58,6 +69,31 @@ pub fn detect_type(value: &str) -> ValueType {
         return ValueType::Map;
     }
     ValueType::String
+}
+
+/// Convert type annotation string to ValueType
+/// Returns None if the type annotation is invalid
+pub fn parse_type_annotation(type_str: &str) -> Option<ValueType> {
+    match type_str {
+        "Int" | "Integer" => Some(ValueType::Int),
+        "Float" => Some(ValueType::Float),
+        "String" | "Str" => Some(ValueType::String),
+        "Bool" | "Boolean" => Some(ValueType::Bool),
+        _ => None,
+    }
+}
+
+/// Get the type name for display
+pub fn type_name(vt: &ValueType) -> &'static str {
+    match vt {
+        ValueType::Dynamic => "Dynamic",
+        ValueType::Int => "Int",
+        ValueType::Float => "Float",
+        ValueType::String => "String",
+        ValueType::Bool => "Bool",
+        ValueType::List => "List",
+        ValueType::Map => "Map",
+    }
 }
 
 /// Convert string to bool
@@ -136,6 +172,27 @@ pub fn deserialize_list(value: &str) -> Option<Vec<String>> {
 /// Get the length of a list
 pub fn list_len(value: &str) -> Option<usize> {
     deserialize_list(value).map(|list| list.len())
+}
+
+/// Format a value for display (handles nested lists and maps recursively)
+fn format_value(value: &str) -> String {
+    if value.starts_with("__LST__:") {
+        format_list(value)
+    } else if value.starts_with("__MAP__:") {
+        format_map(value)
+    } else {
+        value.to_string()
+    }
+}
+
+/// Format a list value for display (convert internal representation to user-friendly format)
+pub fn format_list(value: &str) -> String {
+    if let Some(list) = deserialize_list(value) {
+        let items: Vec<String> = list.iter().map(|s| format_value(s)).collect();
+        format!("[{}]", items.join(", "))
+    } else {
+        value.to_string()
+    }
 }
 
 /// Get an element from a list by index
@@ -252,9 +309,26 @@ pub fn map_get(value: &str, key: &str) -> Option<String> {
     map.get(key).cloned()
 }
 
+/// Get the number of entries in a map
+pub fn map_len(value: &str) -> Option<usize> {
+    deserialize_map(value).map(|map| map.len())
+}
+
 /// Set a value in map (returns new serialized map)
 pub fn map_set(value: &str, key: String, new_value: String) -> Option<String> {
     let mut map = deserialize_map(value)?;
     map.insert(key, new_value);
     Some(serialize_map(&map))
+}
+
+/// Format a map value for display (convert internal representation to user-friendly format)
+pub fn format_map(value: &str) -> String {
+    if let Some(map) = deserialize_map(value) {
+        let items: Vec<String> = map.iter()
+            .map(|(k, v)| format!("{}: {}", k, format_value(v)))
+            .collect();
+        format!("{{{}}}", items.join(", "))
+    } else {
+        value.to_string()
+    }
 }

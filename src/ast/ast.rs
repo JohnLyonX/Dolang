@@ -31,6 +31,7 @@ pub enum Expr {
     Char(CharLiteral),
     Bool(BoolLiteral),
     StringLiteral(StringLiteral),
+    FString(FStringLiteral),  // f"Hello {name}"
     ListLiteral(ListLiteral),
     MapLiteral(MapLiteral),
     VarLookup(VarLookup),
@@ -40,14 +41,16 @@ pub enum Expr {
     Unary(UnaryExpr),
     FnCall(FnCallExpr),
     FnLiteral(FnLiteral),  // Anonymous function: $fn(x, y) -> Int { ... }
+    Read(ExprRead),       // $<<ENV("KEY") or $<<LINE("prompt") as expression
 }
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Print(PrintStmt),
+    Read(ReadStmt),   // $<<ENV("KEY") or $<<LINE("prompt")
     Assign(AssignStmt),
-    VarDecl(VarDeclStmt),   // $ a <& 1;
-    ConstDecl(ConstDeclStmt), // $@ a <& 1;
+    VarDecl(VarDeclStmt),   // $ a = 1;
+    ConstDecl(ConstDeclStmt), // $@ a = 1;
     If(IfStmt),             // $if condition { ... } $elif ... $else ...
     While(WhileStmt),       // $while condition { ... }
     Loop(LoopStmt),         // $loop { ... }
@@ -91,6 +94,22 @@ pub struct BoolLiteral {
 pub struct StringLiteral {
     pub span: Span,
     pub value: Cow<'static, str>,
+}
+
+/// F-string literal: f"Hello {name}"
+/// Segments are either literal text or expression to interpolate
+#[derive(Debug, Clone)]
+pub struct FStringLiteral {
+    pub span: Span,
+    pub segments: Vec<FStringSegment>,
+}
+
+#[derive(Debug, Clone)]
+pub enum FStringSegment {
+    /// Literal text (outside {braces})
+    Literal(String),
+    /// Expression to interpolate (inside {braces})
+    Expression(Box<Expr>),
 }
 
 #[derive(Debug, Clone)]
@@ -137,6 +156,28 @@ pub struct VarLookup {
 pub struct PrintStmt {
     pub span: Span,
     pub value: Box<Expr>,
+    pub target: PrintTarget, // stdout or stderr
+}
+
+/// Read statement: $<<ENV("KEY") or $<<LINE("prompt")
+#[derive(Debug, Clone)]
+pub struct ReadStmt {
+    pub span: Span,
+    pub mode: ReadMode,   // ENV or LINE
+    pub prompt: Option<Box<Expr>>, // optional prompt for LINE mode
+}
+
+/// Read mode: ENV reads environment variable, LINE reads stdin
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReadMode {
+    Env,  // $<<ENV("KEY")
+    Line, // $<<LINE("prompt")
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PrintTarget {
+    Stdout,
+    Stderr,
 }
 
 #[derive(Debug, Clone)]
@@ -150,6 +191,7 @@ pub struct AssignStmt {
 pub struct VarDeclStmt {
     pub span: Span,
     pub name: String,
+    pub type_annotation: Option<String>, // e.g., Some("Int"), None for dynamic
     pub value: Box<Expr>,
 }
 
@@ -157,6 +199,7 @@ pub struct VarDeclStmt {
 pub struct ConstDeclStmt {
     pub span: Span,
     pub name: String,
+    pub type_annotation: Option<String>, // Optional type annotation: $@ x: Int = 30
     pub value: Box<Expr>,
 }
 
@@ -248,6 +291,14 @@ pub struct FnLiteral {
     pub body: Vec<Stmt>,
 }
 
+/// Read expression: $<<ENV("KEY") or $<<LINE("prompt") as expression (in assignment)
+#[derive(Debug, Clone)]
+pub struct ExprRead {
+    pub span: Span,
+    pub mode: ReadMode,
+    pub prompt: Option<Box<Expr>>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ReturnStmt {
     pub span: Span,
@@ -280,6 +331,12 @@ impl Spanned for BoolLiteral {
 }
 
 impl Spanned for StringLiteral {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for FStringLiteral {
     fn span(&self) -> Span {
         self.span
     }
@@ -339,7 +396,19 @@ impl Spanned for FnLiteral {
     }
 }
 
+impl Spanned for ExprRead {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Spanned for PrintStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for ReadStmt {
     fn span(&self) -> Span {
         self.span
     }
@@ -443,6 +512,7 @@ impl Expr {
             Expr::Char(c) => c.span(),
             Expr::Bool(b) => b.span(),
             Expr::StringLiteral(s) => s.span(),
+            Expr::FString(f) => f.span(),
             Expr::ListLiteral(l) => l.span(),
             Expr::MapLiteral(m) => m.span(),
             Expr::IndexAccess(i) => i.span(),
@@ -452,6 +522,7 @@ impl Expr {
             Expr::Unary(u) => u.span(),
             Expr::FnCall(f) => f.span(),
             Expr::FnLiteral(f) => f.span(),
+            Expr::Read(r) => r.span(),
         }
     }
 }
@@ -473,6 +544,7 @@ impl Stmt {
             Stmt::Exit(s) => s.span(),
             Stmt::FnDecl(s) => s.span(),
             Stmt::Return(s) => s.span(),
+            Stmt::Read(s) => s.span(),
             Stmt::ExprStmt(e) => e.span(),
         }
     }

@@ -114,15 +114,11 @@ impl Lexer {
                 Ok(Token::new(Type::Not, "!", start))
             }
             '<' => {
-                // Check for <= or <&
+                // Check for <=
                 self.advance();
                 if self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::Lte, "<=", start));
-                }
-                if self.peek() == '&' {
-                    self.advance();
-                    return Ok(Token::new(Type::Assign, "<&", start));
                 }
                 Ok(Token::new(Type::Lt, "<", start))
             }
@@ -204,6 +200,10 @@ impl Lexer {
                 }
                 // Identifier or keyword.
                 let lit = self.read_until_delimiter();
+                // Check for f-string: "f" followed by '"'
+                if lit == "f" && self.pos < self.input.len() && self.input[self.pos] == '"' {
+                    return self.read_fstring(start);
+                }
                 if lit == "true" {
                     return Ok(Token::new(Type::Bool, "true", start));
                 }
@@ -225,6 +225,11 @@ impl Lexer {
         if self.match_seq("$>>") {
             self.advance_n(3);
             return Ok(Token::new(Type::Print, "$>>", start));
+        }
+
+        if self.match_seq("$<<") {
+            self.advance_n(3);
+            return Ok(Token::new(Type::Read, "$<<", start));
         }
 
         if self.match_seq("$continue") {
@@ -298,6 +303,55 @@ impl Lexer {
         Ok(Token::new(Type::String, &literal, start))
     }
 
+    /// Read an f-string: f"..."
+    /// Format: f"Hello {name}, you have {count} items"
+    /// - Text outside {} is literal
+    /// - Inside {} can be: variable, expression, method call
+    fn read_fstring(&mut self, start: usize) -> Result<Token, String> {
+        // Check if we need to consume 'f' or if we're already at '"'
+        if self.pos < self.input.len() && self.input[self.pos] == 'f' {
+            // Consume the 'f' character
+            self.advance();
+        }
+        // Now consume the opening "
+        self.advance();
+
+        let mut literal = String::new();
+        let mut brace_depth = 0;
+
+        while self.pos < self.input.len() {
+            let ch = self.peek();
+            match ch {
+                '{' => {
+                    brace_depth += 1;
+                    literal.push('{');
+                    self.advance();
+                }
+                '}' => {
+                    if brace_depth == 0 {
+                        return Err("f-string syntax error: unexpected \"}\"".to_string());
+                    }
+                    brace_depth -= 1;
+                    literal.push('}');
+                    self.advance();
+                }
+                '"' => {
+                    if brace_depth > 0 {
+                        return Err("f-string syntax error: unclosed \"{\"".to_string());
+                    }
+                    self.advance(); // consume closing "
+                    return Ok(Token::new(Type::FString, &literal, start));
+                }
+                _ => {
+                    literal.push(ch);
+                    self.advance();
+                }
+            }
+        }
+
+        Err("unclosed f-string".to_string())
+    }
+
     fn read_char(&mut self, start: usize) -> Result<Token, String> {
         self.advance(); // consume opening '
         if self.pos >= self.input.len() {
@@ -321,22 +375,36 @@ impl Lexer {
         }
 
         // Read digits before decimal point
+        let digits_start = self.pos;
         while self.pos < self.input.len() && self.peek().is_ascii_digit() {
             self.advance();
         }
+        let _int_part_len = self.pos - digits_start;
 
-        // Check for decimal point
+        // Check for decimal point - only treat as float if digits follow
         let mut is_float = false;
+        let float_end_pos;
         if self.pos < self.input.len() && self.peek() == '.' {
-            is_float = true;
-            self.advance();
-            // Read digits after decimal point
-            while self.pos < self.input.len() && self.peek().is_ascii_digit() {
+            let after_dot = self.pos + 1;
+            // Check if there are digits after the decimal point
+            if after_dot < self.input.len() && self.input[after_dot].is_ascii_digit() {
+                is_float = true;
                 self.advance();
+                // Read digits after decimal point
+                while self.pos < self.input.len() && self.peek().is_ascii_digit() {
+                    self.advance();
+                }
+                float_end_pos = self.pos;
+            } else {
+                // No digits after decimal point - don't treat as float
+                // Return integer and let the dot be a separate token
+                float_end_pos = self.pos;
             }
+        } else {
+            float_end_pos = self.pos;
         }
 
-        let literal: String = self.input[start..self.pos].iter().collect();
+        let literal: String = self.input[start..float_end_pos].iter().collect();
         if literal.is_empty() || (has_sign && literal == "-") {
             return Err("invalid number literal".to_string());
         }
@@ -432,5 +500,5 @@ impl Lexer {
 fn is_delimiter(ch: char) -> bool {
     matches!(ch, ' ' | '\t' | '\n' | '\r' | ';' | '+' | '-' | '*' | '/' | '%'
         | '<' | '>' | '=' | '!' | '&' | '|' | '$' | '"' | '\'' | '{' | '}'
-        | '(' | ')' | '[' | ']' | ',' | '.')
+        | '(' | ')' | '[' | ']' | ',' | '.' | ':')
 }

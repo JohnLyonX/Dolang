@@ -64,6 +64,7 @@ impl<'a> StmtParser<'a> {
             if self.at_end() || self.peek().typ == Type::RBrace {
                 break;
             }
+            std::fs::write("/tmp/debug.txt", format!("DEBUG: about to parse, peek = {:?}", self.peek())).unwrap();
             let stmt = self.parse_one_stmt()?;
             if let Some(s) = stmt {
                 stmts.push(s);
@@ -191,9 +192,259 @@ impl<'a> StmtParser<'a> {
             if expr_toks.is_empty() {
                 return Err(Error::InvalidExpression(None));
             }
-            let expr = parse_expr_tokens(&expr_toks)?;
+
+            // Check for special print target: ERR
+            let actual_expr_toks = expr_toks.clone();
+            let print_target = Some(crate::ast::PrintTarget::Stdout);
+
+            // Handle $>>ERR("msg") - stderr output with exactly 1 argument
+            if expr_toks.len() >= 2 && expr_toks[0].typ == Type::Ident && expr_toks[0].literal == "ERR" {
+                if expr_toks[1].typ != Type::LParen {
+                    return Err(Error::Parse(crate::error::ParseError {
+                        message: "ERR requires parentheses: $>>ERR(\"msg\")".to_string(),
+                        line: 1,
+                        column: 1,
+                        found: None,
+                        expected: None,
+                    }));
+                }
+                // Find the argument inside parentheses and extract it
+                let mut found_arg: Option<(Token, bool)> = None; // (token, is_fstring)
+                let mut paren_depth = 0;
+                for tok in expr_toks.iter().skip(2) {
+                    match tok.typ {
+                        Type::LParen => {
+                            paren_depth += 1;
+                        }
+                        Type::RParen => {
+                            if paren_depth == 0 {
+                                break;
+                            }
+                            paren_depth -= 1;
+                        }
+                        Type::String => {
+                            if paren_depth == 0 && found_arg.is_none() {
+                                found_arg = Some((tok.clone(), false));
+                            }
+                        }
+                        Type::FString => {
+                            if paren_depth == 0 && found_arg.is_none() {
+                                found_arg = Some((tok.clone(), true));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                let (arg_tok, is_fstring) = match found_arg {
+                    Some((t, f)) => (t, f),
+                    None => {
+                        return Err(Error::Parse(crate::error::ParseError {
+                            message: "ERR requires a string argument: $>>ERR(\"msg\")".to_string(),
+                            line: 1,
+                            column: 1,
+                            found: None,
+                            expected: None,
+                        }));
+                    }
+                };
+                // Create a string or f-string literal expression
+                let str_expr = if is_fstring {
+                    let segments = crate::parser::expr::parse_fstring_segments(&arg_tok.literal, arg_tok.pos)
+                        .map_err(|e| Error::Parse(crate::error::ParseError {
+                            message: e.to_string(),
+                            line: 1,
+                            column: 1,
+                            found: None,
+                            expected: None,
+                        }))?;
+                    Box::new(crate::ast::Expr::FString(crate::ast::FStringLiteral {
+                        span: crate::ast::Span::from_token(arg_tok.pos),
+                        segments,
+                    }))
+                } else {
+                    Box::new(crate::ast::Expr::StringLiteral(crate::ast::StringLiteral {
+                        span: crate::ast::Span::from_token(arg_tok.pos),
+                        value: std::borrow::Cow::Owned(arg_tok.literal),
+                    }))
+                };
+                self.skip_semis();
+                return Ok(Some(Stmt::Print(crate::ast::PrintStmt {
+                    span: Span::from_token(start),
+                    value: str_expr,
+                    target: crate::ast::PrintTarget::Stderr,
+                })));
+            }
+
+            let expr = parse_expr_tokens(&actual_expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::Print(crate::ast::PrintStmt { span: Span::from_token(start), value: expr })));
+            return Ok(Some(Stmt::Print(crate::ast::PrintStmt {
+                span: Span::from_token(start),
+                value: expr,
+                target: print_target.unwrap_or(crate::ast::PrintTarget::Stdout),
+            })));
+        }
+
+        // --- $<< read (ENV or LINE) ---
+        if typ == Type::Read {
+            let start = self.peek().pos;
+            self.advance(); // consume $<<
+            let expr_toks = self.collect_until_semi();
+            if expr_toks.is_empty() {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "invalid read statement, use $<<ENV(\"KEY\") or $<<LINE(\"prompt\")".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: None,
+                }));
+            }
+
+            // Must start with identifier (ENV or LINE)
+            if expr_toks[0].typ != Type::Ident {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected ENV or LINE after $<<".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: Some(format!("{:?}", expr_toks[0].typ)),
+                    expected: Some("ENV or LINE".to_string()),
+                }));
+            }
+
+            let mode_name = expr_toks[0].literal.clone();
+            if mode_name != "ENV" && mode_name != "LINE" {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: format!("unknown read mode '{}', expected ENV or LINE", mode_name),
+                    line: 1,
+                    column: 1,
+                    found: Some(mode_name),
+                    expected: Some("ENV or LINE".to_string()),
+                }));
+            }
+
+            // Must have parentheses
+            if expr_toks.len() < 2 || expr_toks[1].typ != Type::LParen {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: format!("{} requires parentheses: $<<{}(\"KEY\")", mode_name, mode_name),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("(".to_string()),
+                }));
+            }
+
+            // Parse arguments inside parentheses
+            let mut args: Vec<Token> = Vec::new();
+            let mut paren_depth = 1;
+            let mut i = 2; // start after '('
+            while i < expr_toks.len() {
+                let tok = &expr_toks[i];
+                match tok.typ {
+                    Type::LParen => paren_depth += 1,
+                    Type::RParen => {
+                        paren_depth -= 1;
+                        if paren_depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                // Only collect top-level arguments (not inside nested parens)
+                if paren_depth == 1 && (tok.typ == Type::String || tok.typ == Type::FString) {
+                    args.push(tok.clone());
+                }
+                i += 1;
+            }
+
+            // Check closing paren
+            if i >= expr_toks.len() || expr_toks[i].typ != Type::RParen {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: format!("expected closing parenthesis for {}(...)", mode_name),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some(")".to_string()),
+                }));
+            }
+
+            let mode = if mode_name == "ENV" {
+                // ENV mode: must have exactly one string argument
+                if args.len() != 1 {
+                    return Err(Error::Parse(crate::error::ParseError {
+                        message: "ENV requires a key: $<<ENV(\"KEY\")".to_string(),
+                        line: 1,
+                        column: 1,
+                        found: if args.is_empty() { None } else { Some("multiple arguments".to_string()) },
+                        expected: Some("one string argument".to_string()),
+                    }));
+                }
+                // Check that argument is a plain string (not f-string)
+                if args[0].typ != Type::String {
+                    return Err(Error::Parse(crate::error::ParseError {
+                        message: "ENV key must be a String".to_string(),
+                        line: 1,
+                        column: 1,
+                        found: Some(format!("{:?}", args[0].typ)),
+                        expected: Some("String".to_string()),
+                    }));
+                }
+                crate::ast::ReadMode::Env
+            } else {
+                // LINE mode: at most one string argument (the prompt)
+                if args.len() > 1 {
+                    return Err(Error::Parse(crate::error::ParseError {
+                        message: "LINE accepts at most one argument".to_string(),
+                        line: 1,
+                        column: 1,
+                        found: Some(format!("{} arguments", args.len())),
+                        expected: Some("0 or 1 argument".to_string()),
+                    }));
+                }
+                // If there's an argument, it must be a plain string (not f-string)
+                if args.len() == 1 && args[0].typ != Type::String {
+                    return Err(Error::Parse(crate::error::ParseError {
+                        message: "LINE prompt must be a String".to_string(),
+                        line: 1,
+                        column: 1,
+                        found: Some(format!("{:?}", args[0].typ)),
+                        expected: Some("String".to_string()),
+                    }));
+                }
+                crate::ast::ReadMode::Line
+            };
+
+            // Build the prompt expression if present
+            let prompt = if args.len() == 1 {
+                let arg_tok = &args[0];
+                let prompt_expr = if arg_tok.typ == Type::FString {
+                    let segments = crate::parser::expr::parse_fstring_segments(&arg_tok.literal, arg_tok.pos)
+                        .map_err(|e| Error::Parse(crate::error::ParseError {
+                            message: e.to_string(),
+                            line: 1,
+                            column: 1,
+                            found: None,
+                            expected: None,
+                        }))?;
+                    Box::new(crate::ast::Expr::FString(crate::ast::FStringLiteral {
+                        span: crate::ast::Span::from_token(arg_tok.pos),
+                        segments,
+                    }))
+                } else {
+                    Box::new(crate::ast::Expr::StringLiteral(crate::ast::StringLiteral {
+                        span: crate::ast::Span::from_token(arg_tok.pos),
+                        value: std::borrow::Cow::Owned(arg_tok.literal.clone()),
+                    }))
+                };
+                Some(prompt_expr)
+            } else {
+                None
+            };
+
+            self.skip_semis();
+            return Ok(Some(Stmt::Read(crate::ast::ReadStmt {
+                span: Span::from_token(start),
+                mode,
+                prompt,
+            })));
         }
 
         // --- $ varDecl ---
@@ -204,15 +455,28 @@ impl<'a> StmtParser<'a> {
                 return Err(Error::InvalidStatement(None));
             }
             let name = self.advance().literal.clone();
-            // expect <&
+
+            // Check for type annotation: $ x: Int = 30
+            let type_annotation = if self.peek().typ == Type::Colon {
+                self.advance(); // consume :
+                if self.at_end() || self.peek().typ != Type::Ident {
+                    return Err(Error::InvalidStatement(None));
+                }
+                let type_str = self.advance().literal.clone();
+                Some(type_str)
+            } else {
+                None
+            };
+
+            // expect =
             if self.at_end() || self.peek().typ != Type::Assign {
                 return Err(Error::InvalidStatement(None));
             }
-            self.advance(); // consume <&
+            self.advance(); // consume =
             let expr_toks = self.collect_until_semi();
             let expr = parse_expr_tokens(&expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::VarDecl(VarDeclStmt { span: Span::from_token(start), name, value: expr })));
+            return Ok(Some(Stmt::VarDecl(VarDeclStmt { span: Span::from_token(start), name, type_annotation, value: expr })));
         }
 
         // --- $@ constDecl ---
@@ -223,14 +487,27 @@ impl<'a> StmtParser<'a> {
                 return Err(Error::InvalidStatement(None));
             }
             let name = self.advance().literal.clone();
+
+            // Check for type annotation: $@ MAX_RETRY: Int = 3
+            let type_annotation = if self.peek().typ == Type::Colon {
+                self.advance(); // consume :
+                if self.at_end() || self.peek().typ != Type::Ident {
+                    return Err(Error::InvalidStatement(None));
+                }
+                let type_str = self.advance().literal.clone();
+                Some(type_str)
+            } else {
+                None
+            };
+
             if self.at_end() || self.peek().typ != Type::Assign {
                 return Err(Error::InvalidStatement(None));
             }
-            self.advance(); // consume <&
+            self.advance(); // consume =
             let expr_toks = self.collect_until_semi();
             let expr = parse_expr_tokens(&expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::ConstDecl(ConstDeclStmt { span: Span::from_token(start), name, value: expr })));
+            return Ok(Some(Stmt::ConstDecl(ConstDeclStmt { span: Span::from_token(start), name, type_annotation, value: expr })));
         }
 
         // --- Function call as statement: name(args); ---
@@ -251,7 +528,7 @@ impl<'a> StmtParser<'a> {
             }
         }
 
-        // --- Assign: ident <& expr  OR  var-read <& expr ---
+        // --- Assign: ident = expr  OR  var-read = expr ---
         // --- Compound assign: ident += expr, -= expr, *= expr, /= expr, %= expr ---
         let saved_pos = self.pos;
         let stmt_toks = self.collect_until_semi();
@@ -276,7 +553,7 @@ impl<'a> StmtParser<'a> {
             })));
         }
 
-        // Then check for regular assignment (= or <&)
+        // Then check for regular assignment (=)
         if let Some(assign_idx) = find_token(&stmt_toks, Type::Assign) {
             let start = stmt_toks.first().map(|t| t.pos).unwrap_or(0);
             let name_expr = parse_expr_tokens(&stmt_toks[..assign_idx])?;
@@ -290,8 +567,12 @@ impl<'a> StmtParser<'a> {
 
         // Try parsing as expression statement (e.g. bare function call)
         if !stmt_toks.is_empty() {
-            if let Ok(expr) = parse_expr_tokens(&stmt_toks) {
-                return Ok(Some(Stmt::ExprStmt(expr)));
+            match parse_expr_tokens(&stmt_toks) {
+                Ok(expr) => return Ok(Some(Stmt::ExprStmt(expr))),
+                Err(e) => {
+                    // Return the specific parse error
+                    return Err(e);
+                }
             }
         }
 
@@ -578,16 +859,36 @@ fn parse_init_or_update(toks: &[Token]) -> Result<Option<Box<Stmt>>, Error> {
 
     // VarDecl: starts with $
     if toks[0].typ == Type::VarDecl {
-        if toks.len() < 3 || toks[1].typ != Type::Ident || toks[2].typ != Type::Assign {
+        // Need at least: $ name = value (4 tokens minimum)
+        if toks.len() < 4 || toks[1].typ != Type::Ident {
             return Err(Error::InvalidStatement(None));
         }
         let start = toks[0].pos;
         let name = toks[1].literal.clone();
-        let expr = parse_expr_tokens(&toks[3..])?;
-        return Ok(Some(Box::new(Stmt::VarDecl(VarDeclStmt { span: Span::from_token(start), name, value: expr }))));
+
+        // Check for type annotation: $ x: Int = value
+        let type_annotation;
+        let value_start_idx;
+        if toks[2].typ == Type::Colon {
+            // Type annotation present: $ name: Type = value
+            if toks.len() < 5 || toks[3].typ != Type::Ident || toks[4].typ != Type::Assign {
+                return Err(Error::InvalidStatement(None));
+            }
+            type_annotation = Some(toks[3].literal.clone());
+            value_start_idx = 5;
+        } else if toks[2].typ == Type::Assign {
+            // No type annotation: $ name = value
+            type_annotation = None;
+            value_start_idx = 3;
+        } else {
+            return Err(Error::InvalidStatement(None));
+        }
+
+        let expr = parse_expr_tokens(&toks[value_start_idx..])?;
+        return Ok(Some(Box::new(Stmt::VarDecl(VarDeclStmt { span: Span::from_token(start), name, type_annotation, value: expr }))));
     }
 
-    // Assign: look for <&
+    // Assign: look for =
     if let Some(idx) = find_token(toks, Type::Assign) {
         let start = toks.first().map(|t| t.pos).unwrap_or(0);
         let name_expr = parse_expr_tokens(&toks[..idx])?;

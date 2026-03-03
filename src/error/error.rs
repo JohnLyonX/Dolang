@@ -24,6 +24,7 @@ impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RuntimeError::TypeMismatch { name, expected, actual } => {
+
                 write!(f, "type mismatch: cannot assign {} to variable '{}' of type {}", actual, name, expected)
             }
             RuntimeError::UndefinedVariable(name) => {
@@ -61,11 +62,13 @@ pub enum Error {
     /// Runtime error
     Runtime(RuntimeError),
     /// Invalid expression
-    InvalidExpression,
+    InvalidExpression(Option<String>),
     /// Invalid assignment
-    InvalidAssignment,
+    InvalidAssignment(Option<String>),
     /// Invalid statement
-    InvalidStatement,
+    InvalidStatement(Option<String>),
+    /// Type mismatch error
+    TypeMismatch(String),
     /// Lexer error
     Lexer(String),
     /// Interpreter error
@@ -77,9 +80,28 @@ impl fmt::Display for Error {
         match self {
             Error::Parse(e) => write!(f, "{}", e),
             Error::Runtime(e) => write!(f, "runtime error: {}", e),
-            Error::InvalidExpression => write!(f, "invalid expression"),
-            Error::InvalidAssignment => write!(f, "invalid assignment"),
-            Error::InvalidStatement => write!(f, "invalid statement"),
+            Error::InvalidExpression(detail) => {
+                write!(f, "invalid expression")?;
+                if let Some(d) = detail {
+                    write!(f, ": {}", d)?;
+                }
+                Ok(())
+            }
+            Error::InvalidAssignment(detail) => {
+                write!(f, "invalid assignment")?;
+                if let Some(d) = detail {
+                    write!(f, ": {}", d)?;
+                }
+                Ok(())
+            }
+            Error::InvalidStatement(detail) => {
+                write!(f, "invalid statement")?;
+                if let Some(d) = detail {
+                    write!(f, ": {}", d)?;
+                }
+                Ok(())
+            }
+            Error::TypeMismatch(msg) => write!(f, "{}", msg),
             Error::Lexer(s) => write!(f, "lexer error: {}", s),
             Error::Interpreter(s) => write!(f, "runtime error: {}", s),
         }

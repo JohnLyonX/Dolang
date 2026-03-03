@@ -11,6 +11,7 @@ pub enum Type {
     Div,        // /
     Mod,        // %
     Print,
+    Read,      // $<< - read from stdin
     Assign,
     VarDecl,    // $ - variable declaration
     ConstDecl,  // $@ - constant declaration
@@ -65,6 +66,7 @@ pub enum Type {
     Char,
     Bool,
     String,
+    FString,  // f"..." formatted string
     Ident,
 }
 
@@ -79,6 +81,7 @@ impl fmt::Display for Type {
             Type::Div => write!(f, "/"),
             Type::Mod => write!(f, "%"),
             Type::Print => write!(f, "$>>"),
+            Type::Read => write!(f, "$<<"),
             Type::Assign => write!(f, "="),
             Type::VarDecl => write!(f, "$"),
             Type::ConstDecl => write!(f, "$@"),
@@ -121,6 +124,7 @@ impl fmt::Display for Type {
             Type::Char => write!(f, "CHAR"),
             Type::Bool => write!(f, "BOOL"),
             Type::String => write!(f, "STRING"),
+            Type::FString => write!(f, "FSTRING"),
             Type::Ident => write!(f, "IDENT"),
         }
     }

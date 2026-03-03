@@ -1,11 +1,12 @@
 // Literal parser - handles function literals and anonymous functions.
-use crate::ast::{Expr, FnLiteral, Stmt};
+use crate::ast::{Expr, FnLiteral, Span, Stmt};
 use crate::error::Error;
 use crate::parser::expr::ExprParser;
 use crate::token::Type;
 
 /// Parse anonymous function literal: $fn(x, y) -> Int { body }
 pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Error> {
+    let start = parser.tokens.get(parser.pos).map(|t| t.pos).unwrap_or(0);
     // Parse parameters: (param1, param2, ...)
     if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::LParen {
         return Err(parser.error_expected("expected function parameters", "("));
@@ -125,6 +126,7 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
     }
 
     Ok(Box::new(Expr::FnLiteral(FnLiteral {
+        span: Span::from_token(start),
         params,
         return_type,
         body: body_stmts,

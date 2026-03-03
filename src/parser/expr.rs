@@ -2,7 +2,7 @@
 use std::borrow::Cow;
 
 use crate::ast::{
-    BinaryExpr, BoolLiteral, CharLiteral, Expr, FnCallExpr, IndexAccess, ListLiteral, MapLiteral, MethodCall, NumberLiteral,
+    BinaryExpr, BoolLiteral, CharLiteral, Expr, FStringLiteral, FStringSegment, FnCallExpr, IndexAccess, ListLiteral, MapLiteral, MethodCall, NumberLiteral,
     Span, Spanned, StringLiteral, UnaryExpr, VarLookup,
 };
 use crate::error::{Error, ParseError};
@@ -268,28 +268,33 @@ impl<'a> ExprParser<'a> {
             let method = self.tokens[self.pos].literal.clone();
             self.pos += 1; // consume method name
 
-            // Check for parentheses with arguments
-            let mut args: Vec<Expr> = Vec::new();
-            if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::LParen {
-                self.pos += 1; // consume '('
-
-                // Parse arguments
-                if self.pos < self.tokens.len() && self.tokens[self.pos].typ != Type::RParen {
-                    loop {
-                        let arg = self.parse_expr()?;
-                        args.push(*arg);
-                        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma {
-                            break;
-                        }
-                        self.pos += 1; // consume ','
-                    }
-                }
-
-                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
-                    return Err(self.error_expected("expected closing parenthesis in method call", ")"));
-                }
-                self.pos += 1; // consume ')'
+            // Method calls MUST have parentheses - error if missing
+            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                return Err(self.error_expected(
+                    &format!("method '{}' requires parentheses, use '{}(...)' instead", method, method),
+                    "("
+                ));
             }
+
+            // Parse arguments
+            let mut args: Vec<Expr> = Vec::new();
+            self.pos += 1; // consume '('
+
+            if self.pos < self.tokens.len() && self.tokens[self.pos].typ != Type::RParen {
+                loop {
+                    let arg = self.parse_expr()?;
+                    args.push(*arg);
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma {
+                        break;
+                    }
+                    self.pos += 1; // consume ','
+                }
+            }
+
+            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                return Err(self.error_expected("expected closing parenthesis in method call", ")"));
+            }
+            self.pos += 1; // consume ')'
 
             expr = Box::new(Expr::MethodCall(MethodCall {
                 span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
@@ -317,6 +322,11 @@ impl<'a> ExprParser<'a> {
                 Ok(Box::new(Expr::Bool(BoolLiteral { span: Span::from_token(tok.pos), value })))
             }
             Type::String => Ok(Box::new(Expr::StringLiteral(StringLiteral { span: Span::from_token(tok.pos), value: Cow::Owned(tok.literal) }))),
+            Type::FString => {
+                // Parse f-string segments
+                let segments = parse_fstring_segments(&tok.literal, tok.pos)?;
+                Ok(Box::new(Expr::FString(FStringLiteral { span: Span::from_token(tok.pos), segments })))
+            }
             // $fn: anonymous function literal
             Type::Fn => self.parse_fn_literal(),
             // Ident: check if followed by '(' for function call
@@ -441,6 +451,67 @@ impl<'a> ExprParser<'a> {
                     entries,
                 })))
             }
+            // Read expression: $<<ENV("KEY") or $<<LINE("prompt")
+            Type::Read => {
+                let start = tok.pos;
+                // Expect: ENV("key") or LINE("prompt")
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Ident {
+                    return Err(self.error_expected("expected ENV or LINE after $<<", "identifier"));
+                }
+                let mode_name = self.tokens[self.pos].literal.clone();
+                if mode_name != "ENV" && mode_name != "LINE" {
+                    return Err(self.error_expected("expected ENV or LINE", &format!("got {}", mode_name)));
+                }
+                self.pos += 1; // consume ENV/LINE
+
+                // Expect parentheses
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                    return Err(self.error_expected(&format!("expected '(' after {}", mode_name), "("));
+                }
+                self.pos += 1; // consume '('
+
+                // Parse optional string argument
+                let mut prompt = None;
+                if self.pos < self.tokens.len() && (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString) {
+                    let arg_tok = self.tokens[self.pos].clone();
+                    self.pos += 1;
+                    if arg_tok.typ == Type::FString {
+                        let segments = parse_fstring_segments(&arg_tok.literal, arg_tok.pos)
+                            .map_err(|e| self.error(&e.to_string()))?;
+                        prompt = Some(Box::new(Expr::FString(FStringLiteral {
+                            span: Span::from_token(arg_tok.pos),
+                            segments,
+                        })));
+                    } else {
+                        prompt = Some(Box::new(Expr::StringLiteral(StringLiteral {
+                            span: Span::from_token(arg_tok.pos),
+                            value: Cow::Owned(arg_tok.literal),
+                        })));
+                    }
+                }
+
+                // Check closing paren
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                    return Err(self.error_expected("expected ')'", ")"));
+                }
+                self.pos += 1; // consume ')'
+
+                // ENV requires exactly one argument, LINE accepts at most one
+                let mode = if mode_name == "ENV" {
+                    if prompt.is_none() {
+                        return Err(self.error_expected("ENV requires a key: $<<ENV(\"KEY\")", "string"));
+                    }
+                    crate::ast::ReadMode::Env
+                } else {
+                    crate::ast::ReadMode::Line
+                };
+
+                Ok(Box::new(Expr::Read(crate::ast::ExprRead {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    mode,
+                    prompt,
+                })))
+            }
             _ => Err(self.error(&format!("unexpected token: {:?} {}", tok.typ, tok.literal))),
         }
     }
@@ -449,4 +520,110 @@ impl<'a> ExprParser<'a> {
     pub fn parse_fn_literal(&mut self) -> Result<Box<Expr>, Error> {
         crate::parser::literal::parse_fn_literal(self)
     }
+}
+
+/// Parse f-string segments from the raw literal
+/// Format: "Hello {name}, you have {count + 1} items"
+pub fn parse_fstring_segments(literal: &str, start_pos: usize) -> Result<Vec<FStringSegment>, Error> {
+    use crate::lexer::Lexer;
+
+    let mut segments = Vec::new();
+    let mut current_literal = String::new();
+    let mut chars = literal.chars().peekable();
+    let mut pos = start_pos;
+
+    while let Some(ch) = chars.next() {
+        pos += 1;
+        match ch {
+            '{' => {
+                // Start of expression
+                if !current_literal.is_empty() {
+                    segments.push(FStringSegment::Literal(current_literal.clone()));
+                    current_literal.clear();
+                }
+                // Find the closing brace
+                let mut expr_str = String::new();
+                let mut brace_count = 1;
+                while let Some(c) = chars.next() {
+                    pos += 1;
+                    match c {
+                        '{' => {
+                            brace_count += 1;
+                            expr_str.push(c);
+                        }
+                        '}' => {
+                            brace_count -= 1;
+                            if brace_count == 0 {
+                                // Parse the expression
+                                if expr_str.trim().is_empty() {
+                                    return Err(Error::Parse(ParseError {
+                                        message: "f-string syntax error: empty expression in \"{}\"".to_string(),
+                                        line: 1,
+                                        column: pos - 1,
+                                        found: None,
+                                        expected: None,
+                                    }));
+                                }
+                                // Tokenize the expression and parse it
+                                let mut lexer = Lexer::new(&expr_str);
+                                let mut expr_tokens = lexer.lex_all()
+                                    .map_err(|e| Error::Parse(ParseError {
+                                        message: format!("f-string expression parse error: {}", e),
+                                        line: 1,
+                                        column: pos,
+                                        found: None,
+                                        expected: None,
+                                    }))?;
+                                // Filter out Eof token for parsing
+                                expr_tokens.retain(|t| t.typ != Type::Eof);
+                                let expr = parse_expr_tokens(&expr_tokens)
+                                    .map_err(|e| Error::Parse(ParseError {
+                                        message: format!("f-string expression parse error: {}", e),
+                                        line: 1,
+                                        column: pos,
+                                        found: None,
+                                        expected: None,
+                                    }))?;
+                                segments.push(FStringSegment::Expression(expr));
+                                break;
+                            } else {
+                                expr_str.push(c);
+                            }
+                        }
+                        _ => {
+                            expr_str.push(c);
+                        }
+                    }
+                }
+                if brace_count > 0 {
+                    return Err(Error::Parse(ParseError {
+                        message: "f-string syntax error: unclosed \"{\"".to_string(),
+                        line: 1,
+                        column: pos,
+                        found: None,
+                        expected: None,
+                    }));
+                }
+            }
+            '}' => {
+                return Err(Error::Parse(ParseError {
+                    message: "f-string syntax error: unexpected \"}\"".to_string(),
+                    line: 1,
+                    column: pos,
+                    found: None,
+                    expected: None,
+                }));
+            }
+            _ => {
+                current_literal.push(ch);
+            }
+        }
+    }
+
+    // Add remaining literal
+    if !current_literal.is_empty() {
+        segments.push(FStringSegment::Literal(current_literal));
+    }
+
+    Ok(segments)
 }

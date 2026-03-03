@@ -311,59 +311,7 @@ pub fn run_file(filename: &str) {
         }
     };
 
-    // Validate each line has proper ending
-    let mut block_depth = 0;
-    let mut in_multiline_comment = false;
-    for line in content.lines() {
-        let mut processed_line = String::new();
-        let mut chars = line.chars().peekable();
-
-        while let Some(c) = chars.next() {
-            if in_multiline_comment {
-                if c == '*' && chars.peek() == Some(&'/') {
-                    chars.next();
-                    in_multiline_comment = false;
-                }
-                continue;
-            }
-
-            if c == '/' && chars.peek() == Some(&'*') {
-                chars.next();
-                in_multiline_comment = true;
-                continue;
-            }
-
-            if c == '/' && chars.peek() == Some(&'/') {
-                break;
-            }
-
-            processed_line.push(c);
-        }
-
-        let trimmed = processed_line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        for c in trimmed.chars() {
-            if c == '{' {
-                block_depth += 1;
-            } else if c == '}' {
-                block_depth -= 1;
-            }
-        }
-
-        if block_depth == 0 && !trimmed.ends_with('}') && !trimmed.ends_with(';') {
-            err_red(&format!("[ERROR] missing ';' at: {}", trimmed));
-            process::exit(1);
-        }
-    }
-
-    if in_multiline_comment {
-        err_red("[ERROR] unclosed multi-line comment");
-        process::exit(1);
-    }
-
+    // Parse the file - validation is handled by the parser
     let statements = match parser::parse(&content) {
         Ok(stmts) => stmts,
         Err(e) => {

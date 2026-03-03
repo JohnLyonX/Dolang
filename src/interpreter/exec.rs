@@ -1,10 +1,10 @@
 // Statement execution - executes AST statements.
-use crate::ast::{Expr, FnDeclStmt, ForInStmt, ForStmt, Stmt};
+use crate::ast::{Expr, FnDeclStmt, Stmt};
 use crate::error::Error;
 use std::collections::HashMap;
 use std::io::{self, Write};
 
-use super::env::{detect_type, format_list, format_map, list_len, list_set, map_set, to_bool, ValueType, VarValue};
+use super::env::{detect_type, format_list, format_map, list_len, list_set, map_set, parse_type_annotation, to_bool, type_name, ValueType, VarValue};
 use super::eval::{check_eval_result, eval_expr};
 
 pub type Env = HashMap<String, VarValue>;
@@ -60,26 +60,103 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
         }
 
         Stmt::Print(st) => {
+            // Determine the target writer (stdout or stderr)
+            let use_stderr = st.target == crate::ast::PrintTarget::Stderr;
+
             match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
                 Ok(Some(val)) => {
+                    // Check if this is a function reference and call it
+                    if val.starts_with("__anon_fn_") || val.starts_with("__fn_") {
+                        // Try to find the user-defined variable name for this function
+                        let user_var_name = env.iter()
+                            .find(|(_, v)| v.value == val)
+                            .map(|(k, _)| k.clone());
+
+                        if let Some(fn_def) = fns.get(&val).cloned() {
+                            // Call the function with no arguments
+                            match call_fn(&fn_def, &[], fns, w) {
+                                Ok(Some(result)) => {
+                                    // Format and print the result
+                                    let display_val = if result.starts_with("__LST__:") {
+                                        format_list(&result)
+                                    } else if result.starts_with("__MAP__:") {
+                                        format_map(&result)
+                                    } else {
+                                        result
+                                    };
+                                    if use_stderr {
+                                        eprintln!("{}", display_val);
+                                    } else {
+                                        if writeln!(w, "{}", display_val).is_err() {
+                                            return Flow::Err(Error::InvalidStatement(None));
+                                        }
+                                    }
+                                    return Flow::Normal;
+                                }
+                                Ok(None) => {
+                                    // Function returned nothing, print empty line
+                                    if use_stderr {
+                                        eprintln!("");
+                                    } else {
+                                        if writeln!(w).is_err() {
+                                            return Flow::Err(Error::InvalidStatement(None));
+                                        }
+                                    }
+                                    return Flow::Normal;
+                                }
+                                Err(e) => {
+                                    // If we found a user variable name, use it in the error message
+                                    if let Some(var_name) = user_var_name {
+                                        let enhanced_error = match &e {
+                                            Error::Interpreter(msg) => {
+                                                // Replace the internal function name with user variable name
+                                                let new_msg = msg.replace(&val, &var_name);
+                                                Error::Interpreter(new_msg)
+                                            }
+                                            _ => e,
+                                        };
+                                        return Flow::Err(enhanced_error);
+                                    }
+                                    return Flow::Err(e);
+                                }
+                            }
+                        }
+                    }
+
                     // Format list and map values for display
                     let display_val = if val.starts_with("__LST__:") {
                         format_list(&val)
                     } else if val.starts_with("__MAP__:") {
                         format_map(&val)
+                    } else if val.starts_with("__STR__:") {
+                        // Remove __STR__: prefix for display
+                        val.trim_start_matches("__STR__:").to_string()
                     } else {
-                        val
+                        val.clone()
                     };
-                    if writeln!(w, "{}", display_val).is_err() {
-                        return Flow::Err(Error::InvalidStatement(None));
+                    if use_stderr {
+                        eprintln!("{}", display_val);
+                    } else {
+                        if writeln!(w, "{}", display_val).is_err() {
+                            return Flow::Err(Error::InvalidStatement(None));
+                        }
                     }
                     Flow::Normal
                 }
                 Ok(None) => {
-                    if let Expr::VarLookup(v) = &*st.value {
+                    // Check for undefined variable - need to handle nested expressions like MethodCall
+                    fn find_undefined_var(expr: &Expr) -> Option<String> {
+                        match expr {
+                            Expr::VarLookup(v) => Some(v.name.as_ref().to_string()),
+                            Expr::MethodCall(m) => find_undefined_var(&m.object),
+                            Expr::IndexAccess(i) => find_undefined_var(&i.object),
+                            _ => None,
+                        }
+                    }
+                    if let Some(var_name) = find_undefined_var(&st.value) {
                         Flow::Err(Error::Interpreter(format!(
                             "variable '{}' is not defined",
-                            v.name
+                            var_name
                         )))
                     } else {
                         Flow::Err(Error::InvalidExpression(None))
@@ -89,10 +166,135 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
             }
         }
 
+        Stmt::Read(st) => {
+            use std::io;
+
+            match st.mode {
+                crate::ast::ReadMode::Env => {
+                    // ENV mode: get key from prompt (which contains the key name)
+                    // We stored the key in prompt as a string literal
+                    let key = if let Some(ref prompt_expr) = st.prompt {
+                        match eval_expr(prompt_expr, env, fns, w, false) {
+                            Some(k) => k,
+                            None => {
+                                return Flow::Err(Error::Interpreter("ENV requires a key".to_string()));
+                            }
+                        }
+                    } else {
+                        return Flow::Err(Error::Interpreter("ENV requires a key: $<<ENV(\"KEY\")".to_string()));
+                    };
+
+                    // Remove string prefix if present
+                    let key = key.trim_start_matches("__STR__:");
+
+                    // Check for empty key
+                    if key.is_empty() {
+                        return Flow::Err(Error::Interpreter("ENV requires a key: $<<ENV(\"KEY\")".to_string()));
+                    }
+
+                    // Read environment variable
+                    match std::env::var(key) {
+                        Ok(_val) => {
+                            // ENV as standalone statement should not print the value
+                            // The value is only used when assigned: $ x = $<<ENV("KEY")
+                            // Currently we just return Normal without printing
+                            Flow::Normal
+                        }
+                        Err(_) => {
+                            Flow::Err(Error::Interpreter(format!(
+                                "runtime error: environment variable '{}' is not defined",
+                                key
+                            )))
+                        }
+                    }
+                }
+                crate::ast::ReadMode::Line => {
+                    // LINE mode: read a line from stdin
+
+                    // If there's a prompt, print it first (without newline)
+                    if let Some(ref prompt_expr) = st.prompt {
+                        match eval_expr(prompt_expr, env, fns, w, false) {
+                            Some(prompt_val) => {
+                                let prompt = prompt_val.trim_start_matches("__STR__:");
+                                // Print prompt without newline
+                                if write!(w, "{}", prompt).is_err() {
+                                    return Flow::Err(Error::InvalidStatement(None));
+                                }
+                                if w.flush().is_err() {
+                                    return Flow::Err(Error::InvalidStatement(None));
+                                }
+                            }
+                            None => {
+                                return Flow::Err(Error::InvalidExpression(None));
+                            }
+                        }
+                    }
+
+                    // Read from stdin
+                    let mut input = String::new();
+                    match io::stdin().read_line(&mut input) {
+                        Ok(0) => {
+                            // EOF reached
+                            Flow::Err(Error::Interpreter("runtime error: unexpected EOF on stdin".to_string()))
+                        }
+                        Ok(_) => {
+                            // Remove trailing newline
+                            let _input = input.trim_end_matches('\n').trim_end_matches('\r');
+                            // For LINE mode in a statement context (not assignment),
+                            // we just read and discard the input (pause effect)
+                            // The value will be handled by the assignment if present
+                            Flow::Normal
+                        }
+                        Err(_) => {
+                            Flow::Err(Error::Interpreter("runtime error: failed to read from stdin".to_string()))
+                        }
+                    }
+                }
+            }
+        }
+
         Stmt::VarDecl(st) => {
+            // Check if a constant with this name already exists
+            if let Some(existing) = env.get(&st.name) {
+                if existing.is_const {
+                    return Flow::Err(Error::Interpreter(format!(
+                        "cannot shadow constant '{}' with a variable",
+                        st.name
+                    )));
+                }
+            }
+
             match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
                 Ok(Some(val)) => {
-                    let value_type = detect_type(&val);
+                    let value_type: ValueType;
+
+                    // Check type annotation if present
+                    if let Some(ref type_str) = st.type_annotation {
+                        let expected_type = parse_type_annotation(type_str);
+                        match expected_type {
+                            Some(expected) => {
+                                let detected = detect_type(&val);
+                                if detected != expected {
+                                    return Flow::Err(Error::TypeMismatch(format!(
+                                        "type error: declared type '{}' does not match value type '{}'\n  hint: change the annotation or the value",
+                                        type_str,
+                                        type_name(&detected)
+                                    )));
+                                }
+                                value_type = expected;
+                            }
+                            None => {
+                                return Flow::Err(Error::TypeMismatch(format!(
+                                    "type error: unknown type '{}', supported types are: Int, Float, String, Bool",
+                                    type_str
+                                )));
+                            }
+                        }
+                    } else {
+                        // No type annotation: use Dynamic type (can change freely)
+                        value_type = ValueType::Dynamic;
+                    }
+
                     env.insert(st.name.clone(), VarValue { value: val, value_type, is_const: false });
                     Flow::Normal
                 }
@@ -102,10 +304,43 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
         }
 
         Stmt::ConstDecl(st) => {
+            // Check if constant is already defined
+            if let Some(existing) = env.get(&st.name) {
+                if existing.is_const {
+                    return Flow::Err(Error::Interpreter(format!(
+                        "constant '{}' is already defined",
+                        st.name
+                    )));
+                }
+            }
+
             match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
                 Ok(Some(val)) => {
-                    let value_type = detect_type(&val);
-                    env.insert(st.name.clone(), VarValue { value: val, value_type, is_const: true });
+                    let detected_type = detect_type(&val);
+
+                    // Check type annotation if present
+                    if let Some(ref type_str) = st.type_annotation {
+                        let expected_type = parse_type_annotation(type_str);
+                        match expected_type {
+                            Some(expected) => {
+                                if detected_type != expected {
+                                    return Flow::Err(Error::TypeMismatch(format!(
+                                        "type error: declared type '{}' does not match value type '{}'\n  hint: change the annotation or the value",
+                                        type_str,
+                                        type_name(&detected_type)
+                                    )));
+                                }
+                            }
+                            None => {
+                                return Flow::Err(Error::TypeMismatch(format!(
+                                    "type error: unknown type '{}', supported types are: Int, Float, String, Bool",
+                                    type_str
+                                )));
+                            }
+                        }
+                    }
+
+                    env.insert(st.name.clone(), VarValue { value: val, value_type: detected_type, is_const: true });
                     Flow::Normal
                 }
                 Ok(None) => Flow::Err(Error::InvalidAssignment(None)),
@@ -196,13 +431,20 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     ));
                 }
                 let new_type = detect_type(&val);
-                if new_type != existing.value_type {
-                    return Flow::Err(Error::Interpreter(format!(
-                        "type mismatch: cannot assign {} to variable '{}' of type {:?}",
-                        val, name, existing.value_type
+                // Allow assignment if variable is Dynamic (no type annotation) or types match
+                if existing.value_type != ValueType::Dynamic && new_type != existing.value_type {
+                    return Flow::Err(Error::TypeMismatch(format!(
+                        "type error: variable '{}' is declared as '{}', cannot assign '{}' value\n  hint: use '$ {}: {} = ...' to redeclare with a new type",
+                        name,
+                        type_name(&existing.value_type),
+                        type_name(&new_type),
+                        name,
+                        type_name(&new_type)
                     )));
                 }
-                env.insert(name, VarValue { value: val, value_type: new_type, is_const: false });
+                // For Dynamic type, keep it as Dynamic to allow future type changes
+                let final_type = existing.value_type.clone();
+                env.insert(name, VarValue { value: val, value_type: final_type, is_const: false });
             } else {
                 let value_type = detect_type(&val);
                 env.insert(name, VarValue { value: val, value_type, is_const: false });
@@ -478,8 +720,8 @@ pub fn call_fn(
                 if let Some(ref v) = val {
                     let actual_type = detect_type(v);
                     let (expected, expected_str) = match expected_type.to_lowercase().as_str() {
-                        "int" | "integer" => (ValueType::Number, "Int"),
-                        "float" => (ValueType::Number, "Float"),
+                        "int" | "integer" => (ValueType::Int, "Int"),
+                        "float" => (ValueType::Float, "Float"),
                         "string" => (ValueType::String, "String"),
                         "bool" | "boolean" => (ValueType::Bool, "Bool"),
                         _ => {
@@ -491,7 +733,9 @@ pub fn call_fn(
                     };
                     if actual_type != expected {
                         let actual_str = match actual_type {
-                            ValueType::Number => "Int",
+                            ValueType::Dynamic => "Dynamic",
+                            ValueType::Int => "Int",
+                            ValueType::Float => "Float",
                             ValueType::String => "String",
                             ValueType::Bool => "Bool",
                             ValueType::List => "List",

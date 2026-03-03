@@ -3,7 +3,7 @@ use crate::ast::{Expr, FnDeclStmt};
 use crate::error::Error;
 use crate::token::Type;
 
-use super::env::{generate_fn_name, list_get, list_len, map_get, map_len, serialize_list, serialize_map, to_bool, Env, FnEnv};
+use super::env::{generate_fn_name, list_get, list_len, map_get, serialize_list, serialize_map, to_bool, Env, FnEnv};
 
 /// Smart number formatting - follows these rules:
 /// 1. Integer results: no decimal point (5.0 → 5)
@@ -213,400 +213,44 @@ pub fn eval_expr(
             }
         }
         Expr::MethodCall(call) => {
-            // First, evaluate the object
-            let obj_val = eval_expr(&call.object, env, fns, w, false)?;
+            // Evaluate the object to DolangValue
+            let obj_str = eval_expr(&call.object, env, fns, w, false)?;
+            let obj_val = match crate::interpreter::DolangValue::parse_legacy(&obj_str) {
+                Some(v) => v,
+                None => return Some(format!("[ERROR] runtime error: invalid value {}", obj_str)),
+            };
 
-            // Then evaluate the arguments
-            let mut arg_vals: Vec<String> = Vec::new();
+            // Evaluate arguments to DolangValue
+            let mut arg_vals: Vec<crate::interpreter::DolangValue> = Vec::new();
             for arg in &call.args {
                 if let Some(val) = eval_expr(arg, env, fns, w, false) {
-                    arg_vals.push(val);
+                    if let Some(dv) = crate::interpreter::DolangValue::parse_legacy(&val) {
+                        arg_vals.push(dv);
+                    } else {
+                        return Some(format!("[ERROR] runtime error: invalid argument {}", val));
+                    }
                 } else {
                     return None;
                 }
             }
 
-            // Dispatch to method based on object type and method name
-            if obj_val.starts_with("__LST__:") {
-                // List methods
-                match call.method.as_str() {
-                    "len" | "length" => {
-                        return Some(list_len(&obj_val).unwrap_or(0).to_string());
-                    }
-                    "push" => {
-                        // push(value) - append to list
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'push' requires 1 argument".to_string());
-                        }
-                        // Deserialize, add, serialize back
-                        let mut list = super::env::deserialize_list(&obj_val).unwrap_or_default();
-                        list.push(arg_vals[0].clone());
-                        return Some(super::env::serialize_list(&list));
-                    }
-                    "pop" => {
-                        // pop() - remove last element
-                        let mut list = super::env::deserialize_list(&obj_val).unwrap_or_default();
-                        if list.is_empty() {
-                            return Some("[ERROR] cannot pop from empty list".to_string());
-                        }
-                        let popped = list.pop().unwrap();
-                        // Store modified list back would require mutation - for now return popped value
-                        // Actually, we need to return the popped value, not the modified list
-                        return Some(popped);
-                    }
-                    "contains" => {
-                        // contains(value) - check if list contains value
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'contains' requires 1 argument".to_string());
-                        }
-                        let list = super::env::deserialize_list(&obj_val).unwrap_or_default();
-                        return Some(list.contains(&arg_vals[0]).to_string());
-                    }
-                    "reverse" => {
-                        // reverse() - return reversed list
-                        let mut list = super::env::deserialize_list(&obj_val).unwrap_or_default();
-                        list.reverse();
-                        return Some(super::env::serialize_list(&list));
-                    }
-                    "join" => {
-                        // join(separator) - join list elements into string
-                        let sep = if arg_vals.is_empty() {
-                            "".to_string()
-                        } else {
-                            arg_vals[0].clone()
-                        };
-                        let list = super::env::deserialize_list(&obj_val).unwrap_or_default();
-                        return Some(list.join(&sep));
-                    }
-                    "type" => {
-                        return Some("List".to_string());
-                    }
-                    _ => {
-                        return Some(format!("[ERROR] runtime error: list has no method '{}'", call.method));
-                    }
-                }
-            } else if obj_val.starts_with("__MAP__:") {
-                // Map methods
-                match call.method.as_str() {
-                    "len" | "length" => {
-                        return Some(map_len(&obj_val).unwrap_or(0).to_string());
-                    }
-                    "keys" => {
-                        // Return keys as a list
-                        let map = super::env::deserialize_map(&obj_val).unwrap_or_default();
-                        let keys: Vec<String> = map.keys().cloned().collect();
-                        return Some(super::env::serialize_list(&keys));
-                    }
-                    "values" => {
-                        // Return values as a list
-                        let map = super::env::deserialize_map(&obj_val).unwrap_or_default();
-                        let values: Vec<String> = map.values().cloned().collect();
-                        return Some(super::env::serialize_list(&values));
-                    }
-                    "contains_key" => {
-                        // contains_key(key) - check if key exists
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'contains_key' requires 1 argument".to_string());
-                        }
-                        let map = super::env::deserialize_map(&obj_val).unwrap_or_default();
-                        return Some(map.contains_key(&arg_vals[0]).to_string());
-                    }
-                    "remove" => {
-                        // remove(key) - remove key and return value
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'remove' requires 1 argument".to_string());
-                        }
-                        let mut map = super::env::deserialize_map(&obj_val).unwrap_or_default();
-                        if map.swap_remove(&arg_vals[0]).is_some() {
-                            // Return a new map without the key
-                            return Some(super::env::serialize_map(&map));
-                        } else {
-                            return Some("[ERROR] key not found".to_string());
-                        }
-                    }
-                    "type" => {
-                        return Some("Map".to_string());
-                    }
-                    _ => {
-                        return Some(format!("[ERROR] runtime error: map has no method '{}'", call.method));
-                    }
-                }
-            } else if obj_val == "true" || obj_val == "false" {
-                // Bool methods
-                let b = obj_val == "true";
-                match call.method.as_str() {
-                    "to_str" => {
-                        return Some(format!("__STR__:{}", b.to_string()));
-                    }
-                    "to_int" => {
-                        return Some("[ERROR] runtime error: type mismatch: Bool cannot convert to Int".to_string());
-                    }
-                    "to_float" => {
-                        return Some("[ERROR] runtime error: type mismatch: Bool cannot convert to Float".to_string());
-                    }
-                    "to_bool" => {
-                        return Some(b.to_string());
-                    }
-                    "type" => {
-                        return Some("Bool".to_string());
-                    }
-                    _ => {
-                        return Some(format!("[ERROR] runtime error: Bool has no method '{}'", call.method));
-                    }
-                }
-            } else if obj_val.parse::<f64>().is_ok() {
-                // Number methods - could be Int or Float
-                let num_str = &obj_val;
-                // Check if it's an integer (no decimal point in original)
-                let is_int = !num_str.contains('.');
+            // Convert args to string slice for fallback
+            let arg_strs: Vec<String> = arg_vals.iter().map(|v| v.to_legacy()).collect();
 
-                match call.method.as_str() {
-                    "to_str" => {
-                        return Some(format!("__STR__:{}", num_str));
-                    }
-                    "to_int" => {
-                        // Convert to int (truncate for floats)
-                        if let Ok(i) = num_str.parse::<i64>() {
-                            return Some(i.to_string());
-                        } else if let Ok(f) = num_str.parse::<f64>() {
-                            // Try parsing as float and truncate
-                            return Some((f as i64).to_string());
-                        } else {
-                            return Some("[ERROR] runtime error: cannot convert to Int".to_string());
-                        }
-                    }
-                    "to_float" => {
-                        if let Ok(f) = num_str.parse::<f64>() {
-                            return Some(format_float_always(f));
-                        } else {
-                            return Some("[ERROR] runtime error: cannot convert to Float".to_string());
-                        }
-                    }
-                    "to_bool" => {
-                        // Only allow 0 or 1 for integers
-                        if is_int {
-                            if let Ok(i) = num_str.parse::<i64>() {
-                                if i == 0 {
-                                    return Some("false".to_string());
-                                } else if i == 1 {
-                                    return Some("true".to_string());
-                                } else {
-                                    return Some(format!("[ERROR] runtime error: cannot convert {} to Bool\nexpected 0 or 1", i));
-                                }
-                            }
-                        }
-                        return Some("[ERROR] runtime error: type mismatch: Float cannot convert to Bool".to_string());
-                    }
-                    "type" => {
-                        return Some(if is_int { "Int" } else { "Float" }.to_string());
-                    }
-                    _ => {
-                        return Some(format!("[ERROR] runtime error: Number has no method '{}'", call.method));
-                    }
-                }
-            } else if obj_val.starts_with("__STR__:") {
-                // String values from to_str() conversion
-                let s = obj_val.trim_start_matches("__STR__:");
-                match call.method.as_str() {
-                    "len" | "length" => {
-                        return Some(s.len().to_string());
-                    }
-                    "upper" => {
-                        return Some(s.to_uppercase());
-                    }
-                    "lower" => {
-                        return Some(s.to_lowercase());
-                    }
-                    "trim" => {
-                        return Some(s.trim().to_string());
-                    }
-                    "contains" => {
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'contains' requires 1 argument".to_string());
-                        }
-                        let arg = arg_vals[0].trim_start_matches("__STR__:");
-                        return Some(s.contains(arg).to_string());
-                    }
-                    "starts_with" => {
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'starts_with' requires 1 argument".to_string());
-                        }
-                        let arg = arg_vals[0].trim_start_matches("__STR__:");
-                        return Some(s.starts_with(arg).to_string());
-                    }
-                    "ends_with" => {
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'ends_with' requires 1 argument".to_string());
-                        }
-                        let arg = arg_vals[0].trim_start_matches("__STR__:");
-                        return Some(s.ends_with(arg).to_string());
-                    }
-                    "replace" => {
-                        if arg_vals.len() != 2 {
-                            return Some("[ERROR] method 'replace' requires 2 arguments".to_string());
-                        }
-                        let old = arg_vals[0].trim_start_matches("__STR__:");
-                        let new = arg_vals[1].trim_start_matches("__STR__:");
-                        return Some(s.replace(old, new));
-                    }
-                    "split" => {
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'split' requires 1 argument".to_string());
-                        }
-                        let sep = arg_vals[0].trim_start_matches("__STR__:");
-                        let parts: Vec<String> = s.split(sep).map(|s| format!("__STR__:{}", s)).collect();
-                        return Some(super::env::serialize_list(&parts));
-                    }
-                    "slice" => {
-                        if arg_vals.len() != 2 {
-                            return Some("[ERROR] method 'slice' requires 2 arguments".to_string());
-                        }
-                        if let (Ok(start), Ok(end)) = (arg_vals[0].parse::<usize>(), arg_vals[1].parse::<usize>()) {
-                            let chars: Vec<char> = s.chars().collect();
-                            if start < chars.len() && end <= chars.len() && start < end {
-                                let slice: String = chars[start..end].iter().collect();
-                                return Some(format!("__STR__:{}", slice));
-                            }
-                        }
-                        return Some("[ERROR] invalid slice indices".to_string());
-                    }
-                    "to_int" => {
-                        if let Ok(i) = s.parse::<i64>() {
-                            return Some(i.to_string());
-                        } else if let Ok(f) = s.parse::<f64>() {
-                            return Some((f as i64).to_string());
-                        } else {
-                            return Some(format!("[ERROR] runtime error: cannot convert \"{}\" to Int", s));
-                        }
-                    }
-                    "to_float" => {
-                        if let Ok(f) = s.parse::<f64>() {
-                            return Some(format_float_always(f));
-                        } else {
-                            return Some(format!("[ERROR] runtime error: cannot convert \"{}\" to Float", s));
-                        }
-                    }
-                    "to_bool" => {
-                        if s == "true" {
-                            return Some("true".to_string());
-                        } else if s == "false" {
-                            return Some("false".to_string());
-                        } else {
-                            return Some(format!("[ERROR] runtime error: cannot convert \"{}\" to Bool\nexpected \"true\" or \"false\"", s));
-                        }
-                    }
-                    "to_str" => {
-                        return Some(s.to_string());
-                    }
-                    "type" => {
-                        return Some("String".to_string());
-                    }
-                    _ => {
-                        return Some(format!("[ERROR] runtime error: string has no method '{}'", call.method));
-                    }
-                }
-            } else if !obj_val.starts_with("__LST__:") && !obj_val.starts_with("__MAP__:") {
-                // String methods - strings are any value that doesn't start with special prefixes
-                // and wasn't parsed as Number or Bool
-                let s = &obj_val;
-                // It's a string
-                match call.method.as_str() {
-                    "len" | "length" => {
-                        return Some(s.len().to_string());
-                    }
-                    "upper" => {
-                        return Some(s.to_uppercase());
-                    }
-                    "lower" => {
-                        return Some(s.to_lowercase());
-                    }
-                    "trim" => {
-                        return Some(s.trim().to_string());
-                    }
-                    "contains" => {
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'contains' requires 1 argument".to_string());
-                        }
-                        return Some(s.contains(&arg_vals[0]).to_string());
-                    }
-                    "starts_with" => {
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'starts_with' requires 1 argument".to_string());
-                        }
-                        return Some(s.starts_with(&arg_vals[0]).to_string());
-                    }
-                    "ends_with" => {
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'ends_with' requires 1 argument".to_string());
-                        }
-                        return Some(s.ends_with(&arg_vals[0]).to_string());
-                    }
-                    "replace" => {
-                        if arg_vals.len() < 2 {
-                            return Some("[ERROR] method 'replace' requires 2 arguments".to_string());
-                        }
-                        return Some(s.replace(&arg_vals[0], &arg_vals[1]));
-                    }
-                    "split" => {
-                        if arg_vals.is_empty() {
-                            return Some("[ERROR] method 'split' requires 1 argument".to_string());
-                        }
-                        let parts: Vec<String> = s.split(&arg_vals[0]).map(|s| s.to_string()).collect();
-                        return Some(super::env::serialize_list(&parts));
-                    }
-                    "slice" => {
-                        if arg_vals.len() < 2 {
-                            return Some("[ERROR] method 'slice' requires 2 arguments".to_string());
-                        }
-                        let start = arg_vals[0].parse::<usize>().ok();
-                        let end = arg_vals[1].parse::<usize>().ok();
-                        if let (Some(si), Some(ei)) = (start, end) {
-                            if si < s.len() && ei <= s.len() && si < ei {
-                                return Some(s[si..ei].to_string());
-                            }
-                        }
-                        return Some("[ERROR] invalid slice indices".to_string());
-                    }
-                    "to_int" => {
-                        // Try to parse as i64 first, then as f64 and truncate
-                        if let Ok(i) = s.parse::<i64>() {
-                            return Some(i.to_string());
-                        } else if let Ok(f) = s.parse::<f64>() {
-                            return Some((f as i64).to_string());
-                        } else {
-                            return Some(format!("[ERROR] runtime error: cannot convert \"{}\" to Int", s));
-                        }
-                    }
-                    "to_float" => {
-                        if let Ok(f) = s.parse::<f64>() {
-                            return Some(format_float_always(f));
-                        } else {
-                            return Some(format!("[ERROR] runtime error: cannot convert \"{}\" to Float", s));
-                        }
-                    }
-                    "to_bool" => {
-                        if *s == "true" {
-                            return Some("true".to_string());
-                        } else if *s == "false" {
-                            return Some("false".to_string());
-                        } else {
-                            return Some(format!("[ERROR] runtime error: cannot convert \"{}\" to Bool\nexpected \"true\" or \"false\"", s));
-                        }
-                    }
-                    "to_str" => {
-                        // String to_str returns the string as-is (no prefix needed)
-                        return Some(s.to_string());
-                    }
-                    "type" => {
-                        return Some("String".to_string());
-                    }
-                    _ => {
-                        return Some(format!("[ERROR] runtime error: string has no method '{}'", call.method));
-                    }
-                }
+            // Dispatch based on method mutability
+            let result = if super::builtins::is_method_mutating(&call.method) {
+                // 可变方法：需要从环境获取可变引用（当前不支持）
+                // 回退到字符串版本
+                super::builtins::dispatch_str(&obj_str, &call.method, &arg_strs)
             } else {
-                // This should never happen since we've covered all types
-                return Some("[ERROR] runtime error: unknown type for method call".to_string());
+                // 不可变方法：使用 DolangValue 版本
+                super::builtins::dispatch(&obj_val, &call.method, &arg_vals)
+                    .map(|v| v.to_legacy())
+            };
+
+            match result {
+                Ok(r) => Some(r),
+                Err(e) => Some(format!("[ERROR] runtime error: {}", e)),
             }
         }
         Expr::VarLookup(v) => {

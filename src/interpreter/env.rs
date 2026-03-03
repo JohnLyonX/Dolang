@@ -16,14 +16,10 @@ pub enum ValueType {
     Map,
 }
 
-/// Represents a runtime Map value
-#[derive(Clone, Debug, PartialEq)]
-pub struct MapValue(pub IndexMap<String, String>);
-
 /// Represents a value that can be either a variable or constant
 #[derive(Clone)]
 pub struct VarValue {
-    pub value: String,
+    pub value: String,  // 过渡期：仍使用字符串，Phase 2 稳定后改为 DolangValue
     pub value_type: ValueType,
     pub is_const: bool,
 }

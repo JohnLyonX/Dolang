@@ -7,4 +7,4 @@ pub mod syntax;
 pub mod token;
 
 pub use parser::parse;
-pub use interpreter::{exec, FnEnv, VarValue};
+pub use interpreter::{exec, FnEnv, DolangValue};

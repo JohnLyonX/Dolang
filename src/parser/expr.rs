@@ -544,7 +544,7 @@ pub fn parse_fstring_segments(literal: &str, start_pos: usize) -> Result<Vec<FSt
                 // Find the closing brace
                 let mut expr_str = String::new();
                 let mut brace_count = 1;
-                while let Some(c) = chars.next() {
+                for c in chars.by_ref() {
                     pos += 1;
                     match c {
                         '{' => {

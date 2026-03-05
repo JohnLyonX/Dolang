@@ -128,14 +128,12 @@ impl<'a> StmtParser<'a> {
 
         // --- $fn function declaration ---
         // Only parse as named function if followed by an identifier
-        if typ == Type::Fn {
-            if let Some(next_pos) = self.peek_next() {
-                if next_pos.typ == Type::Ident {
+        if typ == Type::Fn
+            && let Some(next_pos) = self.peek_next()
+                && next_pos.typ == Type::Ident {
                     return self.parse_fn_decl().map(Some);
                 }
                 // Otherwise, let it be parsed as an expression (anonymous function)
-            }
-        }
 
         // --- $# return ---
         if typ == Type::Return {
@@ -195,7 +193,7 @@ impl<'a> StmtParser<'a> {
 
             // Check for special print target: ERR
             let actual_expr_toks = expr_toks.clone();
-            let print_target = Some(crate::ast::PrintTarget::Stdout);
+            let print_target = crate::ast::PrintTarget::Stdout;
 
             // Handle $>>ERR("msg") - stderr output with exactly 1 argument
             if expr_toks.len() >= 2 && expr_toks[0].typ == Type::Ident && expr_toks[0].literal == "ERR" {
@@ -280,7 +278,7 @@ impl<'a> StmtParser<'a> {
             return Ok(Some(Stmt::Print(crate::ast::PrintStmt {
                 span: Span::from_token(start),
                 value: expr,
-                target: print_target.unwrap_or(crate::ast::PrintTarget::Stdout),
+                target: print_target,
             })));
         }
 

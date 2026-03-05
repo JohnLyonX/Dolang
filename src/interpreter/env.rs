@@ -1,10 +1,10 @@
 // Environment management - types for variables and functions.
 use crate::ast::FnDeclStmt;
-use indexmap::IndexMap;
+use super::value::DolangValue;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// Represents the type of a value
+/// Represents the type of a value (for type checking)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValueType {
     Dynamic,  // No type annotation, can change freely
@@ -16,16 +16,31 @@ pub enum ValueType {
     Map,
 }
 
-/// Represents a value that can be either a variable or constant
-#[derive(Clone)]
-pub struct VarValue {
-    pub value: String,  // 过渡期：仍使用字符串，Phase 2 稳定后改为 DolangValue
-    pub value_type: ValueType,
-    pub is_const: bool,
+/// Get the ValueType from a DolangValue
+pub fn get_value_type(val: &DolangValue) -> ValueType {
+    match val {
+        DolangValue::Int(_) => ValueType::Int,
+        DolangValue::Float(_) => ValueType::Float,
+        DolangValue::Str(_) => ValueType::String,
+        DolangValue::Bool(_) => ValueType::Bool,
+        DolangValue::List(_) => ValueType::List,
+        DolangValue::Map(_) => ValueType::Map,
+        DolangValue::Function { .. } => ValueType::Dynamic,
+        DolangValue::Null => ValueType::Dynamic,
+    }
 }
 
-/// Variable environment: name -> VarValue
-pub type Env = HashMap<String, VarValue>;
+/// Variable environment: name -> DolangValue
+pub type Env = HashMap<String, DolangValue>;
+
+/// Type environment: tracks declared types for variables with type annotations
+/// This is used to enforce type checking on assignment
+/// Key: variable name, Value: declared type (if any)
+pub type TypeEnv = HashMap<String, ValueType>;
+
+/// Constant environment: tracks which variables are constants
+/// Key: variable name, Value: true if constant
+pub type ConstEnv = HashMap<String, bool>;
 
 /// Function environment: name -> FnDeclStmt
 pub type FnEnv = HashMap<String, FnDeclStmt>;
@@ -37,34 +52,6 @@ static FN_COUNTER: AtomicUsize = AtomicUsize::new(0);
 pub fn generate_fn_name() -> String {
     let n = FN_COUNTER.fetch_add(1, Ordering::SeqCst);
     format!("__anon_fn_{}__", n)
-}
-
-/// Detect the type of a value string
-pub fn detect_type(value: &str) -> ValueType {
-    if value == "true" || value == "false" {
-        return ValueType::Bool;
-    }
-    // String values are serialized with a special prefix
-    if value.starts_with("__STR__:") {
-        return ValueType::String;
-    }
-    if let Ok(n) = value.parse::<f64>() {
-        // Check if it's an integer (no decimal point)
-        if n.fract() == 0.0 && n.is_finite() {
-            return ValueType::Int;
-        } else {
-            return ValueType::Float;
-        }
-    }
-    // List values are serialized with a special prefix
-    if value.starts_with("__LST__:") {
-        return ValueType::List;
-    }
-    // Map values are serialized with a special prefix
-    if value.starts_with("__MAP__:") {
-        return ValueType::Map;
-    }
-    ValueType::String
 }
 
 /// Convert type annotation string to ValueType
@@ -89,242 +76,5 @@ pub fn type_name(vt: &ValueType) -> &'static str {
         ValueType::Bool => "Bool",
         ValueType::List => "List",
         ValueType::Map => "Map",
-    }
-}
-
-/// Convert string to bool
-pub fn to_bool(value: &str) -> bool {
-    value == "true"
-}
-
-/// List prefix for serialization
-const LIST_PREFIX: &str = "__LST__:";
-const LIST_ESCAPE: &str = "__X__";
-
-/// Serialize a list of values to a string using length-prefixed format
-/// Format: __LST__:len1:value1:len2:value2:...
-pub fn serialize_list(values: &[String]) -> String {
-    let mut result = LIST_PREFIX.to_string();
-    for v in values {
-        // Escape: replace __X__ with __X__X__ (escape escape sequence)
-        // and replace __LST__: with __X__LST__: (escape prefix)
-        let escaped = v.replace(LIST_ESCAPE, &format!("{}X__", LIST_ESCAPE))
-                       .replace(LIST_PREFIX, &format!("{}LST__:", LIST_ESCAPE));
-        // Length-prefix each element
-        result.push_str(&escaped.len().to_string());
-        result.push(':');
-        result.push_str(&escaped);
-        result.push(':');
-    }
-    result
-}
-
-/// Deserialize a string to a list of values
-/// Format: __LST__:len1:value1:len2:value2:...
-pub fn deserialize_list(value: &str) -> Option<Vec<String>> {
-    if !value.starts_with(LIST_PREFIX) {
-        return None;
-    }
-    let content = &value[LIST_PREFIX.len()..];
-    if content.is_empty() {
-        return Some(Vec::new());
-    }
-
-    let mut results = Vec::new();
-    let mut remaining = content;
-
-    while !remaining.is_empty() {
-        // Find the colon after the length
-        if let Some(colon_pos) = remaining.find(':') {
-            let len_str = &remaining[..colon_pos];
-            let len = len_str.parse::<usize>().ok()?;
-            let after_len = &remaining[colon_pos + 1..];
-
-            // Check if we have enough content
-            if after_len.len() < len {
-                return None;
-            }
-
-            let element = &after_len[..len];
-            // Unescape: replace __X__X__ with __X__ (unescape escape sequence)
-            // and replace __X__LST__: with __LST__: (unescape prefix)
-            let unescaped = element.replace(&format!("{}X__", LIST_ESCAPE), LIST_ESCAPE)
-                                   .replace(&format!("{}LST__:", LIST_ESCAPE), LIST_PREFIX);
-            results.push(unescaped);
-
-            // Move past this element (length + colon + element)
-            remaining = &after_len[len..];
-            if !remaining.is_empty() && remaining.starts_with(':') {
-                remaining = &remaining[1..];
-            }
-        } else {
-            break;
-        }
-    }
-
-    Some(results)
-}
-
-/// Get the length of a list
-pub fn list_len(value: &str) -> Option<usize> {
-    deserialize_list(value).map(|list| list.len())
-}
-
-/// Format a value for display (handles nested lists and maps recursively)
-fn format_value(value: &str) -> String {
-    if value.starts_with("__LST__:") {
-        format_list(value)
-    } else if value.starts_with("__MAP__:") {
-        format_map(value)
-    } else {
-        value.to_string()
-    }
-}
-
-/// Format a list value for display (convert internal representation to user-friendly format)
-pub fn format_list(value: &str) -> String {
-    if let Some(list) = deserialize_list(value) {
-        let items: Vec<String> = list.iter().map(|s| format_value(s)).collect();
-        format!("[{}]", items.join(", "))
-    } else {
-        value.to_string()
-    }
-}
-
-/// Get an element from a list by index
-pub fn list_get(value: &str, index: usize) -> Option<String> {
-    let list = deserialize_list(value)?;
-    if index >= list.len() {
-        None
-    } else {
-        Some(list[index].clone())
-    }
-}
-
-/// Set an element in a list by index (returns new serialized list)
-pub fn list_set(value: &str, index: usize, new_value: String) -> Option<String> {
-    let mut list = deserialize_list(value)?;
-    if index >= list.len() {
-        return None;
-    }
-    list[index] = new_value;
-    Some(serialize_list(&list))
-}
-
-/// Map prefix for serialization
-const MAP_PREFIX: &str = "__MAP__:";
-const MAP_ESCAPE: &str = "__X__";
-
-/// Serialize a map to string using indexmap
-pub fn serialize_map(values: &IndexMap<String, String>) -> String {
-    let mut result = MAP_PREFIX.to_string();
-    for (key, val) in values {
-        // Escape key and value
-        let escaped_key = key.replace(MAP_ESCAPE, &format!("{}X__", MAP_ESCAPE))
-                            .replace(MAP_PREFIX, &format!("{}MAP__:", MAP_ESCAPE));
-        let escaped_val = val.replace(MAP_ESCAPE, &format!("{}X__", MAP_ESCAPE))
-                            .replace(MAP_PREFIX, &format!("{}MAP__:", MAP_ESCAPE));
-        result.push_str(&escaped_key.len().to_string());
-        result.push(':');
-        result.push_str(&escaped_key);
-        result.push(':');
-        result.push_str(&escaped_val.len().to_string());
-        result.push(':');
-        result.push_str(&escaped_val);
-        result.push(':');
-    }
-    result
-}
-
-/// Deserialize a string to a map
-pub fn deserialize_map(value: &str) -> Option<IndexMap<String, String>> {
-    if !value.starts_with(MAP_PREFIX) {
-        return None;
-    }
-    let content = &value[MAP_PREFIX.len()..];
-    if content.is_empty() {
-        return Some(IndexMap::new());
-    }
-
-    let mut results = IndexMap::new();
-    let mut remaining = content;
-
-    while !remaining.is_empty() {
-        // Parse key
-        if let Some(colon_pos) = remaining.find(':') {
-            let key_len = remaining[..colon_pos].parse::<usize>().ok()?;
-            let after_key_len = &remaining[colon_pos + 1..];
-
-            if after_key_len.len() < key_len {
-                return None;
-            }
-            let key = &after_key_len[..key_len];
-            let unescaped_key = key.replace(&format!("{}X__", MAP_ESCAPE), MAP_ESCAPE)
-                                   .replace(&format!("{}MAP__:", MAP_ESCAPE), MAP_PREFIX);
-
-            // Move to value
-            let after_key = &after_key_len[key_len..];
-            if after_key.is_empty() || !after_key.starts_with(':') {
-                return None;
-            }
-            let val_part = &after_key[1..];
-
-            // Parse value
-            if let Some(val_colon_pos) = val_part.find(':') {
-                let val_len = val_part[..val_colon_pos].parse::<usize>().ok()?;
-                let after_val_len = &val_part[val_colon_pos + 1..];
-
-                if after_val_len.len() < val_len {
-                    return None;
-                }
-                let val = &after_val_len[..val_len];
-                let unescaped_val = val.replace(&format!("{}X__", MAP_ESCAPE), MAP_ESCAPE)
-                                       .replace(&format!("{}MAP__:", MAP_ESCAPE), MAP_PREFIX);
-
-                results.insert(unescaped_key, unescaped_val);
-
-                // Move past this entry
-                remaining = &after_val_len[val_len..];
-                if !remaining.is_empty() && remaining.starts_with(':') {
-                    remaining = &remaining[1..];
-                }
-            } else {
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-
-    Some(results)
-}
-
-/// Get a value from map by key
-pub fn map_get(value: &str, key: &str) -> Option<String> {
-    let map = deserialize_map(value)?;
-    map.get(key).cloned()
-}
-
-/// Get the number of entries in a map
-pub fn map_len(value: &str) -> Option<usize> {
-    deserialize_map(value).map(|map| map.len())
-}
-
-/// Set a value in map (returns new serialized map)
-pub fn map_set(value: &str, key: String, new_value: String) -> Option<String> {
-    let mut map = deserialize_map(value)?;
-    map.insert(key, new_value);
-    Some(serialize_map(&map))
-}
-
-/// Format a map value for display (convert internal representation to user-friendly format)
-pub fn format_map(value: &str) -> String {
-    if let Some(map) = deserialize_map(value) {
-        let items: Vec<String> = map.iter()
-            .map(|(k, v)| format!("{}: {}", k, format_value(v)))
-            .collect();
-        format!("{{{}}}", items.join(", "))
-    } else {
-        value.to_string()
     }
 }

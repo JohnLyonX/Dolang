@@ -5,6 +5,6 @@ pub mod eval;
 pub mod exec;
 pub mod value;
 
-pub use env::{FnEnv, VarValue, parse_type_annotation, type_name};
+pub use env::{FnEnv, parse_type_annotation, type_name};
 pub use exec::exec;
 pub use value::DolangValue;

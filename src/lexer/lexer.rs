@@ -137,7 +137,7 @@ impl Lexer {
                     return Ok(Token::new(Type::Eq, "==", start));
                 }
                 // Single = is assignment
-                return Ok(Token::new(Type::Assign, "=", start));
+                Ok(Token::new(Type::Assign, "=", start))
             }
             '&' => {
                 self.advance();

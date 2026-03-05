@@ -3,13 +3,15 @@ use crate::ast::{Expr, FnDeclStmt};
 use crate::error::Error;
 use crate::token::Type;
 
-use super::env::{generate_fn_name, list_get, list_len, map_get, serialize_list, serialize_map, to_bool, Env, FnEnv};
+use super::env::{generate_fn_name, Env, FnEnv};
+use super::value::DolangValue;
 
 /// Smart number formatting - follows these rules:
 /// 1. Integer results: no decimal point (5.0 → 5)
 /// 2. Float results: max 10 significant digits
 /// 3. Trailing zeros removed (0.5 not 0.500...)
 /// 4. Very large/small numbers use scientific notation
+///
 /// Note: This function removes trailing .0 for display purposes
 pub fn format_number(n: f64) -> String {
     if n.is_nan() {
@@ -49,25 +51,6 @@ fn format_float(n: f64, max_sig_digits: usize) -> String {
     s
 }
 
-/// Format float but always keep decimal point (e.g., 42.0 not 42)
-/// Used for to_float() method to preserve type information
-fn format_float_always(n: f64) -> String {
-    if n.is_nan() {
-        return "NaN".to_string();
-    }
-    if n.is_infinite() {
-        return if n.is_sign_positive() { "inf" } else { "-inf" }.to_string();
-    }
-
-    let s = format!("{}", n);
-    // Ensure decimal point is always present
-    if !s.contains('.') {
-        format!("{}.0", s)
-    } else {
-        s
-    }
-}
-
 fn format_scientific(n: f64, max_sig_digits: usize) -> String {
     if n == 0.0 {
         return "0".to_string();
@@ -88,13 +71,13 @@ fn format_scientific(n: f64, max_sig_digits: usize) -> String {
     format!("{:.prec$}e{}", rounded, exp, prec = decimals)
 }
 
-/// Check for special error markers returned by eval_expr and convert to Error
-pub fn check_eval_result(val: Option<String>) -> Result<Option<String>, Error> {
+/// Check for special error values returned by eval_expr and convert to Error
+pub fn check_eval_result(val: Option<DolangValue>) -> Result<Option<DolangValue>, Error> {
     match val {
-        Some(v) if v == "__DIVZERO__" => Err(Error::Interpreter("division by zero".to_string())),
-        Some(v) if v == "__MODZERO__" => Err(Error::Interpreter("modulo by zero".to_string())),
-        Some(v) if v.starts_with("[ERROR]") => {
-            let msg = v.trim_start_matches("[ERROR]");
+        Some(DolangValue::Str(s)) if s == "__DIVZERO__" => Err(Error::Interpreter("division by zero".to_string())),
+        Some(DolangValue::Str(s)) if s == "__MODZERO__" => Err(Error::Interpreter("modulo by zero".to_string())),
+        Some(DolangValue::Str(s)) if s.starts_with("[ERROR]") => {
+            let msg = s.trim_start_matches("[ERROR]");
             let msg = msg.trim_start_matches(" runtime error:");
             Err(Error::Interpreter(msg.trim_start_matches(" ").to_string()))
         }
@@ -102,19 +85,34 @@ pub fn check_eval_result(val: Option<String>) -> Result<Option<String>, Error> {
     }
 }
 
-/// Evaluate an expression and return the result as a String.
+/// Evaluate an expression and return the result as DolangValue.
 pub fn eval_expr(
     e: &Expr,
     env: &Env,
     fns: &mut FnEnv,
     w: &mut dyn std::io::Write,
     as_identifier: bool,
-) -> Option<String> {
+) -> Option<DolangValue> {
     match e {
-        Expr::Number(n) => Some(n.value.as_ref().to_string()),
-        Expr::Char(c) => Some(c.value.as_ref().to_string()),
-        Expr::Bool(b) => Some(b.value.to_string()),
-        Expr::StringLiteral(s) => Some(format!("__STR__:{}", s.value.as_ref())),
+        Expr::Number(n) => {
+            // Determine type based on whether the literal contains a decimal point
+            // This preserves "1.0" as Float even though it's numerically equal to 1
+            let is_float = n.value.contains('.') || n.value.contains('e') || n.value.contains('E');
+            if let Ok(val) = n.value.parse::<f64>() {
+                if is_float {
+                    Some(DolangValue::Float(val))
+                } else if val.fract() == 0.0 && val.is_finite() {
+                    Some(DolangValue::Int(val as i64))
+                } else {
+                    Some(DolangValue::Float(val))
+                }
+            } else {
+                Some(DolangValue::Str(n.value.as_ref().to_string()))
+            }
+        }
+        Expr::Char(c) => Some(DolangValue::Str(c.value.as_ref().to_string())),
+        Expr::Bool(b) => Some(DolangValue::Bool(b.value)),
+        Expr::StringLiteral(s) => Some(DolangValue::Str(s.value.as_ref().to_string())),
         Expr::FString(fs) => {
             // Evaluate f-string: substitute each segment
             let mut result = String::new();
@@ -125,40 +123,18 @@ pub fn eval_expr(
                     }
                     crate::ast::FStringSegment::Expression(expr) => {
                         if let Some(val) = eval_expr(expr, env, fns, w, false) {
-                            // Convert value to string (handle Int, Float, Bool, etc.)
-                            let str_val = if val == "true" || val == "false" {
-                                val.clone()
-                            } else if let Ok(_) = val.parse::<f64>() {
-                                // Check if it's an integer or float
-                                if let Ok(n) = val.parse::<f64>() {
-                                    if n.fract() == 0.0 && n.is_finite() {
-                                        // It's an integer
-                                        format!("{}", n as i64)
-                                    } else {
-                                        val.clone()
-                                    }
-                                } else {
-                                    val.clone()
-                                }
-                            } else if val.starts_with("__STR__:") {
-                                val.trim_start_matches("__STR__:").to_string()
-                            } else if val.starts_with("__LST__:") || val.starts_with("__MAP__:") {
-                                val.clone()
-                            } else {
-                                val.clone()
-                            };
-                            result.push_str(&str_val);
+                            result.push_str(&val.to_string());
                         } else {
                             return None;
                         }
                     }
                 }
             }
-            Some(format!("__STR__:{}", result))
+            Some(DolangValue::Str(result))
         }
         Expr::ListLiteral(list) => {
-            // Evaluate each element and serialize to list
-            let mut elements: Vec<String> = Vec::new();
+            // Evaluate each element and create list
+            let mut elements: Vec<DolangValue> = Vec::new();
             for elem in &list.elements {
                 if let Some(val) = eval_expr(elem, env, fns, w, false) {
                     elements.push(val);
@@ -166,12 +142,12 @@ pub fn eval_expr(
                     return None;
                 }
             }
-            Some(serialize_list(&elements))
+            Some(DolangValue::List(elements))
         }
         Expr::MapLiteral(map) => {
             use indexmap::IndexMap;
             // Evaluate each value and create map
-            let mut entries: IndexMap<String, String> = IndexMap::new();
+            let mut entries: IndexMap<String, DolangValue> = IndexMap::new();
             for (key, value_expr) in &map.entries {
                 if let Some(val) = eval_expr(value_expr, env, fns, w, false) {
                     entries.insert(key.clone(), val);
@@ -179,101 +155,83 @@ pub fn eval_expr(
                     return None;
                 }
             }
-            Some(serialize_map(&entries))
+            Some(DolangValue::Map(entries))
         }
         Expr::IndexAccess(idx) => {
-            // Evaluate the object - use false to get the variable's value
+            // Evaluate the object
             let obj_val = eval_expr(&idx.object, env, fns, w, false)?;
             // Evaluate the index/key
             let idx_val = eval_expr(&idx.index, env, fns, w, false)?;
 
-            // Check if it's a list (numeric index) or map (string key)
-            if obj_val.starts_with("__LST__:") {
-                // List access - parse index as integer
-                let idx = match idx_val.parse::<usize>() {
-                    Ok(i) => i,
-                    Err(_) => return Some(format!("[ERROR] invalid list index: must be a non-negative integer")),
-                };
-                // Check bounds
-                let len = list_len(&obj_val).unwrap_or(0);
-                if idx >= len {
-                    return Some(format!("[ERROR] list index {} out of bounds (length: {})", idx, len));
+            // Check if it's a list or map
+            match obj_val {
+                DolangValue::List(list) => {
+                    let idx = match idx_val {
+                        DolangValue::Int(i) => i as usize,
+                        DolangValue::Float(f) if f.fract() == 0.0 => f as usize,
+                        _ => return Some(DolangValue::Str("[ERROR] invalid list index: must be a non-negative integer".to_string())),
+                    };
+                    if idx >= list.len() {
+                        return Some(DolangValue::Str(format!("[ERROR] list index {} out of bounds (length: {})", idx, list.len())));
+                    }
+                    Some(list[idx].clone())
                 }
-                list_get(&obj_val, idx)
-            } else if obj_val.starts_with("__MAP__:") {
-                // Map access - use key directly
-                match map_get(&obj_val, &idx_val) {
-                    Some(val) => Some(val),
-                    None => {
-                        Some(format!("[ERROR] map key '{}' not found", idx_val))
+                DolangValue::Map(map) => {
+                    let key = idx_val.to_string();
+                    match map.get(&key) {
+                        Some(val) => Some(val.clone()),
+                        None => Some(DolangValue::Str(format!("[ERROR] map key '{}' not found", key)))
                     }
                 }
-            } else {
-                None
+                _ => None
             }
         }
         Expr::MethodCall(call) => {
             // Evaluate the object to DolangValue
-            let obj_str = eval_expr(&call.object, env, fns, w, false)?;
-            let obj_val = match crate::interpreter::DolangValue::parse_legacy(&obj_str) {
-                Some(v) => v,
-                None => return Some(format!("[ERROR] runtime error: invalid value {}", obj_str)),
-            };
+            let obj_val = eval_expr(&call.object, env, fns, w, false)?;
 
             // Evaluate arguments to DolangValue
-            let mut arg_vals: Vec<crate::interpreter::DolangValue> = Vec::new();
+            let mut arg_vals: Vec<DolangValue> = Vec::new();
             for arg in &call.args {
                 if let Some(val) = eval_expr(arg, env, fns, w, false) {
-                    if let Some(dv) = crate::interpreter::DolangValue::parse_legacy(&val) {
-                        arg_vals.push(dv);
-                    } else {
-                        return Some(format!("[ERROR] runtime error: invalid argument {}", val));
-                    }
+                    arg_vals.push(val);
                 } else {
                     return None;
                 }
             }
 
-            // Convert args to string slice for fallback
-            let arg_strs: Vec<String> = arg_vals.iter().map(|v| v.to_legacy()).collect();
-
             // Dispatch based on method mutability
-            let result = if super::builtins::is_method_mutating(&call.method) {
-                // 可变方法：需要从环境获取可变引用（当前不支持）
-                // 回退到字符串版本
-                super::builtins::dispatch_str(&obj_str, &call.method, &arg_strs)
+            let result: Result<DolangValue, Error> = if super::builtins::is_method_mutating(&call.method) {
+                // 可变方法暂不支持，返回错误
+                return Some(DolangValue::Str(format!("[ERROR] runtime error: mutable method '{}' not yet supported", call.method)));
             } else {
                 // 不可变方法：使用 DolangValue 版本
                 super::builtins::dispatch(&obj_val, &call.method, &arg_vals)
-                    .map(|v| v.to_legacy())
             };
 
             match result {
                 Ok(r) => Some(r),
-                Err(e) => Some(format!("[ERROR] runtime error: {}", e)),
+                Err(e) => Some(DolangValue::Str(format!("[ERROR] runtime error: {}", e))),
             }
         }
         Expr::VarLookup(v) => {
             if as_identifier {
-                Some(v.name.as_ref().to_string())
+                Some(DolangValue::Str(v.name.as_ref().to_string()))
             } else {
                 let name = v.name.as_ref();
-                // Normal variable lookup
-                match env.get(name) {
-                    Some(val) => Some(val.value.clone()),
-                    None => None,
-                }
+                // Normal variable lookup - env now stores DolangValue
+                env.get(name).cloned()
             }
         }
         Expr::Unary(u) => {
             let right = eval_expr(&u.right, env, fns, w, as_identifier)?;
             match u.op {
-                Type::Not => Some((!to_bool(&right)).to_string()),
+                Type::Not => Some(DolangValue::Bool(!right.is_truthy())),
                 Type::Minus => {
-                    if let Ok(num) = right.parse::<f64>() {
-                        Some((-num).to_string())
-                    } else {
-                        None
+                    match right {
+                        DolangValue::Int(n) => Some(DolangValue::Int(-n)),
+                        DolangValue::Float(f) => Some(DolangValue::Float(-f)),
+                        _ => None
                     }
                 }
                 _ => None,
@@ -285,82 +243,174 @@ pub fn eval_expr(
 
             match b.op {
                 Type::Plus => {
-                    if let (Ok(l), Ok(r)) = (left.parse::<f64>(), right.parse::<f64>()) {
-                        // Check if either operand is a Float (contains decimal point)
-                        let is_float = left.contains('.') || right.contains('.');
-                        let result = l + r;
-                        if is_float {
-                            Some(format_float_always(result))
-                        } else {
-                            Some(format_number(result))
+                    match (&left, &right) {
+                        (DolangValue::Int(l), DolangValue::Int(r)) => Some(DolangValue::Int(l + r)),
+                        (DolangValue::Int(l), DolangValue::Float(r)) => Some(DolangValue::Float(*l as f64 + r)),
+                        (DolangValue::Float(l), DolangValue::Int(r)) => Some(DolangValue::Float(l + *r as f64)),
+                        (DolangValue::Float(l), DolangValue::Float(r)) => Some(DolangValue::Float(l + r)),
+                        (DolangValue::Str(l), DolangValue::Str(r)) => Some(DolangValue::Str(l.clone() + r)),
+                        (DolangValue::Str(l), DolangValue::Int(r)) => Some(DolangValue::Str(format!("{}{}", l, r))),
+                        (DolangValue::Int(l), DolangValue::Str(r)) => Some(DolangValue::Str(format!("{}{}", l, r))),
+                        (DolangValue::Str(l), DolangValue::Float(r)) => Some(DolangValue::Str(format!("{}{}", l, r))),
+                        (DolangValue::Float(l), DolangValue::Str(r)) => Some(DolangValue::Str(format!("{}{}", l, r))),
+                        (DolangValue::List(l), DolangValue::List(r)) => {
+                            let mut new_list = l.clone();
+                            new_list.extend(r.clone());
+                            Some(DolangValue::List(new_list))
                         }
-                    } else {
-                        // String concatenation - remove __STR__: prefix if present
-                        let left_str = left.trim_start_matches("__STR__:");
-                        let right_str = right.trim_start_matches("__STR__:");
-                        Some(format!("__STR__:{}", left_str.to_string() + right_str))
+                        _ => None
                     }
                 }
                 Type::Minus => {
-                    if let (Ok(l), Ok(r)) = (left.parse::<f64>(), right.parse::<f64>()) {
-                        Some(format_number(l - r))
-                    } else {
-                        None
+                    match (&left, &right) {
+                        (DolangValue::Int(l), DolangValue::Int(r)) => Some(DolangValue::Int(l - r)),
+                        (DolangValue::Int(l), DolangValue::Float(r)) => Some(DolangValue::Float(*l as f64 - r)),
+                        (DolangValue::Float(l), DolangValue::Int(r)) => Some(DolangValue::Float(l - *r as f64)),
+                        (DolangValue::Float(l), DolangValue::Float(r)) => Some(DolangValue::Float(l - r)),
+                        _ => None
                     }
                 }
                 Type::Mul => {
-                    if let (Ok(l), Ok(r)) = (left.parse::<f64>(), right.parse::<f64>()) {
-                        Some(format_number(l * r))
-                    } else {
-                        None
+                    match (&left, &right) {
+                        (DolangValue::Int(l), DolangValue::Int(r)) => Some(DolangValue::Int(l * r)),
+                        (DolangValue::Int(l), DolangValue::Float(r)) => Some(DolangValue::Float(*l as f64 * r)),
+                        (DolangValue::Float(l), DolangValue::Int(r)) => Some(DolangValue::Float(l * *r as f64)),
+                        (DolangValue::Float(l), DolangValue::Float(r)) => Some(DolangValue::Float(l * r)),
+                        (DolangValue::Str(s), DolangValue::Int(n)) => {
+                            if *n >= 0 {
+                                Some(DolangValue::Str(s.repeat(*n as usize)))
+                            } else {
+                                None
+                            }
+                        }
+                        (DolangValue::List(l), DolangValue::Int(n)) => {
+                            if *n >= 0 {
+                                let mut new_list = Vec::new();
+                                for _ in 0..*n as usize {
+                                    new_list.extend(l.clone());
+                                }
+                                Some(DolangValue::List(new_list))
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None
                     }
                 }
                 Type::Div => {
-                    if let (Ok(l), Ok(r)) = (left.parse::<f64>(), right.parse::<f64>()) {
-                        if r != 0.0 { Some(format_number(l / r)) } else { Some("__DIVZERO__".to_string()) }
-                    } else {
-                        None
+                    match (&left, &right) {
+                        (DolangValue::Int(l), DolangValue::Int(r)) => {
+                            if *r != 0 {
+                                if *l % *r == 0 {
+                                    Some(DolangValue::Int(l / r))
+                                } else {
+                                    Some(DolangValue::Float(*l as f64 / *r as f64))
+                                }
+                            } else {
+                                Some(DolangValue::Str("__DIVZERO__".to_string()))
+                            }
+                        }
+                        (DolangValue::Int(l), DolangValue::Float(r)) => {
+                            if *r != 0.0 {
+                                Some(DolangValue::Float(*l as f64 / r))
+                            } else {
+                                Some(DolangValue::Str("__DIVZERO__".to_string()))
+                            }
+                        }
+                        (DolangValue::Float(l), DolangValue::Int(r)) => {
+                            if *r != 0 {
+                                Some(DolangValue::Float(l / *r as f64))
+                            } else {
+                                Some(DolangValue::Str("__DIVZERO__".to_string()))
+                            }
+                        }
+                        (DolangValue::Float(l), DolangValue::Float(r)) => {
+                            if *r != 0.0 {
+                                Some(DolangValue::Float(l / r))
+                            } else {
+                                Some(DolangValue::Str("__DIVZERO__".to_string()))
+                            }
+                        }
+                        _ => None
                     }
                 }
                 Type::Mod => {
-                    if let (Ok(l), Ok(r)) = (left.parse::<f64>(), right.parse::<f64>()) {
-                        if r != 0.0 { Some(format_number(l % r)) } else { Some("__MODZERO__".to_string()) }
-                    } else {
-                        None
+                    match (&left, &right) {
+                        (DolangValue::Int(l), DolangValue::Int(r)) => {
+                            if *r != 0 {
+                                Some(DolangValue::Int(l % r))
+                            } else {
+                                Some(DolangValue::Str("__MODZERO__".to_string()))
+                            }
+                        }
+                        (DolangValue::Int(l), DolangValue::Float(r)) => {
+                            if *r != 0.0 {
+                                Some(DolangValue::Float(*l as f64 % r))
+                            } else {
+                                Some(DolangValue::Str("__MODZERO__".to_string()))
+                            }
+                        }
+                        (DolangValue::Float(l), DolangValue::Int(r)) => {
+                            if *r != 0 {
+                                Some(DolangValue::Float(l % *r as f64))
+                            } else {
+                                Some(DolangValue::Str("__MODZERO__".to_string()))
+                            }
+                        }
+                        (DolangValue::Float(l), DolangValue::Float(r)) => {
+                            if *r != 0.0 {
+                                Some(DolangValue::Float(l % r))
+                            } else {
+                                Some(DolangValue::Str("__MODZERO__".to_string()))
+                            }
+                        }
+                        _ => None
                     }
                 }
-                Type::Eq  => Some((left == right).to_string()),
-                Type::Ne  => Some((left != right).to_string()),
-                Type::Gt  => {
-                    if let (Ok(l), Ok(r)) = (left.parse::<f64>(), right.parse::<f64>()) {
-                        Some((l > r).to_string())
-                    } else {
-                        None
+                Type::Eq => Some(DolangValue::Bool(left == right)),
+                Type::Ne => Some(DolangValue::Bool(left != right)),
+                Type::Gt => {
+                    match (&left, &right) {
+                        (DolangValue::Int(l), DolangValue::Int(r)) => Some(DolangValue::Bool(l > r)),
+                        (DolangValue::Float(l), DolangValue::Float(r)) => Some(DolangValue::Bool(l > r)),
+                        (DolangValue::Int(l), DolangValue::Float(r)) => Some(DolangValue::Bool((*l as f64) > *r)),
+                        (DolangValue::Float(l), DolangValue::Int(r)) => Some(DolangValue::Bool(*l > *r as f64)),
+                        (DolangValue::Str(l), DolangValue::Str(r)) => Some(DolangValue::Bool(l > r)),
+                        _ => None
                     }
                 }
-                Type::Lt  => {
-                    if let (Ok(l), Ok(r)) = (left.parse::<f64>(), right.parse::<f64>()) {
-                        Some((l < r).to_string())
-                    } else {
-                        None
+                Type::Lt => {
+                    match (&left, &right) {
+                        (DolangValue::Int(l), DolangValue::Int(r)) => Some(DolangValue::Bool(l < r)),
+                        (DolangValue::Float(l), DolangValue::Float(r)) => Some(DolangValue::Bool(l < r)),
+                        (DolangValue::Int(l), DolangValue::Float(r)) => Some(DolangValue::Bool((*l as f64) < *r)),
+                        (DolangValue::Float(l), DolangValue::Int(r)) => Some(DolangValue::Bool(*l < *r as f64)),
+                        (DolangValue::Str(l), DolangValue::Str(r)) => Some(DolangValue::Bool(l < r)),
+                        _ => None
                     }
                 }
                 Type::Gte => {
-                    if let (Ok(l), Ok(r)) = (left.parse::<f64>(), right.parse::<f64>()) {
-                        Some((l >= r).to_string())
-                    } else {
-                        None
+                    match (&left, &right) {
+                        (DolangValue::Int(l), DolangValue::Int(r)) => Some(DolangValue::Bool(l >= r)),
+                        (DolangValue::Float(l), DolangValue::Float(r)) => Some(DolangValue::Bool(l >= r)),
+                        (DolangValue::Int(l), DolangValue::Float(r)) => Some(DolangValue::Bool((*l as f64) >= *r)),
+                        (DolangValue::Float(l), DolangValue::Int(r)) => Some(DolangValue::Bool(*l >= *r as f64)),
+                        (DolangValue::Str(l), DolangValue::Str(r)) => Some(DolangValue::Bool(l >= r)),
+                        _ => None
                     }
                 }
                 Type::Lte => {
-                    if let (Ok(l), Ok(r)) = (left.parse::<f64>(), right.parse::<f64>()) {
-                        Some((l <= r).to_string())
-                    } else {
-                        None
+                    match (&left, &right) {
+                        (DolangValue::Int(l), DolangValue::Int(r)) => Some(DolangValue::Bool(l <= r)),
+                        (DolangValue::Float(l), DolangValue::Float(r)) => Some(DolangValue::Bool(l <= r)),
+                        (DolangValue::Int(l), DolangValue::Float(r)) => Some(DolangValue::Bool((*l as f64) <= *r)),
+                        (DolangValue::Float(l), DolangValue::Int(r)) => Some(DolangValue::Bool(*l <= *r as f64)),
+                        (DolangValue::Str(l), DolangValue::Str(r)) => Some(DolangValue::Bool(l <= r)),
+                        _ => None
                     }
                 }
-                Type::And => Some((to_bool(&left) && to_bool(&right)).to_string()),
-                Type::Or  => Some((to_bool(&left) || to_bool(&right)).to_string()),
+                Type::And => Some(DolangValue::Bool(left.is_truthy() && right.is_truthy())),
+                Type::Or => Some(DolangValue::Bool(left.is_truthy() || right.is_truthy())),
                 _ => None,
             }
         }
@@ -374,7 +424,7 @@ pub fn eval_expr(
                 body: lit.body.clone(),
             };
             fns.insert(fn_name.clone(), fn_decl);
-            Some(fn_name)
+            Some(DolangValue::Str(fn_name))
         }
         Expr::Read(read_expr) => {
             use std::io;
@@ -384,27 +434,24 @@ pub fn eval_expr(
                     // ENV mode: get key from prompt expression
                     let key = if let Some(ref prompt_expr) = read_expr.prompt {
                         match eval_expr(prompt_expr, env, fns, w, false) {
-                            Some(k) => k,
+                            Some(k) => k.to_string(),
                             None => {
-                                return Some("__STR__:[ERROR] parse error: ENV requires a key: $<<ENV(\"KEY\")".to_string());
+                                return Some(DolangValue::Str("[ERROR] parse error: ENV requires a key: $<<ENV(\"KEY\")".to_string()));
                             }
                         }
                     } else {
-                        return Some("__STR__:[ERROR] parse error: ENV requires a key: $<<ENV(\"KEY\")".to_string());
+                        return Some(DolangValue::Str("[ERROR] parse error: ENV requires a key: $<<ENV(\"KEY\")".to_string()));
                     };
-
-                    // Remove string prefix if present
-                    let key = key.trim_start_matches("__STR__:");
 
                     // Check for empty key
                     if key.is_empty() {
-                        return Some("__STR__:[ERROR] parse error: ENV requires a key: $<<ENV(\"KEY\")".to_string());
+                        return Some(DolangValue::Str("[ERROR] parse error: ENV requires a key: $<<ENV(\"KEY\")".to_string()));
                     }
 
                     // Read environment variable
-                    match std::env::var(key) {
-                        Ok(val) => Some(val),
-                        Err(_) => Some(format!("__STR__:[ERROR] runtime error: environment variable '{}' is not defined", key))
+                    match std::env::var(&key) {
+                        Ok(val) => Some(DolangValue::Str(val)),
+                        Err(_) => Some(DolangValue::Str(format!("[ERROR] runtime error: environment variable '{}' is not defined", key)))
                     }
                 }
                 crate::ast::ReadMode::Line => {
@@ -414,9 +461,8 @@ pub fn eval_expr(
                     if let Some(ref prompt_expr) = read_expr.prompt {
                         match eval_expr(prompt_expr, env, fns, w, false) {
                             Some(prompt_val) => {
-                                let prompt = prompt_val.trim_start_matches("__STR__:");
                                 // Print prompt without newline
-                                let _ = write!(w, "{}", prompt);
+                                let _ = write!(w, "{}", prompt_val);
                                 let _ = w.flush();
                             }
                             None => {
@@ -430,22 +476,22 @@ pub fn eval_expr(
                     match io::stdin().read_line(&mut input) {
                         Ok(0) => {
                             // EOF reached - return error message as the value
-                            Some("__STR__:[ERROR] runtime error: unexpected EOF on stdin".to_string())
+                            Some(DolangValue::Str("[ERROR] runtime error: unexpected EOF on stdin".to_string()))
                         }
                         Ok(_) => {
                             // Remove trailing newline and return
                             let input = input.trim_end_matches('\n').trim_end_matches('\r');
-                            Some(input.to_string())
+                            Some(DolangValue::Str(input.to_string()))
                         }
                         Err(_) => {
-                            Some("__STR__:[ERROR] runtime error: failed to read from stdin".to_string())
+                            Some(DolangValue::Str("[ERROR] runtime error: failed to read from stdin".to_string()))
                         }
                     }
                 }
             }
         }
         Expr::FnCall(call) => {
-            let mut arg_vals: Vec<String> = Vec::new();
+            let mut arg_vals: Vec<DolangValue> = Vec::new();
             for arg in &call.args {
                 match eval_expr(arg, env, fns, w, false) {
                     Some(val) => arg_vals.push(val),
@@ -459,7 +505,10 @@ pub fn eval_expr(
             }
 
             let fn_name = if let Some(var_val) = env.get(&call.name) {
-                var_val.value.clone()
+                match var_val {
+                    DolangValue::Str(s) => s.clone(),
+                    _ => return None,
+                }
             } else {
                 call.name.clone()
             };
@@ -471,12 +520,12 @@ pub fn eval_expr(
 
             match super::exec::call_fn(&fn_def, &arg_vals, fns, w) {
                 Ok(Some(val)) => Some(val),
-                Ok(None) => Some(String::new()),
+                Ok(None) => Some(DolangValue::Null),
                 Err(Error::Interpreter(msg)) => {
-                    return Some(format!("[FUNC_ERROR] {}", msg));
+                    Some(DolangValue::Str(format!("[FUNC_ERROR] {}", msg)))
                 }
                 Err(_) => {
-                    return Some("invalid expression".to_string());
+                    Some(DolangValue::Str("invalid expression".to_string()))
                 }
             }
         }

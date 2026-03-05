@@ -9,7 +9,7 @@ fn main() {
     if let Some(filename) = cli::parse_args() {
         repl::run_file(&filename);
     } else {
-        println!("Dolang REPL v1.6");
+        println!("Dolang REPL v1.7");
         repl::run_repl();
     }
 }

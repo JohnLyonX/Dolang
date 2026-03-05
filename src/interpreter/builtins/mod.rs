@@ -10,61 +10,6 @@ pub mod bool_methods;
 use crate::error::Error;
 use crate::interpreter::DolangValue;
 
-// ===== 过渡期兼容层 =====
-
-/// 临时兼容函数：eval.rs 还在使用字符串版本
-/// 过渡期结束后删除
-pub fn dispatch_str(
-    obj_val: &str,
-    method: &str,
-    args: &[String],
-) -> Result<String, Error> {
-    // 解析为 DolangValue
-    let value = match DolangValue::parse_legacy(obj_val) {
-        Some(v) => v,
-        None => return Err(Error::Interpreter(format!("failed to parse value: {}", obj_val))),
-    };
-
-    // 转换参数
-    let args_values: Vec<DolangValue> = args
-        .iter()
-        .filter_map(|s| DolangValue::parse_legacy(s))
-        .collect();
-
-    // 调用 DolangValue 版本
-    let result = dispatch(&value, method, &args_values)?;
-
-    // 转回字符串
-    Ok(result.to_legacy())
-}
-
-/// 临时兼容函数：eval.rs 还在使用字符串版本
-pub fn dispatch_mut_str(
-    obj_val: &str,
-    method: &str,
-    args: &[String],
-) -> Result<String, Error> {
-    // 解析为 DolangValue
-    let mut value = match DolangValue::parse_legacy(obj_val) {
-        Some(v) => v,
-        None => return Err(Error::Interpreter(format!("failed to parse value: {}", obj_val))),
-    };
-
-    // 转换参数
-    let args_values: Vec<DolangValue> = args
-        .iter()
-        .filter_map(|s| DolangValue::parse_legacy(s))
-        .collect();
-
-    // 调用可变方法版本
-    let result = dispatch_mut(&mut value, method, &args_values)?;
-
-    // 转回字符串
-    Ok(result.to_legacy())
-}
-
-// ===== 正式版本 =====
-
 /// 判断方法是否需要可变访问
 fn is_mutating(method: &str) -> bool {
     matches!(method, "push" | "pop" | "reverse" | "remove")

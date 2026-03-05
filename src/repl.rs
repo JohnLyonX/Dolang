@@ -9,7 +9,8 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, is_raw_mode_enabled},
 };
 
-use dolang::interpreter::{exec, FnEnv, VarValue};
+use dolang::interpreter::{exec, FnEnv, DolangValue};
+use dolang::interpreter::env::ValueType;
 use dolang::parser;
 use dolang::syntax;
 
@@ -214,7 +215,9 @@ fn read_line_raw(prompt: &str, history: &mut Vec<String>) -> Option<String> {
 // ─── REPL main loop ────────────────────────────────────────────────────────
 
 pub fn run_repl() {
-    let mut env: HashMap<String, VarValue> = HashMap::new();
+        let mut env: HashMap<String, DolangValue> = HashMap::new();
+    let mut type_env: HashMap<String, ValueType> = HashMap::new();
+    let mut const_env: HashMap<String, bool> = HashMap::new();
     let mut fns: FnEnv = HashMap::new();
     let mut history: Vec<String> = Vec::new();
 
@@ -237,6 +240,7 @@ pub fn run_repl() {
 
         // Multi-line input collection (bracket-aware)
         let mut buf = first;
+        let mut is_multiline = false;
         loop {
             let depth: i64 = buf.chars().fold(0, |acc, c| match c {
                 '{' => acc + 1,
@@ -246,10 +250,19 @@ pub fn run_repl() {
             if depth <= 0 {
                 break;
             }
+            is_multiline = true;
             match read_line(".. ", &mut history) {
                 Some(next) => {
-                    buf.push(' ');
-                    buf.push_str(next.trim());
+                    // In multiline mode, handle single-line comments specially
+                    // Remove // comments but keep the newline
+                    let processed = if let Some(pos) = next.find("//") {
+                        format!("{}\n", &next[..pos])
+                    } else {
+                        next
+                    };
+                    buf.push('\n');
+                    let trimmed = processed.trim_start().trim_end();
+                    buf.push_str(trimmed);
                 }
                 None => break,
             }
@@ -267,16 +280,58 @@ pub fn run_repl() {
             continue;
         }
 
-        let is_block_stmt = line.ends_with('}');
-        if !is_block_stmt && !line.ends_with(';') {
+        // Strip comments before checking for semicolon (only in single-line mode)
+        // In multiline mode (function body), we need to keep comments to preserve brace matching
+        let line_without_comments;
+        let is_empty_after_strip;
+        if is_multiline {
+            // In multiline mode, don't strip comments but still trim
+            line_without_comments = line.trim().to_string();
+            // Check if the line (after trimming) is effectively empty (comment-only)
+            is_empty_after_strip = line_without_comments.is_empty() ||
+                line_without_comments.chars().all(|c| c.is_whitespace() ||
+                    (c == '/' && line_without_comments.contains("//")) ||
+                    (c == '/' && line_without_comments.contains("/*")));
+        } else {
+            // In single-line mode, strip comments
+            match syntax::syntax::strip_comments(line) {
+                Ok(stripped) => {
+                    line_without_comments = stripped.trim().to_string();
+                    is_empty_after_strip = line_without_comments.is_empty();
+                }
+                Err(e) => {
+                    err_red(&format!("[ERROR] {}", e));
+                    continue;
+                }
+            }
+        }
+
+        // Skip empty lines (e.g., comment-only lines)
+        if is_empty_after_strip && !is_multiline {
+            continue;
+        }
+
+        let is_block_stmt = line_without_comments.ends_with('}');
+        // Check if this might be a multiline statement (starts with $fn, $if, $while, etc.)
+        let is_likely_multiline = line_without_comments.starts_with("$fn ")
+            || line_without_comments.starts_with("$if ")
+            || line_without_comments.starts_with("$while ")
+            || line_without_comments.starts_with("$for ")
+            || line_without_comments.starts_with("$loop ");
+
+        // In multiline mode or likely multiline statements, we don't check for semicolon
+        if !is_multiline && !is_likely_multiline && !is_block_stmt && !line_without_comments.ends_with(';') {
             err_red("[ERROR] missing ';'");
             continue;
         }
 
-        let src = if is_block_stmt {
-            line
+        let src = if is_multiline {
+            // In multiline mode, preserve the full input
+            line_without_comments.as_str()
+        } else if is_block_stmt {
+            line_without_comments.as_str()
         } else {
-            line.trim_end_matches(';')
+            line_without_comments.trim_end_matches(';')
         };
 
         let statements = match parser::parse(src) {
@@ -288,7 +343,7 @@ pub fn run_repl() {
         };
 
         for stmt in statements {
-            let (cont, exec_err) = exec(&stmt, &mut env, &mut fns);
+            let (cont, exec_err) = exec(&stmt, &mut env, &mut fns, &mut type_env, &mut const_env);
             if let Err(e) = exec_err {
                 err_red(&format!("[ERROR] {}", e));
                 break;
@@ -320,11 +375,13 @@ pub fn run_file(filename: &str) {
         }
     };
 
-    let mut env: HashMap<String, VarValue> = HashMap::new();
+        let mut env: HashMap<String, DolangValue> = HashMap::new();
+    let mut type_env: HashMap<String, ValueType> = HashMap::new();
+    let mut const_env: HashMap<String, bool> = HashMap::new();
     let mut fns: FnEnv = HashMap::new();
 
     for stmt in statements {
-        let (cont, exec_err) = exec(&stmt, &mut env, &mut fns);
+        let (cont, exec_err) = exec(&stmt, &mut env, &mut fns, &mut type_env, &mut const_env);
         if let Err(e) = exec_err {
             err_red(&format!("[ERROR] {}", e));
             process::exit(1);

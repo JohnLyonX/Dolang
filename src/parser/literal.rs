@@ -85,11 +85,8 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
                 Ok(stmts) => body_stmts.extend(stmts),
                 Err(_) => {
                     // Try as expression
-                    match crate::parser::expr::parse_expr_tokens(&current_stmt_tokens) {
-                        Ok(expr) => {
-                            body_stmts.push(Stmt::ExprStmt(expr));
-                        }
-                        Err(_) => {}
+                    if let Ok(expr) = crate::parser::expr::parse_expr_tokens(&current_stmt_tokens) {
+                        body_stmts.push(Stmt::ExprStmt(expr));
                     }
                 }
             }
@@ -113,11 +110,8 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
                     Ok(stmts) => body_stmts.extend(stmts),
                     Err(_) => {
                         // Try as expression
-                        match crate::parser::expr::parse_expr_tokens(&current_stmt_tokens) {
-                            Ok(expr) => {
-                                body_stmts.push(Stmt::ExprStmt(expr));
-                            }
-                            Err(_) => {}
+                        if let Ok(expr) = crate::parser::expr::parse_expr_tokens(&current_stmt_tokens) {
+                            body_stmts.push(Stmt::ExprStmt(expr));
                         }
                     }
                 }

@@ -1,14 +1,11 @@
 // Statement execution - executes AST statements.
 use crate::ast::{Expr, FnDeclStmt, Stmt};
 use crate::error::Error;
-use std::collections::HashMap;
 use std::io::{self, Write};
 
-use super::env::{detect_type, format_list, format_map, list_len, list_set, map_set, parse_type_annotation, to_bool, type_name, ValueType, VarValue};
+use super::env::{ConstEnv, Env, FnEnv, TypeEnv, ValueType, get_value_type, parse_type_annotation, type_name};
 use super::eval::{check_eval_result, eval_expr};
-
-pub type Env = HashMap<String, VarValue>;
-pub type FnEnv = HashMap<String, FnDeclStmt>;
+use super::value::DolangValue;
 
 /// Internal control-flow signal returned by exec_inner.
 #[derive(Debug)]
@@ -17,13 +14,14 @@ pub enum Flow {
     Break,
     Continue,
     Exit,
-    Return(Option<String>),
+    Return(Option<DolangValue>),
     Err(Error),
 }
 
 /// Exec executes a statement to the default output (stdout).
-pub fn exec(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv) -> (bool, Result<(), Error>) {
-    exec_with_writer(stmt, env, fns, &mut io::stdout())
+/// Takes mutable references to type_env and const_env to maintain type and constant information across statements.
+pub fn exec(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEnv, const_env: &mut ConstEnv) -> (bool, Result<(), Error>) {
+    exec_with_writer(stmt, env, fns, type_env, const_env, &mut io::stdout())
 }
 
 /// ExecWithWriter executes a statement and writes prints to `w`.
@@ -31,16 +29,28 @@ pub fn exec_with_writer(
     stmt: &Stmt,
     env: &mut Env,
     fns: &mut FnEnv,
+    type_env: &mut TypeEnv,
+    const_env: &mut ConstEnv,
     w: &mut dyn Write,
 ) -> (bool, Result<(), Error>) {
-    match exec_inner(stmt, env, fns, w) {
+    match exec_inner(stmt, env, fns, type_env, const_env, w) {
         Flow::Normal | Flow::Break | Flow::Continue | Flow::Return(_) => (true, Ok(())),
         Flow::Exit => (false, Ok(())),
         Flow::Err(e) => (true, Err(e)),
     }
 }
 
-fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) -> Flow {
+/// Find undefined variable in an expression
+fn find_undefined_var(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::VarLookup(v) => Some(v.name.as_ref().to_string()),
+        Expr::MethodCall(m) => find_undefined_var(&m.object),
+        Expr::IndexAccess(i) => find_undefined_var(&i.object),
+        _ => None,
+    }
+}
+
+fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEnv, const_env: &mut ConstEnv, w: &mut dyn Write) -> Flow {
     match stmt {
         Stmt::Exit(_) => Flow::Exit,
         Stmt::Break(_) => Flow::Break,
@@ -65,81 +75,11 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
 
             match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
                 Ok(Some(val)) => {
-                    // Check if this is a function reference and call it
-                    if val.starts_with("__anon_fn_") || val.starts_with("__fn_") {
-                        // Try to find the user-defined variable name for this function
-                        let user_var_name = env.iter()
-                            .find(|(_, v)| v.value == val)
-                            .map(|(k, _)| k.clone());
-
-                        if let Some(fn_def) = fns.get(&val).cloned() {
-                            // Call the function with no arguments
-                            match call_fn(&fn_def, &[], fns, w) {
-                                Ok(Some(result)) => {
-                                    // Format and print the result
-                                    let display_val = if result.starts_with("__LST__:") {
-                                        format_list(&result)
-                                    } else if result.starts_with("__MAP__:") {
-                                        format_map(&result)
-                                    } else {
-                                        result
-                                    };
-                                    if use_stderr {
-                                        eprintln!("{}", display_val);
-                                    } else {
-                                        if writeln!(w, "{}", display_val).is_err() {
-                                            return Flow::Err(Error::InvalidStatement(None));
-                                        }
-                                    }
-                                    return Flow::Normal;
-                                }
-                                Ok(None) => {
-                                    // Function returned nothing, print empty line
-                                    if use_stderr {
-                                        eprintln!("");
-                                    } else {
-                                        if writeln!(w).is_err() {
-                                            return Flow::Err(Error::InvalidStatement(None));
-                                        }
-                                    }
-                                    return Flow::Normal;
-                                }
-                                Err(e) => {
-                                    // If we found a user variable name, use it in the error message
-                                    if let Some(var_name) = user_var_name {
-                                        let enhanced_error = match &e {
-                                            Error::Interpreter(msg) => {
-                                                // Replace the internal function name with user variable name
-                                                let new_msg = msg.replace(&val, &var_name);
-                                                Error::Interpreter(new_msg)
-                                            }
-                                            _ => e,
-                                        };
-                                        return Flow::Err(enhanced_error);
-                                    }
-                                    return Flow::Err(e);
-                                }
-                            }
-                        }
-                    }
-
-                    // Format list and map values for display
-                    let display_val = if val.starts_with("__LST__:") {
-                        format_list(&val)
-                    } else if val.starts_with("__MAP__:") {
-                        format_map(&val)
-                    } else if val.starts_with("__STR__:") {
-                        // Remove __STR__: prefix for display
-                        val.trim_start_matches("__STR__:").to_string()
-                    } else {
-                        val.clone()
-                    };
+                    // Simply use DolangValue's Display implementation
                     if use_stderr {
-                        eprintln!("{}", display_val);
-                    } else {
-                        if writeln!(w, "{}", display_val).is_err() {
-                            return Flow::Err(Error::InvalidStatement(None));
-                        }
+                        eprintln!("{}", val);
+                    } else if writeln!(w, "{}", val).is_err() {
+                        return Flow::Err(Error::InvalidStatement(None));
                     }
                     Flow::Normal
                 }
@@ -173,7 +113,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                 crate::ast::ReadMode::Env => {
                     // ENV mode: get key from prompt (which contains the key name)
                     // We stored the key in prompt as a string literal
-                    let key = if let Some(ref prompt_expr) = st.prompt {
+                    let key_val = if let Some(ref prompt_expr) = st.prompt {
                         match eval_expr(prompt_expr, env, fns, w, false) {
                             Some(k) => k,
                             None => {
@@ -184,8 +124,8 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                         return Flow::Err(Error::Interpreter("ENV requires a key: $<<ENV(\"KEY\")".to_string()));
                     };
 
-                    // Remove string prefix if present
-                    let key = key.trim_start_matches("__STR__:");
+                    // Convert DolangValue to string
+                    let key = key_val.to_string();
 
                     // Check for empty key
                     if key.is_empty() {
@@ -193,7 +133,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     }
 
                     // Read environment variable
-                    match std::env::var(key) {
+                    match std::env::var(&key) {
                         Ok(_val) => {
                             // ENV as standalone statement should not print the value
                             // The value is only used when assigned: $ x = $<<ENV("KEY")
@@ -215,9 +155,8 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     if let Some(ref prompt_expr) = st.prompt {
                         match eval_expr(prompt_expr, env, fns, w, false) {
                             Some(prompt_val) => {
-                                let prompt = prompt_val.trim_start_matches("__STR__:");
-                                // Print prompt without newline
-                                if write!(w, "{}", prompt).is_err() {
+                                // Print prompt without newline - use DolangValue's Display
+                                if write!(w, "{}", prompt_val).is_err() {
                                     return Flow::Err(Error::InvalidStatement(None));
                                 }
                                 if w.flush().is_err() {
@@ -254,48 +193,45 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
         }
 
         Stmt::VarDecl(st) => {
-            // Check if a constant with this name already exists
-            if let Some(existing) = env.get(&st.name) {
-                if existing.is_const {
-                    return Flow::Err(Error::Interpreter(format!(
-                        "cannot shadow constant '{}' with a variable",
-                        st.name
-                    )));
-                }
+            // Evaluate the value expression first to check for undefined variables
+            let eval_result = eval_expr(&st.value, env, fns, w, false);
+
+            // Check if value is None (undefined variable)
+            if eval_result.is_none() {
+                // Try to find which variable is undefined
+                let undefined_var = find_undefined_var(&st.value);
+                return Flow::Err(Error::Interpreter(format!(
+                    "variable '{}' is not defined",
+                    undefined_var.unwrap_or_else(|| "unknown".to_string())
+                )));
             }
 
-            match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
+            match check_eval_result(eval_result) {
                 Ok(Some(val)) => {
-                    let value_type: ValueType;
-
                     // Check type annotation if present
                     if let Some(ref type_str) = st.type_annotation {
-                        let expected_type = parse_type_annotation(type_str);
-                        match expected_type {
-                            Some(expected) => {
-                                let detected = detect_type(&val);
-                                if detected != expected {
-                                    return Flow::Err(Error::TypeMismatch(format!(
-                                        "type error: declared type '{}' does not match value type '{}'\n  hint: change the annotation or the value",
-                                        type_str,
-                                        type_name(&detected)
-                                    )));
-                                }
-                                value_type = expected;
-                            }
+                        let expected_type = match parse_type_annotation(type_str) {
+                            Some(t) => t,
                             None => {
                                 return Flow::Err(Error::TypeMismatch(format!(
-                                    "type error: unknown type '{}', supported types are: Int, Float, String, Bool",
+                                    "unknown type '{}', supported types are: Int, Float, String, Bool",
                                     type_str
                                 )));
                             }
+                        };
+                        let actual_type = get_value_type(&val);
+                        if actual_type != expected_type {
+                            return Flow::Err(Error::TypeMismatch(format!(
+                                "type error: declared type '{}' does not match value type '{}'",
+                                type_str,
+                                type_name(&actual_type)
+                            )));
                         }
-                    } else {
-                        // No type annotation: use Dynamic type (can change freely)
-                        value_type = ValueType::Dynamic;
+                        // Record the type in type_env for later assignment checking
+                        type_env.insert(st.name.clone(), expected_type);
                     }
-
-                    env.insert(st.name.clone(), VarValue { value: val, value_type, is_const: false });
+                    // For variables, we just insert (can overwrite)
+                    env.insert(st.name.clone(), val);
                     Flow::Normal
                 }
                 Ok(None) => Flow::Err(Error::InvalidAssignment(None)),
@@ -304,43 +240,54 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
         }
 
         Stmt::ConstDecl(st) => {
-            // Check if constant is already defined
-            if let Some(existing) = env.get(&st.name) {
-                if existing.is_const {
-                    return Flow::Err(Error::Interpreter(format!(
-                        "constant '{}' is already defined",
-                        st.name
-                    )));
-                }
+            // Check if a constant/variable with this name already exists
+            if env.contains_key(&st.name) {
+                return Flow::Err(Error::Interpreter(format!(
+                    "constant '{}' is already defined",
+                    st.name
+                )));
             }
 
-            match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
-                Ok(Some(val)) => {
-                    let detected_type = detect_type(&val);
+            // Evaluate the value expression first to check for undefined variables
+            let eval_result = eval_expr(&st.value, env, fns, w, false);
 
+            // Check if value is None (undefined variable)
+            if eval_result.is_none() {
+                // Try to find which variable is undefined
+                let undefined_var = find_undefined_var(&st.value);
+                return Flow::Err(Error::Interpreter(format!(
+                    "variable '{}' is not defined",
+                    undefined_var.unwrap_or_else(|| "unknown".to_string())
+                )));
+            }
+
+            match check_eval_result(eval_result) {
+                Ok(Some(val)) => {
                     // Check type annotation if present
                     if let Some(ref type_str) = st.type_annotation {
-                        let expected_type = parse_type_annotation(type_str);
-                        match expected_type {
-                            Some(expected) => {
-                                if detected_type != expected {
-                                    return Flow::Err(Error::TypeMismatch(format!(
-                                        "type error: declared type '{}' does not match value type '{}'\n  hint: change the annotation or the value",
-                                        type_str,
-                                        type_name(&detected_type)
-                                    )));
-                                }
-                            }
+                        let expected_type = match parse_type_annotation(type_str) {
+                            Some(t) => t,
                             None => {
                                 return Flow::Err(Error::TypeMismatch(format!(
-                                    "type error: unknown type '{}', supported types are: Int, Float, String, Bool",
+                                    "unknown type '{}', supported types are: Int, Float, String, Bool",
                                     type_str
                                 )));
                             }
+                        };
+                        let actual_type = get_value_type(&val);
+                        if actual_type != expected_type {
+                            return Flow::Err(Error::TypeMismatch(format!(
+                                "type error: declared type '{}' does not match value type '{}'",
+                                type_str,
+                                type_name(&actual_type)
+                            )));
                         }
+                        // Record the type in type_env for later assignment checking
+                        type_env.insert(st.name.clone(), expected_type);
                     }
-
-                    env.insert(st.name.clone(), VarValue { value: val, value_type: detected_type, is_const: true });
+                    // Record in const_env
+                    const_env.insert(st.name.clone(), true);
+                    env.insert(st.name.clone(), val);
                     Flow::Normal
                 }
                 Ok(None) => Flow::Err(Error::InvalidAssignment(None)),
@@ -351,9 +298,10 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
         Stmt::Assign(st) => {
             // Check if this is an index assignment: arr[0] = value OR map["key"] = value
             if let Expr::IndexAccess(idx) = &*st.name {
-                // Get the variable name (object)
+                // Get the variable name (object) - should be a string
                 let var_name = match eval_expr(&idx.object, env, fns, w, true) {
-                    Some(n) => n,
+                    Some(DolangValue::Str(s)) => s.clone(),
+                    Some(_) => return Flow::Err(Error::InvalidAssignment(Some("variable name must be a string".to_string()))),
                     None => return Flow::Err(Error::InvalidAssignment(None)),
                 };
 
@@ -376,38 +324,37 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                     None => return Flow::Err(Error::Interpreter(format!("variable '{}' not found", var_name))),
                 };
 
-                if existing.is_const {
-                    return Flow::Err(Error::Interpreter(format!("cannot modify constant '{}'", var_name)));
-                }
+                // Handle List or Map assignment using DolangValue
+                match existing {
+                    DolangValue::List(list) => {
+                        // List assignment: arr[0] = value
+                        let index = match &idx_val {
+                            DolangValue::Int(i) => *i as usize,
+                            DolangValue::Float(f) if f.fract() == 0.0 => *f as usize,
+                            _ => return Flow::Err(Error::Interpreter("list index must be an integer".to_string())),
+                        };
 
-                // Handle List or Map assignment
-                if existing.value_type == ValueType::List {
-                    // List assignment: arr[0] = value
-                    let index = match idx_val.parse::<usize>() {
-                        Ok(i) => i,
-                        Err(_) => return Flow::Err(Error::Interpreter("list index must be an integer".to_string())),
-                    };
+                        if index >= list.len() {
+                            return Flow::Err(Error::Interpreter(format!(
+                                "index out of bounds: list length is {} but index is {}",
+                                list.len(), index
+                            )));
+                        }
 
-                    let new_list = match list_set(&existing.value, index, val.clone()) {
-                        Some(l) => l,
-                        None => return Flow::Err(Error::Interpreter(format!(
-                            "index out of bounds: list length is {} but index is {}",
-                            list_len(&existing.value).unwrap_or(0),
-                            index
-                        ))),
-                    };
-
-                    env.insert(var_name, VarValue { value: new_list, value_type: ValueType::List, is_const: false });
-                } else if existing.value_type == ValueType::Map {
-                    // Map assignment: map["key"] = value
-                    let new_map = match map_set(&existing.value, idx_val, val.clone()) {
-                        Some(m) => m,
-                        None => return Flow::Err(Error::Interpreter("failed to set map value".to_string())),
-                    };
-
-                    env.insert(var_name, VarValue { value: new_map, value_type: ValueType::Map, is_const: false });
-                } else {
-                    return Flow::Err(Error::Interpreter(format!("cannot index into type {:?}", existing.value_type)));
+                        let mut new_list = list.clone();
+                        new_list[index] = val;
+                        env.insert(var_name, DolangValue::List(new_list));
+                    }
+                    DolangValue::Map(map) => {
+                        // Map assignment: map["key"] = value
+                        let key = idx_val.to_string();
+                        let mut new_map = map.clone();
+                        new_map.insert(key, val);
+                        env.insert(var_name, DolangValue::Map(new_map));
+                    }
+                    _ => {
+                        return Flow::Err(Error::Interpreter(format!("cannot index into type {}", existing.type_name())));
+                    }
                 }
 
                 return Flow::Normal;
@@ -415,7 +362,8 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
 
             // Regular assignment: name = value
             let name = match eval_expr(&st.name, env, fns, w, true) {
-                Some(n) => n,
+                Some(DolangValue::Str(s)) => s.clone(),
+                Some(_) => return Flow::Err(Error::InvalidAssignment(Some("variable name must be a string".to_string()))),
                 None => return Flow::Err(Error::InvalidAssignment(None)),
             };
             let val = match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
@@ -424,31 +372,31 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                 Err(e) => return Flow::Err(e),
             };
 
-            if let Some(existing) = env.get(&name) {
-                if existing.is_const {
-                    return Flow::Err(Error::Interpreter(
-                        format!("cannot reassign constant '{}'", name),
-                    ));
-                }
-                let new_type = detect_type(&val);
-                // Allow assignment if variable is Dynamic (no type annotation) or types match
-                if existing.value_type != ValueType::Dynamic && new_type != existing.value_type {
-                    return Flow::Err(Error::TypeMismatch(format!(
-                        "type error: variable '{}' is declared as '{}', cannot assign '{}' value\n  hint: use '$ {}: {} = ...' to redeclare with a new type",
-                        name,
-                        type_name(&existing.value_type),
-                        type_name(&new_type),
-                        name,
-                        type_name(&new_type)
+            // Check if variable is a constant
+            if let Some(is_const) = const_env.get(&name) {
+                if *is_const {
+                    return Flow::Err(Error::Interpreter(format!(
+                        "cannot reassign constant '{}'",
+                        name
                     )));
                 }
-                // For Dynamic type, keep it as Dynamic to allow future type changes
-                let final_type = existing.value_type.clone();
-                env.insert(name, VarValue { value: val, value_type: final_type, is_const: false });
-            } else {
-                let value_type = detect_type(&val);
-                env.insert(name, VarValue { value: val, value_type, is_const: false });
             }
+
+            // Check type compatibility if variable has declared type
+            if let Some(declared_type) = type_env.get(&name) {
+                let actual_type = get_value_type(&val);
+                if *declared_type != ValueType::Dynamic && actual_type != *declared_type {
+                    return Flow::Err(Error::Interpreter(format!(
+                        "type error: variable '{}' is declared as '{}', cannot assign '{}' value",
+                        name,
+                        type_name(declared_type),
+                        type_name(&actual_type)
+                    )));
+                }
+            }
+
+            // Insert/update the variable
+            env.insert(name, val);
             Flow::Normal
         }
 
@@ -456,27 +404,27 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
             for branch in &st.branches {
                 let cond_val = check_eval_result(eval_expr(&branch.condition, env, fns, w, false));
                 match cond_val {
-                    Ok(Some(cond_str)) => {
-                        if to_bool(&cond_str) {
-                            return exec_block(&branch.body, env, fns, w);
+                    Ok(Some(cond_val)) => {
+                        if cond_val.is_truthy() {
+                            return exec_block(&branch.body, env, fns, type_env, const_env, w);
                         }
                     }
                     Ok(None) => {}
                     Err(e) => return Flow::Err(e),
                 }
             }
-            exec_block(&st.else_body, env, fns, w)
+            exec_block(&st.else_body, env, fns, type_env, const_env, w)
         }
 
         Stmt::While(st) => {
             loop {
                 let cond = check_eval_result(eval_expr(&st.condition, env, fns, w, false));
                 match cond {
-                    Ok(Some(ref c)) if to_bool(c) => {}
+                    Ok(Some(ref c)) if c.is_truthy() => {}
                     Ok(_) => break,
                     Err(e) => return Flow::Err(e),
                 }
-                match exec_block(&st.body, env, fns, w) {
+                match exec_block(&st.body, env, fns, type_env, const_env, w) {
                     Flow::Break => break,
                     Flow::Exit => return Flow::Exit,
                     Flow::Err(e) => return Flow::Err(e),
@@ -489,7 +437,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
 
         Stmt::Loop(st) => {
             loop {
-                match exec_block(&st.body, env, fns, w) {
+                match exec_block(&st.body, env, fns, type_env, const_env, w) {
                     Flow::Break => break,
                     Flow::Exit => return Flow::Exit,
                     Flow::Err(e) => return Flow::Err(e),
@@ -502,7 +450,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
 
         Stmt::For(st) => {
             if let Some(init) = &st.init {
-                let f = exec_inner(init, env, fns, w);
+                let f = exec_inner(init, env, fns, type_env, const_env, w);
                 match f {
                     Flow::Normal => {}
                     other => return other,
@@ -513,13 +461,13 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                 if let Some(cond_expr) = &st.condition {
                     let cond = check_eval_result(eval_expr(cond_expr, env, fns, w, false));
                     match cond {
-                        Ok(Some(ref c)) if to_bool(c) => {}
+                        Ok(Some(ref c)) if c.is_truthy() => {}
                         Ok(_) => break,
                         Err(e) => return Flow::Err(e),
                     }
                 }
 
-                match exec_block(&st.body, env, fns, w) {
+                match exec_block(&st.body, env, fns, type_env, const_env, w) {
                     Flow::Break => break,
                     Flow::Exit => return Flow::Exit,
                     Flow::Err(e) => return Flow::Err(e),
@@ -528,7 +476,7 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                 }
 
                 if let Some(update) = &st.update {
-                    let f = exec_inner(update, env, fns, w);
+                    let f = exec_inner(update, env, fns, type_env, const_env, w);
                     match f {
                         Flow::Normal => {}
                         other => return other,
@@ -545,79 +493,62 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
                 None => return Flow::Err(Error::InvalidExpression(None)),
             };
 
-            // Determine what to iterate over
-            if iterable_val.starts_with("__LST__:") {
-                // Iterate over list elements
-                let list = super::env::deserialize_list(&iterable_val).unwrap_or_default();
-                for item in list {
-                    // Bind the loop variable
-                    env.insert(st.var.clone(), VarValue {
-                        value: item.clone(),
-                        value_type: super::env::detect_type(&item),
-                        is_const: false,
-                    });
+            // Determine what to iterate over based on DolangValue type
+            match iterable_val {
+                DolangValue::List(list) => {
+                    // Iterate over list elements
+                    for item in list {
+                        // Bind the loop variable
+                        env.insert(st.var.clone(), item.clone());
 
-                    // Execute body
-                    match exec_block(&st.body, env, fns, w) {
-                        Flow::Break => break,
-                        Flow::Exit => return Flow::Exit,
-                        Flow::Err(e) => return Flow::Err(e),
-                        Flow::Return(v) => return Flow::Return(v),
-                        Flow::Continue | Flow::Normal => {}
+                        // Execute body
+                        match exec_block(&st.body, env, fns, type_env, const_env, w) {
+                            Flow::Break => break,
+                            Flow::Exit => return Flow::Exit,
+                            Flow::Err(e) => return Flow::Err(e),
+                            Flow::Return(v) => return Flow::Return(v),
+                            Flow::Continue | Flow::Normal => {}
+                        }
                     }
                 }
-            } else if iterable_val.starts_with("__MAP__:") {
-                // Iterate over map keys
-                let map = super::env::deserialize_map(&iterable_val).unwrap_or_default();
-                for key in map.keys() {
-                    // Bind the loop variable (key)
-                    env.insert(st.var.clone(), VarValue {
-                        value: key.clone(),
-                        value_type: super::env::detect_type(key),
-                        is_const: false,
-                    });
+                DolangValue::Map(map) => {
+                    // Iterate over map keys
+                    for key in map.keys() {
+                        // Bind the loop variable (key)
+                        env.insert(st.var.clone(), DolangValue::Str(key.clone()));
 
-                    // Execute body
-                    match exec_block(&st.body, env, fns, w) {
-                        Flow::Break => break,
-                        Flow::Exit => return Flow::Exit,
-                        Flow::Err(e) => return Flow::Err(e),
-                        Flow::Return(v) => return Flow::Return(v),
-                        Flow::Continue | Flow::Normal => {}
+                        // Execute body
+                        match exec_block(&st.body, env, fns, type_env, const_env, w) {
+                            Flow::Break => break,
+                            Flow::Exit => return Flow::Exit,
+                            Flow::Err(e) => return Flow::Err(e),
+                            Flow::Return(v) => return Flow::Return(v),
+                            Flow::Continue | Flow::Normal => {}
+                        }
                     }
                 }
-            } else if !iterable_val.starts_with("__LST__:") && !iterable_val.starts_with("__MAP__:")
-                && iterable_val.parse::<f64>().is_err() && iterable_val != "true" && iterable_val != "false" {
-                // Iterate over string characters
-                for ch in iterable_val.chars() {
-                    let ch_str = ch.to_string();
-                    // Bind the loop variable
-                    env.insert(st.var.clone(), VarValue {
-                        value: ch_str.clone(),
-                        value_type: super::env::detect_type(&ch_str),
-                        is_const: false,
-                    });
+                DolangValue::Str(s) => {
+                    // Iterate over string characters
+                    for ch in s.chars() {
+                        let ch_str = ch.to_string();
+                        // Bind the loop variable
+                        env.insert(st.var.clone(), DolangValue::Str(ch_str));
 
-                    // Execute body
-                    match exec_block(&st.body, env, fns, w) {
-                        Flow::Break => break,
-                        Flow::Exit => return Flow::Exit,
-                        Flow::Err(e) => return Flow::Err(e),
-                        Flow::Return(v) => return Flow::Return(v),
-                        Flow::Continue | Flow::Normal => {}
+                        // Execute body
+                        match exec_block(&st.body, env, fns, type_env, const_env, w) {
+                            Flow::Break => break,
+                            Flow::Exit => return Flow::Exit,
+                            Flow::Err(e) => return Flow::Err(e),
+                            Flow::Return(v) => return Flow::Return(v),
+                            Flow::Continue | Flow::Normal => {}
+                        }
                     }
                 }
-            } else {
-                return Flow::Err(Error::Interpreter(format!(
-                    "cannot iterate over value of type '{}'",
-                    if iterable_val.parse::<f64>().is_ok() {
-                        "Number"
-                    } else if iterable_val == "true" || iterable_val == "false" {
-                        "Bool"
-                    } else {
-                        "Unknown"
-                    }
-                )));
+                _ => {
+                    return Flow::Err(Error::Interpreter(format!(
+                        "cannot iterate over value of type '{}'",
+                        iterable_val.type_name())));
+                }
             }
 
             Flow::Normal
@@ -638,12 +569,14 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
             let eval_result = check_eval_result(eval_expr(expr, env, fns, w, false));
             match eval_result {
                 Ok(Some(result)) => {
-                    if result.starts_with("[FUNC_ERROR]") {
-                        let error_msg = result.trim_start_matches("[FUNC_ERROR]");
-                        Flow::Err(Error::Interpreter(error_msg.to_string()))
-                    } else {
-                        Flow::Normal
+                    // Check if result is an error string
+                    if let DolangValue::Str(s) = &result
+                        && s.starts_with("[FUNC_ERROR]")
+                    {
+                        let error_msg = s.trim_start_matches("[FUNC_ERROR]");
+                        return Flow::Err(Error::Interpreter(error_msg.to_string()));
                     }
+                    Flow::Normal
                 }
                 Ok(None) => {
                     match &**expr {
@@ -673,9 +606,9 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) ->
     }
 }
 
-fn exec_block(stmts: &[Stmt], env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write) -> Flow {
+fn exec_block(stmts: &[Stmt], env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEnv, const_env: &mut ConstEnv, w: &mut dyn Write) -> Flow {
     for stmt in stmts {
-        let f = exec_inner(stmt, env, fns, w);
+        let f = exec_inner(stmt, env, fns, type_env, const_env, w);
         match f {
             Flow::Normal => {}
             other => return other,
@@ -687,10 +620,10 @@ fn exec_block(stmts: &[Stmt], env: &mut Env, fns: &mut FnEnv, w: &mut dyn Write)
 /// Call a user-defined function with the given arguments.
 pub fn call_fn(
     fn_def: &FnDeclStmt,
-    args: &[String],
+    args: &[DolangValue],
     fns: &mut FnEnv,
     w: &mut dyn Write,
-) -> Result<Option<String>, Error> {
+) -> Result<Option<DolangValue>, Error> {
     if args.len() != fn_def.params.len() {
         return Err(Error::Interpreter(format!(
             "function '{}' expects {} arguments, got {}",
@@ -700,25 +633,28 @@ pub fn call_fn(
         )));
     }
 
-    let mut local_env: Env = HashMap::new();
+    let mut local_env: Env = Env::new();
+    let mut local_type_env: TypeEnv = TypeEnv::new();
+    let mut local_const_env: ConstEnv = ConstEnv::new();
     for (param, arg) in fn_def.params.iter().zip(args.iter()) {
-        let value_type = detect_type(arg);
-        local_env.insert(
-            param.clone(),
-            VarValue {
-                value: arg.clone(),
-                value_type,
-                is_const: false,
-            },
-        );
+        local_env.insert(param.clone(), arg.clone());
     }
 
-    let flow = exec_block(&fn_def.body, &mut local_env, fns, w);
+    let flow = exec_block(&fn_def.body, &mut local_env, fns, &mut local_type_env, &mut local_const_env, w);
     match flow {
         Flow::Return(val) => {
             if let Some(expected_type) = &fn_def.return_type {
                 if let Some(ref v) = val {
-                    let actual_type = detect_type(v);
+                    let actual_type = match v {
+                        DolangValue::Int(_) => ValueType::Int,
+                        DolangValue::Float(_) => ValueType::Float,
+                        DolangValue::Str(_) => ValueType::String,
+                        DolangValue::Bool(_) => ValueType::Bool,
+                        DolangValue::List(_) => ValueType::List,
+                        DolangValue::Map(_) => ValueType::Map,
+                        DolangValue::Function { .. } => ValueType::Dynamic,
+                        DolangValue::Null => ValueType::Dynamic,
+                    };
                     let (expected, expected_str) = match expected_type.to_lowercase().as_str() {
                         "int" | "integer" => (ValueType::Int, "Int"),
                         "float" => (ValueType::Float, "Float"),

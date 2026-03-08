@@ -6,6 +6,7 @@ pub mod map;
 pub mod number;
 pub mod str_methods;
 pub mod bool_methods;
+pub mod file;
 
 use crate::error::Error;
 use crate::interpreter::DolangValue;
@@ -27,6 +28,7 @@ pub fn dispatch(
         DolangValue::Str(_) => str_methods::call(receiver, method, args),
         DolangValue::Int(_) | DolangValue::Float(_) => number::call(receiver, method, args),
         DolangValue::Bool(_) => bool_methods::call(receiver, method, args),
+        DolangValue::File { .. } => file::call(receiver, method, args),
         DolangValue::Function { .. } => Err(Error::Interpreter(format!(
             "Function has no method '{}'",
             method
@@ -47,6 +49,11 @@ pub fn dispatch_mut(
     match receiver {
         DolangValue::List(_) => list::call_mut(receiver, method, args),
         DolangValue::Map(_) => map::call_mut(receiver, method, args),
+        DolangValue::File { .. } => Err(Error::Interpreter(format!(
+            "'{}' does not support mutable method '{}'",
+            receiver.type_name(),
+            method
+        ))),
         _ => Err(Error::Interpreter(format!(
             "'{}' does not support mutable method '{}'",
             receiver.type_name(),

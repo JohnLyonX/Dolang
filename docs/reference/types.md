@@ -104,9 +104,30 @@ $>> "Dao" + "Lang";
 Dolang
 ```
 
+**转义字符**：
+
+```dao
+$>> "Hello\nWorld";         // 换行: Hello
+                           //          World
+$>> "Hello\tWorld";         // 制表符: Hello   World
+$>> "He said \"Hi\"";       // 双引号: He said "Hi"
+$>> "C:\\path\\file";       // 反斜杠: C:\path\file
+$>> "Line1\rLine2";        // 回车
+$>> "Hello\0World";        // 空字符
+```
+
+**f-string 同样支持转义**：
+
+```dao
+$ name = "World";
+$>> f"Hello\n{name}";      // 输出: Hello
+                           //          World
+```
+
 **特性**：
 - 支持 `+` 运算符进行字符串连接
 - 内部统一存储为字符串类型
+- 支持转义字符：`\n`, `\t`, `\r`, `\0`, `\\`, `\"`
 
 **字符串方法**：
 

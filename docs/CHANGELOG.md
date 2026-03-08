@@ -2,6 +2,32 @@
 
 All notable changes to DaoLang will be documented in this file.
 
+## [v1.7.0] - 2026-03-08
+
+### Added
+- **可变参数函数**：
+  - 具名函数：`$fn add(...nums) { $# nums; }`
+  - 匿名函数：`$ result = $fn(...args) { $# args; };`
+  - 混合参数：`$fn greet(name, ...others) { $# [name, others]; }`
+  - 使用 `.len()` 获取参数个数
+- **文件读写**（拆分写法）：
+  - `$>>FILE(path)` - 创建文件对象
+  - `.content("内容")` - 链式写入内容
+  - `$>>FILE(path, "W")` - 覆盖写入模式
+  - `$>>FILE(path, "A")` - 追加写入模式
+  - `$>>FILE(path, "DEL")` - 删除文件
+  - `$<<FILE(path)` - 读取文件（返回 File 对象）
+  - File 方法：`.exists()`、`.read()`、`.read_lines()`、`.size()`、`.is_dir()`
+- **转义字符支持**：
+  - 字符串：`\n`, `\t`, `\r`, `\0`, `\\`, `\"`
+  - f-string 同样支持
+- **项目系统**：
+  - `dolang serve [path]` - 服务模式
+  - `$mod 路径;` - 模块导入
+  - `$main() { }` - 主入口声明
+  - `$<<CONFIG("KEY")` - 配置读取（仅服务模式）
+  - `package.toml` - 项目配置文件
+
 ## [v1.6] - 2026-03-02
 
 ### Added

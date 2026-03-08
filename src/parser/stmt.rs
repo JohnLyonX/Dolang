@@ -1,7 +1,7 @@
 // Statement parser - handles all statement parsing.
 use crate::ast::{
     AssignStmt, BinaryExpr, BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, Expr, FnDeclStmt, ForInStmt, ForStmt,
-    IfBranch, IfStmt, LoopStmt, ReturnStmt, Span, Stmt, VarDeclStmt, WhileStmt,
+    FileReadStmt, FileWriteStmt, IfBranch, IfStmt, LoopStmt, MainDeclStmt, ModDeclStmt, ReturnStmt, Span, Stmt, VarDeclStmt, WhileStmt,
 };
 use crate::error::Error;
 use crate::parser::parse_expr_tokens;
@@ -153,6 +153,91 @@ impl<'a> StmtParser<'a> {
             return Ok(Some(Stmt::Return(ReturnStmt { span: Span::from_token(start), value: Some(expr) })));
         }
 
+        // --- $mod module declaration ---
+        if typ == Type::ModDecl {
+            let start = self.peek().pos;
+            self.advance(); // consume $mod
+            // Collect module path - can be: ident, ident.ident, ident.ident.ident
+            let mut path_parts: Vec<String> = Vec::new();
+
+            // First part must be ident
+            if self.at_end() || self.peek().typ != Type::Ident {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected module path after $mod".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("module path".to_string()),
+                }));
+            }
+            path_parts.push(self.peek().literal.clone());
+            self.advance(); // consume first ident
+
+            // Continue with dot-separated parts
+            while !self.at_end() && self.peek().typ == Type::Dot {
+                self.advance(); // consume '.'
+                if self.at_end() || self.peek().typ != Type::Ident {
+                    return Err(Error::Parse(crate::error::ParseError {
+                        message: "expected identifier after '.' in module path".to_string(),
+                        line: 1,
+                        column: 1,
+                        found: None,
+                        expected: Some("identifier".to_string()),
+                    }));
+                }
+                path_parts.push(self.peek().literal.clone());
+                self.advance(); // consume ident
+            }
+
+            self.skip_semis();
+            return Ok(Some(Stmt::ModDecl(ModDeclStmt {
+                span: Span::from_token(start),
+                path: path_parts.join("."),
+            })));
+        }
+
+        // --- $main main entry point ---
+        if typ == Type::MainDecl {
+            let start = self.peek().pos;
+            self.advance(); // consume $main
+            // Expect parentheses
+            if self.at_end() || self.peek().typ != Type::LParen {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected '(' after $main".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("(".to_string()),
+                }));
+            }
+            self.advance(); // consume '('
+            if self.at_end() || self.peek().typ != Type::RParen {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected ')' in $main()".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some(")".to_string()),
+                }));
+            }
+            self.advance(); // consume ')'
+            // Expect block
+            if self.at_end() || self.peek().typ != Type::LBrace {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected '{' after $main()".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("{".to_string()),
+                }));
+            }
+            let body = self.parse_block()?;
+            return Ok(Some(Stmt::MainDecl(MainDeclStmt {
+                span: Span::from_token(start),
+                body,
+            })));
+        }
+
         // --- $break ---
         if typ == Type::Break {
             let start = self.peek().pos;
@@ -182,10 +267,17 @@ impl<'a> StmtParser<'a> {
             return Ok(Some(Stmt::Exit(ExitStmt { span: Span::from_token(start) })));
         }
 
-        // --- $>> print ---
+        // --- $>> print / $>>FILE file write ---
         if typ == Type::Print {
             let start = self.peek().pos;
-            self.advance(); // consume $>>
+            let print_literal = self.peek().literal.clone();
+            self.advance(); // consume $>> or $>>FILE
+
+            // Check for $>>FILE
+            if print_literal == "$>>FILE" {
+                return self.parse_file_write(start);
+            }
+
             let expr_toks = self.collect_until_semi();
             if expr_toks.is_empty() {
                 return Err(Error::InvalidExpression(None));
@@ -282,10 +374,17 @@ impl<'a> StmtParser<'a> {
             })));
         }
 
-        // --- $<< read (ENV or LINE) ---
+        // --- $<< read (ENV or LINE) or $<<FILE file read ---
         if typ == Type::Read {
             let start = self.peek().pos;
-            self.advance(); // consume $<<
+            let read_literal = self.peek().literal.clone();
+            self.advance(); // consume $<< or $<<FILE
+
+            // Check for $<<FILE
+            if read_literal == "$<<FILE" {
+                return self.parse_file_read(start);
+            }
+
             let expr_toks = self.collect_until_semi();
             if expr_toks.is_empty() {
                 return Err(Error::Parse(crate::error::ParseError {
@@ -297,25 +396,31 @@ impl<'a> StmtParser<'a> {
                 }));
             }
 
-            // Must start with identifier (ENV or LINE)
+            // Must start with identifier (ENV, LINE, or FILE)
             if expr_toks[0].typ != Type::Ident {
                 return Err(Error::Parse(crate::error::ParseError {
-                    message: "expected ENV or LINE after $<<".to_string(),
+                    message: "expected ENV, LINE, or FILE after $<<".to_string(),
                     line: 1,
                     column: 1,
                     found: Some(format!("{:?}", expr_toks[0].typ)),
-                    expected: Some("ENV or LINE".to_string()),
+                    expected: Some("ENV, LINE, or FILE".to_string()),
                 }));
             }
 
             let mode_name = expr_toks[0].literal.clone();
+
+            // Handle $<<FILE as file read statement
+            if mode_name == "FILE" {
+                return self.parse_file_read(start);
+            }
+
             if mode_name != "ENV" && mode_name != "LINE" {
                 return Err(Error::Parse(crate::error::ParseError {
-                    message: format!("unknown read mode '{}', expected ENV or LINE", mode_name),
+                    message: format!("unknown read mode '{}', expected ENV, LINE, or FILE", mode_name),
                     line: 1,
                     column: 1,
                     found: Some(mode_name),
-                    expected: Some("ENV or LINE".to_string()),
+                    expected: Some("ENV, LINE, or FILE".to_string()),
                 }));
             }
 
@@ -770,8 +875,19 @@ impl<'a> StmtParser<'a> {
 
         // Parse parameter names
         let mut params: Vec<String> = Vec::new();
+        let mut variadic_param: Option<String> = None;
         if !self.at_end() && self.peek().typ != Type::RParen {
             loop {
+                // Check for variadic parameter: ...identifier
+                if self.peek().typ == Type::Spread {
+                    self.advance(); // consume '...'
+                    if self.at_end() || self.peek().typ != Type::Ident {
+                        return Err(Error::InvalidStatement(None));
+                    }
+                    variadic_param = Some(self.advance().literal.clone());
+                    // Variadic must be the last parameter
+                    break;
+                }
                 if self.at_end() || self.peek().typ != Type::Ident {
                     return Err(Error::InvalidStatement(None));
                 }
@@ -804,9 +920,190 @@ impl<'a> StmtParser<'a> {
             span: Span::from_token(start),
             name,
             params,
+            variadic_param,
             return_type,
             body,
         }))
+    }
+
+    /// Parse $>>FILE(path, content, mode?, buffer?)
+    pub fn parse_file_write(&mut self, start: usize) -> Result<Option<Stmt>, Error> {
+        // Collect tokens inside parentheses: path, mode?
+        let expr_toks = self.collect_until_semi();
+        if expr_toks.is_empty() {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "invalid file write statement, use $>>FILE(path) or $>>FILE(path, mode)".to_string(),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: None,
+            }));
+        }
+
+        // Must start with '('
+        if expr_toks[0].typ != Type::LParen {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "expected '(' after $>>FILE".to_string(),
+                line: 1,
+                column: 1,
+                found: Some(format!("{:?}", expr_toks[0].typ)),
+                expected: Some("(".to_string()),
+            }));
+        }
+
+        // Extract arguments inside parentheses
+        let mut args: Vec<Token> = Vec::new();
+        let mut paren_depth = 1;
+        let mut i = 1;
+        while i < expr_toks.len() {
+            let tok = &expr_toks[i];
+            match tok.typ {
+                Type::LParen => paren_depth += 1,
+                Type::RParen => {
+                    paren_depth -= 1;
+                    if paren_depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            // Collect top-level arguments
+            if paren_depth == 1 && (tok.typ == Type::String || tok.typ == Type::FString || tok.typ == Type::Ident || tok.typ == Type::Number) {
+                args.push(tok.clone());
+            }
+            i += 1;
+        }
+
+        // Validate arguments: at least path required
+        if args.len() < 1 {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "FILE write requires at least 1 argument: path".to_string(),
+                line: 1,
+                column: 1,
+                found: Some(format!("{} arguments", args.len())),
+                expected: Some("path".to_string()),
+            }));
+        }
+
+        // Parse path expression
+        let path_expr = parse_expr_tokens(&[args[0].clone()])
+            .map_err(|_| Error::Parse(crate::error::ParseError {
+                message: "invalid path expression".to_string(),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: None,
+            }))?;
+
+        // Parse optional mode
+        let mode = if args.len() >= 2 {
+            Some(parse_expr_tokens(&[args[1].clone()])
+                .map_err(|_| Error::Parse(crate::error::ParseError {
+                    message: "invalid mode expression".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: None,
+                }))?)
+        } else {
+            None
+        };
+
+        Ok(Some(Stmt::FileWrite(FileWriteStmt {
+            span: Span::from_token(start),
+            path: path_expr,
+            mode,
+        })))
+    }
+
+    /// Parse $<<FILE(path, mode?)
+    pub fn parse_file_read(&mut self, start: usize) -> Result<Option<Stmt>, Error> {
+        // Collect tokens inside parentheses: path, mode?
+        let expr_toks = self.collect_until_semi();
+        if expr_toks.is_empty() {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "invalid file read statement, use $<<FILE(path)".to_string(),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: None,
+            }));
+        }
+
+        // Must start with '('
+        if expr_toks[0].typ != Type::LParen {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "expected '(' after $<<FILE".to_string(),
+                line: 1,
+                column: 1,
+                found: Some(format!("{:?}", expr_toks[0].typ)),
+                expected: Some("(".to_string()),
+            }));
+        }
+
+        // Extract arguments inside parentheses
+        let mut args: Vec<Token> = Vec::new();
+        let mut paren_depth = 1;
+        let mut i = 1;
+        while i < expr_toks.len() {
+            let tok = &expr_toks[i];
+            match tok.typ {
+                Type::LParen => paren_depth += 1,
+                Type::RParen => {
+                    paren_depth -= 1;
+                    if paren_depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            // Collect top-level arguments
+            if paren_depth == 1 && (tok.typ == Type::String || tok.typ == Type::FString || tok.typ == Type::Ident || tok.typ == Type::Number) {
+                args.push(tok.clone());
+            }
+            i += 1;
+        }
+
+        // Validate arguments: at least path
+        if args.is_empty() {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "FILE read requires at least 1 argument: path".to_string(),
+                line: 1,
+                column: 1,
+                found: Some("0 arguments".to_string()),
+                expected: Some("path".to_string()),
+            }));
+        }
+
+        // Parse path expression
+        let path_expr = parse_expr_tokens(&[args[0].clone()])
+            .map_err(|_| Error::Parse(crate::error::ParseError {
+                message: "invalid path expression".to_string(),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: None,
+            }))?;
+
+        // Parse optional mode (e.g., "LINES" or buffer size)
+        let mode = if args.len() >= 2 {
+            Some(parse_expr_tokens(&[args[1].clone()])
+                .map_err(|_| Error::Parse(crate::error::ParseError {
+                    message: "invalid mode expression".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: None,
+                }))?)
+        } else {
+            None
+        };
+
+        Ok(Some(Stmt::FileRead(FileReadStmt {
+            span: Span::from_token(start),
+            path: path_expr,
+            mode,
+        })))
     }
 }
 

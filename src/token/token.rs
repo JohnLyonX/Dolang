@@ -12,6 +12,7 @@ pub enum Type {
     Mod,        // %
     Print,
     Read,      // $<< - read from stdin
+    File,      // FILE - file I/O
     Assign,
     VarDecl,    // $ - variable declaration
     ConstDecl,  // $@ - constant declaration
@@ -41,6 +42,9 @@ pub enum Type {
     Continue,   // $continue
     Fn,         // $fn
     Return,     // $#
+    ModDecl,    // $mod - module declaration
+    MainDecl,   // $main - main entry point
+    ConfigRead, // $<<CONFIG - read from package.toml
 
     // Block delimiters
     LBrace,     // {
@@ -51,6 +55,7 @@ pub enum Type {
     RBracket,   // ]
     Colon,      // :
     Dot,        // .
+    Spread,     // ...
     Comma,      // ,
     Arrow,      // ->
 
@@ -82,6 +87,7 @@ impl fmt::Display for Type {
             Type::Mod => write!(f, "%"),
             Type::Print => write!(f, "$>>"),
             Type::Read => write!(f, "$<<"),
+            Type::File => write!(f, "FILE"),
             Type::Assign => write!(f, "="),
             Type::VarDecl => write!(f, "$"),
             Type::ConstDecl => write!(f, "$@"),
@@ -105,6 +111,9 @@ impl fmt::Display for Type {
             Type::Continue => write!(f, "$continue"),
             Type::Fn => write!(f, "$fn"),
             Type::Return => write!(f, "$#"),
+            Type::ModDecl => write!(f, "$mod"),
+            Type::MainDecl => write!(f, "$main"),
+            Type::ConfigRead => write!(f, "$<<CONFIG"),
             Type::LBrace => write!(f, "{{"),
             Type::RBrace => write!(f, "}}"),
             Type::LParen => write!(f, "("),
@@ -113,6 +122,7 @@ impl fmt::Display for Type {
             Type::RBracket => write!(f, "]"),
             Type::Colon => write!(f, ":"),
             Type::Dot => write!(f, "."),
+            Type::Spread => write!(f, "..."),
             Type::Comma => write!(f, ","),
             Type::Arrow => write!(f, "->"),
             Type::PlusAssign => write!(f, "+="),

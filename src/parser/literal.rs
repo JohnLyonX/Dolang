@@ -14,8 +14,20 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
     parser.pos += 1; // consume '('
 
     let mut params: Vec<String> = Vec::new();
+    let mut variadic_param: Option<String> = None;
     if parser.pos < parser.tokens.len() && parser.tokens[parser.pos].typ != Type::RParen {
         loop {
+            // Check for variadic parameter: ...identifier
+            if parser.tokens[parser.pos].typ == Type::Spread {
+                parser.pos += 1; // consume '...'
+                if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::Ident {
+                    return Err(parser.error_expected("expected variadic parameter name", "identifier"));
+                }
+                variadic_param = Some(parser.tokens[parser.pos].literal.clone());
+                parser.pos += 1;
+                // Variadic must be the last parameter
+                break;
+            }
             if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::Ident {
                 return Err(parser.error_expected("expected parameter name", "identifier"));
             }
@@ -122,6 +134,7 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
     Ok(Box::new(Expr::FnLiteral(FnLiteral {
         span: Span::from_token(start),
         params,
+        variadic_param,
         return_type,
         body: body_stmts,
     })))

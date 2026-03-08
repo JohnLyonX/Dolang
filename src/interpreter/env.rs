@@ -14,6 +14,7 @@ pub enum ValueType {
     Bool,
     List,
     Map,
+    File,
 }
 
 /// Get the ValueType from a DolangValue
@@ -26,6 +27,7 @@ pub fn get_value_type(val: &DolangValue) -> ValueType {
         DolangValue::List(_) => ValueType::List,
         DolangValue::Map(_) => ValueType::Map,
         DolangValue::Function { .. } => ValueType::Dynamic,
+        DolangValue::File { .. } => ValueType::File,
         DolangValue::Null => ValueType::Dynamic,
     }
 }
@@ -76,5 +78,6 @@ pub fn type_name(vt: &ValueType) -> &'static str {
         ValueType::Bool => "Bool",
         ValueType::List => "List",
         ValueType::Map => "Map",
+        ValueType::File => "File",
     }
 }

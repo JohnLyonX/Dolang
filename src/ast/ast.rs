@@ -42,12 +42,17 @@ pub enum Expr {
     FnCall(FnCallExpr),
     FnLiteral(FnLiteral),  // Anonymous function: $fn(x, y) -> Int { ... }
     Read(ExprRead),       // $<<ENV("KEY") or $<<LINE("prompt") as expression
+    FileRead(FileReadExpr), // $<<FILE("path") as expression
+    FileWrite(FileWriteExpr), // $>>FILE("path", mode?) as expression
+    ConfigRead(ConfigReadExpr), // $<<CONFIG("KEY") as expression
 }
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Print(PrintStmt),
     Read(ReadStmt),   // $<<ENV("KEY") or $<<LINE("prompt")
+    FileWrite(FileWriteStmt), // $>>FILE(path, content, ...)
+    FileRead(FileReadStmt),   // $<<FILE(path, ...)
     Assign(AssignStmt),
     VarDecl(VarDeclStmt),   // $ a = 1;
     ConstDecl(ConstDeclStmt), // $@ a = 1;
@@ -61,6 +66,8 @@ pub enum Stmt {
     Exit(ExitStmt),
     FnDecl(FnDeclStmt),     // $fn name(params) -> type { body }
     Return(ReturnStmt),     // $# expression;
+    ModDecl(ModDeclStmt),  // $mod path;
+    MainDecl(MainDeclStmt), // $main() { body }
     ExprStmt(Box<Expr>),    // expression statement (for function calls as statements)
 }
 
@@ -174,6 +181,23 @@ pub enum ReadMode {
     Line, // $<<LINE("prompt")
 }
 
+/// File write statement: $>>FILE(path, mode)
+/// Creates a file object for writing, use .content() to write
+#[derive(Debug, Clone)]
+pub struct FileWriteStmt {
+    pub span: Span,
+    pub path: Box<Expr>,
+    pub mode: Option<Box<Expr>>,  // "W", "A", "DEL"
+}
+
+/// File read statement: $<<FILE(path, mode)
+#[derive(Debug, Clone)]
+pub struct FileReadStmt {
+    pub span: Span,
+    pub path: Box<Expr>,
+    pub mode: Option<Box<Expr>>, // "LINES" or buffer size
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum PrintTarget {
     Stdout,
@@ -271,7 +295,22 @@ pub struct FnDeclStmt {
     pub span: Span,
     pub name: String,
     pub params: Vec<String>,
+    pub variadic_param: Option<String>,
     pub return_type: Option<String>,
+    pub body: Vec<Stmt>,
+}
+
+/// Module declaration: $mod path;
+#[derive(Debug, Clone)]
+pub struct ModDeclStmt {
+    pub span: Span,
+    pub path: String,  // e.g., "dao.user"
+}
+
+/// Main entry point: $main() { body }
+#[derive(Debug, Clone)]
+pub struct MainDeclStmt {
+    pub span: Span,
     pub body: Vec<Stmt>,
 }
 
@@ -287,6 +326,7 @@ pub struct FnCallExpr {
 pub struct FnLiteral {
     pub span: Span,
     pub params: Vec<String>,
+    pub variadic_param: Option<String>,
     pub return_type: Option<String>,
     pub body: Vec<Stmt>,
 }
@@ -297,6 +337,29 @@ pub struct ExprRead {
     pub span: Span,
     pub mode: ReadMode,
     pub prompt: Option<Box<Expr>>,
+}
+
+/// File read expression: $<<FILE("path", mode?) as expression
+#[derive(Debug, Clone)]
+pub struct FileReadExpr {
+    pub span: Span,
+    pub path: Box<Expr>,
+    pub mode: Option<Box<Expr>>, // "LINES" or buffer size
+}
+
+/// File write expression: $>>FILE("path", mode?) as expression
+#[derive(Debug, Clone)]
+pub struct FileWriteExpr {
+    pub span: Span,
+    pub path: Box<Expr>,
+    pub mode: Option<Box<Expr>>, // "W", "A"
+}
+
+/// Config read expression: $<<CONFIG("KEY") as expression
+#[derive(Debug, Clone)]
+pub struct ConfigReadExpr {
+    pub span: Span,
+    pub key: String,
 }
 
 #[derive(Debug, Clone)]
@@ -402,6 +465,36 @@ impl Spanned for ExprRead {
     }
 }
 
+impl Spanned for FileReadExpr {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for FileWriteExpr {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for ConfigReadExpr {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for ModDeclStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for MainDeclStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Spanned for PrintStmt {
     fn span(&self) -> Span {
         self.span
@@ -409,6 +502,18 @@ impl Spanned for PrintStmt {
 }
 
 impl Spanned for ReadStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for FileWriteStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for FileReadStmt {
     fn span(&self) -> Span {
         self.span
     }
@@ -523,6 +628,9 @@ impl Expr {
             Expr::FnCall(f) => f.span(),
             Expr::FnLiteral(f) => f.span(),
             Expr::Read(r) => r.span(),
+            Expr::FileRead(f) => f.span(),
+            Expr::FileWrite(f) => f.span(),
+            Expr::ConfigRead(c) => c.span(),
         }
     }
 }
@@ -544,7 +652,11 @@ impl Stmt {
             Stmt::Exit(s) => s.span(),
             Stmt::FnDecl(s) => s.span(),
             Stmt::Return(s) => s.span(),
+            Stmt::ModDecl(s) => s.span(),
+            Stmt::MainDecl(s) => s.span(),
             Stmt::Read(s) => s.span(),
+            Stmt::FileWrite(s) => s.span(),
+            Stmt::FileRead(s) => s.span(),
             Stmt::ExprStmt(e) => e.span(),
         }
     }

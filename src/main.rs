@@ -6,10 +6,16 @@ mod cli;
 mod repl;
 
 fn main() {
-    if let Some(filename) = cli::parse_args() {
-        repl::run_file(&filename);
-    } else {
-        println!("Dolang REPL v1.7");
-        repl::run_repl();
+    match cli::parse_args() {
+        cli::RunMode::Run(filename) => {
+            repl::run_file(&filename);
+        }
+        cli::RunMode::Serve(path) => {
+            repl::run_serve(path);
+        }
+        cli::RunMode::Repl => {
+            println!("Dolang REPL v1.7");
+            repl::run_repl();
+        }
     }
 }

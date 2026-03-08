@@ -1,0 +1,2 @@
+// Test $<<CONFIG
+$ url = $<<CONFIG("DB_URL");

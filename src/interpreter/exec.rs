@@ -1,9 +1,13 @@
 // Statement execution - executes AST statements.
 use crate::ast::{Expr, FnDeclStmt, Stmt};
 use crate::error::Error;
+use std::fs;
 use std::io::{self, Write};
+use std::path::Path;
 
-use super::env::{ConstEnv, Env, FnEnv, TypeEnv, ValueType, get_value_type, parse_type_annotation, type_name};
+use super::env::{
+    ConstEnv, Env, FnEnv, TypeEnv, ValueType, get_value_type, parse_type_annotation, type_name,
+};
 use super::eval::{check_eval_result, eval_expr};
 use super::value::DolangValue;
 
@@ -20,7 +24,13 @@ pub enum Flow {
 
 /// Exec executes a statement to the default output (stdout).
 /// Takes mutable references to type_env and const_env to maintain type and constant information across statements.
-pub fn exec(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEnv, const_env: &mut ConstEnv) -> (bool, Result<(), Error>) {
+pub fn exec(
+    stmt: &Stmt,
+    env: &mut Env,
+    fns: &mut FnEnv,
+    type_env: &mut TypeEnv,
+    const_env: &mut ConstEnv,
+) -> (bool, Result<(), Error>) {
     exec_with_writer(stmt, env, fns, type_env, const_env, &mut io::stdout())
 }
 
@@ -50,24 +60,109 @@ fn find_undefined_var(expr: &Expr) -> Option<String> {
     }
 }
 
-fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEnv, const_env: &mut ConstEnv, w: &mut dyn Write) -> Flow {
+fn exec_inner(
+    stmt: &Stmt,
+    env: &mut Env,
+    fns: &mut FnEnv,
+    type_env: &mut TypeEnv,
+    const_env: &mut ConstEnv,
+    w: &mut dyn Write,
+) -> Flow {
     match stmt {
         Stmt::Exit(_) => Flow::Exit,
         Stmt::Break(_) => Flow::Break,
         Stmt::Continue(_) => Flow::Continue,
 
-        Stmt::Return(st) => {
-            match &st.value {
-                Some(expr) => {
-                    match check_eval_result(eval_expr(expr, env, fns, w, false)) {
-                        Ok(Some(val)) => Flow::Return(Some(val)),
-                        Ok(None) => Flow::Err(Error::InvalidExpression(None)),
-                        Err(e) => Flow::Err(e),
+        // --- $mod module declaration ---
+        Stmt::ModDecl(stmt) => {
+            // Convert module path: "dao.user" -> "dao/user.dol"
+            let module_path = stmt.path.replace('.', "/");
+            let module_file = format!("{}.dol", module_path);
+
+            // Try to load from current directory first, then from module search path
+            let content = if Path::new(&module_file).exists() {
+                match fs::read_to_string(&module_file) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        return Flow::Err(Error::Interpreter(format!(
+                            "cannot read module '{}': {}",
+                            stmt.path, e
+                        )));
                     }
                 }
-                None => Flow::Return(None),
+            } else {
+                // Try with "modules/" prefix
+                let module_with_prefix = format!("modules/{}.dol", module_path);
+                if Path::new(&module_with_prefix).exists() {
+                    match fs::read_to_string(&module_with_prefix) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            return Flow::Err(Error::Interpreter(format!(
+                                "cannot read module '{}': {}",
+                                stmt.path, e
+                            )));
+                        }
+                    }
+                } else {
+                    return Flow::Err(Error::Interpreter(format!(
+                        "module not found: '{}' (tried: {}, modules/{}.dol)",
+                        stmt.path, module_file, module_path
+                    )));
+                }
+            };
+
+            // Parse the module
+            let module_stmts = match crate::parser::parse(&content) {
+                Ok(stmts) => stmts,
+                Err(e) => {
+                    return Flow::Err(Error::Interpreter(format!(
+                        "parse error in module '{}': {}",
+                        stmt.path, e
+                    )));
+                }
+            };
+
+            // Register functions from the module
+            let mut imported_count = 0;
+            for module_stmt in module_stmts {
+                if let Stmt::FnDecl(fn_decl) = module_stmt {
+                    // Check if function already exists
+                    if fns.contains_key(&fn_decl.name) {
+                        // Function already exists, skip or could warn
+                        continue;
+                    }
+                    fns.insert(fn_decl.name.clone(), fn_decl);
+                    imported_count += 1;
+                }
             }
+
+            // Could print debug info: println!("Loaded module '{}' with {} functions", stmt.path, imported_count);
+            Flow::Normal
         }
+
+        // --- $main main entry point ---
+        Stmt::MainDecl(stmt) => {
+            // Execute the main function body immediately
+            for main_stmt in &stmt.body {
+                let (cont, err) = exec(main_stmt, env, fns, type_env, const_env);
+                if let Err(e) = err {
+                    return Flow::Err(e);
+                }
+                if !cont {
+                    return Flow::Normal;
+                }
+            }
+            Flow::Normal
+        }
+
+        Stmt::Return(st) => match &st.value {
+            Some(expr) => match check_eval_result(eval_expr(expr, env, fns, w, false)) {
+                Ok(Some(val)) => Flow::Return(Some(val)),
+                Ok(None) => Flow::Err(Error::InvalidExpression(None)),
+                Err(e) => Flow::Err(e),
+            },
+            None => Flow::Return(None),
+        },
 
         Stmt::Print(st) => {
             // Determine the target writer (stdout or stderr)
@@ -117,11 +212,15 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                         match eval_expr(prompt_expr, env, fns, w, false) {
                             Some(k) => k,
                             None => {
-                                return Flow::Err(Error::Interpreter("ENV requires a key".to_string()));
+                                return Flow::Err(Error::Interpreter(
+                                    "ENV requires a key".to_string(),
+                                ));
                             }
                         }
                     } else {
-                        return Flow::Err(Error::Interpreter("ENV requires a key: $<<ENV(\"KEY\")".to_string()));
+                        return Flow::Err(Error::Interpreter(
+                            "ENV requires a key: $<<ENV(\"KEY\")".to_string(),
+                        ));
                     };
 
                     // Convert DolangValue to string
@@ -129,7 +228,9 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
 
                     // Check for empty key
                     if key.is_empty() {
-                        return Flow::Err(Error::Interpreter("ENV requires a key: $<<ENV(\"KEY\")".to_string()));
+                        return Flow::Err(Error::Interpreter(
+                            "ENV requires a key: $<<ENV(\"KEY\")".to_string(),
+                        ));
                     }
 
                     // Read environment variable
@@ -140,12 +241,10 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                             // Currently we just return Normal without printing
                             Flow::Normal
                         }
-                        Err(_) => {
-                            Flow::Err(Error::Interpreter(format!(
-                                "runtime error: environment variable '{}' is not defined",
-                                key
-                            )))
-                        }
+                        Err(_) => Flow::Err(Error::Interpreter(format!(
+                            "runtime error: environment variable '{}' is not defined",
+                            key
+                        ))),
                     }
                 }
                 crate::ast::ReadMode::Line => {
@@ -174,7 +273,9 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                     match io::stdin().read_line(&mut input) {
                         Ok(0) => {
                             // EOF reached
-                            Flow::Err(Error::Interpreter("runtime error: unexpected EOF on stdin".to_string()))
+                            Flow::Err(Error::Interpreter(
+                                "runtime error: unexpected EOF on stdin".to_string(),
+                            ))
                         }
                         Ok(_) => {
                             // Remove trailing newline
@@ -184,9 +285,9 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                             // The value will be handled by the assignment if present
                             Flow::Normal
                         }
-                        Err(_) => {
-                            Flow::Err(Error::Interpreter("runtime error: failed to read from stdin".to_string()))
-                        }
+                        Err(_) => Flow::Err(Error::Interpreter(
+                            "runtime error: failed to read from stdin".to_string(),
+                        )),
                     }
                 }
             }
@@ -301,7 +402,11 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                 // Get the variable name (object) - should be a string
                 let var_name = match eval_expr(&idx.object, env, fns, w, true) {
                     Some(DolangValue::Str(s)) => s.clone(),
-                    Some(_) => return Flow::Err(Error::InvalidAssignment(Some("variable name must be a string".to_string()))),
+                    Some(_) => {
+                        return Flow::Err(Error::InvalidAssignment(Some(
+                            "variable name must be a string".to_string(),
+                        )));
+                    }
                     None => return Flow::Err(Error::InvalidAssignment(None)),
                 };
 
@@ -321,7 +426,12 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                 // Get existing value and check type
                 let existing = match env.get(&var_name) {
                     Some(e) => e,
-                    None => return Flow::Err(Error::Interpreter(format!("variable '{}' not found", var_name))),
+                    None => {
+                        return Flow::Err(Error::Interpreter(format!(
+                            "variable '{}' not found",
+                            var_name
+                        )));
+                    }
                 };
 
                 // Handle List or Map assignment using DolangValue
@@ -331,13 +441,18 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                         let index = match &idx_val {
                             DolangValue::Int(i) => *i as usize,
                             DolangValue::Float(f) if f.fract() == 0.0 => *f as usize,
-                            _ => return Flow::Err(Error::Interpreter("list index must be an integer".to_string())),
+                            _ => {
+                                return Flow::Err(Error::Interpreter(
+                                    "list index must be an integer".to_string(),
+                                ));
+                            }
                         };
 
                         if index >= list.len() {
                             return Flow::Err(Error::Interpreter(format!(
                                 "index out of bounds: list length is {} but index is {}",
-                                list.len(), index
+                                list.len(),
+                                index
                             )));
                         }
 
@@ -353,7 +468,10 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                         env.insert(var_name, DolangValue::Map(new_map));
                     }
                     _ => {
-                        return Flow::Err(Error::Interpreter(format!("cannot index into type {}", existing.type_name())));
+                        return Flow::Err(Error::Interpreter(format!(
+                            "cannot index into type {}",
+                            existing.type_name()
+                        )));
                     }
                 }
 
@@ -363,7 +481,11 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
             // Regular assignment: name = value
             let name = match eval_expr(&st.name, env, fns, w, true) {
                 Some(DolangValue::Str(s)) => s.clone(),
-                Some(_) => return Flow::Err(Error::InvalidAssignment(Some("variable name must be a string".to_string()))),
+                Some(_) => {
+                    return Flow::Err(Error::InvalidAssignment(Some(
+                        "variable name must be a string".to_string(),
+                    )));
+                }
                 None => return Flow::Err(Error::InvalidAssignment(None)),
             };
             let val = match check_eval_result(eval_expr(&st.value, env, fns, w, false)) {
@@ -547,7 +669,8 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                 _ => {
                     return Flow::Err(Error::Interpreter(format!(
                         "cannot iterate over value of type '{}'",
-                        iterable_val.type_name())));
+                        iterable_val.type_name()
+                    )));
                 }
             }
 
@@ -565,6 +688,163 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
             Flow::Normal
         }
 
+        // --- $>>FILE file write ---
+        Stmt::FileWrite(st) => {
+            use std::fs;
+
+            // Evaluate path
+            let path_val = match check_eval_result(eval_expr(&st.path, env, fns, w, false)) {
+                Ok(Some(v)) => v,
+                Ok(None) => {
+                    return Flow::Err(Error::Interpreter("FILE path is required".to_string()));
+                }
+                Err(e) => return Flow::Err(e),
+            };
+
+            let path_str = match path_val {
+                DolangValue::Str(s) => s,
+                _ => {
+                    return Flow::Err(Error::Interpreter("FILE path must be a String".to_string()));
+                }
+            };
+
+            // Evaluate mode (optional)
+            let mode_str = if let Some(mode_expr) = &st.mode {
+                match check_eval_result(eval_expr(mode_expr, env, fns, w, false)) {
+                    Ok(Some(v)) => Some(v.to_string()),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
+            // Handle based on mode
+            match mode_str.as_deref() {
+                Some("DEL") => {
+                    // Delete file
+                    match fs::remove_file(&path_str) {
+                        Ok(_) => Flow::Normal,
+                        Err(e) => {
+                            Flow::Err(Error::Interpreter(format!("cannot delete file: {}", e)))
+                        }
+                    }
+                }
+                Some("W") | Some("w") | Some("A") | Some("a") | None => {
+                    // Write/Append mode - return File object for chaining .content()
+                    // Use mode to distinguish write vs append, store in File mode
+                    let file_mode = mode_str.clone();
+                    Flow::Return(Some(DolangValue::File {
+                        path: path_str,
+                        mode: file_mode,
+                    }))
+                }
+                Some(m) => Flow::Err(Error::Interpreter(format!(
+                    "invalid file mode '{}', supported modes: \"W\", \"A\", \"DEL\"",
+                    m
+                ))),
+            }
+        }
+
+        // --- $<<FILE file read ---
+        Stmt::FileRead(st) => {
+            use std::fs;
+            use std::io::{self, Read};
+
+            // Evaluate path
+            let path_val = match check_eval_result(eval_expr(&st.path, env, fns, w, false)) {
+                Ok(Some(v)) => v,
+                Ok(None) => {
+                    return Flow::Err(Error::Interpreter("FILE path is required".to_string()));
+                }
+                Err(e) => return Flow::Err(e),
+            };
+
+            let path_str = match path_val {
+                DolangValue::Str(s) => s,
+                _ => {
+                    return Flow::Err(Error::Interpreter("FILE path must be a String".to_string()));
+                }
+            };
+
+            // Check if path is a directory
+            let metadata = match fs::metadata(&path_str) {
+                Ok(m) => m,
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::NotFound {
+                        return Flow::Err(Error::Interpreter(format!(
+                            "file not found: {}",
+                            path_str
+                        )));
+                    }
+                    return Flow::Err(Error::Interpreter(format!("cannot access file: {}", e)));
+                }
+            };
+
+            if metadata.is_dir() {
+                return Flow::Err(Error::Interpreter(format!(
+                    "'{}' is a directory, not a file",
+                    path_str
+                )));
+            }
+
+            // Evaluate mode (optional)
+            let mode_val = if let Some(mode_expr) = &st.mode {
+                match check_eval_result(eval_expr(mode_expr, env, fns, w, false)) {
+                    Ok(Some(v)) => Some(v),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
+            // Handle based on mode
+            let result = if let Some(mode) = mode_val {
+                let mode_str = mode.to_string();
+                if mode_str == "LINES" {
+                    // Read all lines
+                    match fs::read_to_string(&path_str) {
+                        Ok(content) => {
+                            let lines: Vec<DolangValue> = content
+                                .lines()
+                                .map(|s| DolangValue::Str(s.to_string()))
+                                .collect();
+                            DolangValue::List(lines)
+                        }
+                        Err(e) => {
+                            return Flow::Err(Error::Interpreter(format!(
+                                "cannot read file: {}",
+                                e
+                            )));
+                        }
+                    }
+                } else {
+                    // Treat as buffer size - just read all
+                    match fs::read_to_string(&path_str) {
+                        Ok(content) => DolangValue::Str(content),
+                        Err(e) => {
+                            return Flow::Err(Error::Interpreter(format!(
+                                "cannot read file: {}",
+                                e
+                            )));
+                        }
+                    }
+                }
+            } else {
+                // Default: read all content
+                match fs::read_to_string(&path_str) {
+                    Ok(content) => DolangValue::Str(content),
+                    Err(e) => {
+                        return Flow::Err(Error::Interpreter(format!("cannot read file: {}", e)));
+                    }
+                }
+            };
+
+            // Store result in a special variable or return it
+            // For now, just return it - it will be used if assigned
+            env.insert("__FILE_READ_RESULT__".to_string(), result);
+            Flow::Normal
+        }
+
         Stmt::ExprStmt(expr) => {
             let eval_result = check_eval_result(eval_expr(expr, env, fns, w, false));
             match eval_result {
@@ -578,35 +858,40 @@ fn exec_inner(stmt: &Stmt, env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEn
                     }
                     Flow::Normal
                 }
-                Ok(None) => {
-                    match &**expr {
-                        Expr::FnCall(call) => {
-                            if fns.contains_key(&call.name) {
-                                Flow::Err(Error::Interpreter(format!(
-                                    "error calling function '{}'",
-                                    call.name
-                                )))
-                            } else {
-                                Flow::Err(Error::Interpreter(format!(
-                                    "function '{}' is not defined",
-                                    call.name
-                                )))
-                            }
+                Ok(None) => match &**expr {
+                    Expr::FnCall(call) => {
+                        if fns.contains_key(&call.name) {
+                            Flow::Err(Error::Interpreter(format!(
+                                "error calling function '{}'",
+                                call.name
+                            )))
+                        } else {
+                            Flow::Err(Error::Interpreter(format!(
+                                "function '{}' is not defined",
+                                call.name
+                            )))
                         }
-                        Expr::VarLookup(v) => Flow::Err(Error::Interpreter(format!(
-                            "variable '{}' is not defined",
-                            v.name
-                        ))),
-                        _ => Flow::Err(Error::InvalidExpression(None)),
                     }
-                }
+                    Expr::VarLookup(v) => Flow::Err(Error::Interpreter(format!(
+                        "variable '{}' is not defined",
+                        v.name
+                    ))),
+                    _ => Flow::Err(Error::InvalidExpression(None)),
+                },
                 Err(e) => Flow::Err(e),
             }
         }
     }
 }
 
-fn exec_block(stmts: &[Stmt], env: &mut Env, fns: &mut FnEnv, type_env: &mut TypeEnv, const_env: &mut ConstEnv, w: &mut dyn Write) -> Flow {
+fn exec_block(
+    stmts: &[Stmt],
+    env: &mut Env,
+    fns: &mut FnEnv,
+    type_env: &mut TypeEnv,
+    const_env: &mut ConstEnv,
+    w: &mut dyn Write,
+) -> Flow {
     for stmt in stmts {
         let f = exec_inner(stmt, env, fns, type_env, const_env, w);
         match f {
@@ -624,11 +909,22 @@ pub fn call_fn(
     fns: &mut FnEnv,
     w: &mut dyn Write,
 ) -> Result<Option<DolangValue>, Error> {
-    if args.len() != fn_def.params.len() {
+    let min_params = fn_def.params.len();
+    // Allow variable arguments if there's a variadic param
+    let has_variadic = fn_def.variadic_param.is_some();
+    if has_variadic && args.len() < min_params {
+        return Err(Error::Interpreter(format!(
+            "function '{}' expects at least {} arguments, got {}",
+            fn_def.name,
+            min_params,
+            args.len()
+        )));
+    }
+    if !has_variadic && args.len() != min_params {
         return Err(Error::Interpreter(format!(
             "function '{}' expects {} arguments, got {}",
             fn_def.name,
-            fn_def.params.len(),
+            min_params,
             args.len()
         )));
     }
@@ -636,11 +932,26 @@ pub fn call_fn(
     let mut local_env: Env = Env::new();
     let mut local_type_env: TypeEnv = TypeEnv::new();
     let mut local_const_env: ConstEnv = ConstEnv::new();
+
+    // Bind regular parameters
     for (param, arg) in fn_def.params.iter().zip(args.iter()) {
         local_env.insert(param.clone(), arg.clone());
     }
 
-    let flow = exec_block(&fn_def.body, &mut local_env, fns, &mut local_type_env, &mut local_const_env, w);
+    // Bind variadic parameter to a List of remaining args
+    if let Some(var_param) = &fn_def.variadic_param {
+        let extra_args: Vec<DolangValue> = args[min_params..].to_vec();
+        local_env.insert(var_param.clone(), DolangValue::List(extra_args));
+    }
+
+    let flow = exec_block(
+        &fn_def.body,
+        &mut local_env,
+        fns,
+        &mut local_type_env,
+        &mut local_const_env,
+        w,
+    );
     match flow {
         Flow::Return(val) => {
             if let Some(expected_type) = &fn_def.return_type {
@@ -653,6 +964,7 @@ pub fn call_fn(
                         DolangValue::List(_) => ValueType::List,
                         DolangValue::Map(_) => ValueType::Map,
                         DolangValue::Function { .. } => ValueType::Dynamic,
+                        DolangValue::File { .. } => ValueType::File,
                         DolangValue::Null => ValueType::Dynamic,
                     };
                     let (expected, expected_str) = match expected_type.to_lowercase().as_str() {
@@ -676,6 +988,7 @@ pub fn call_fn(
                             ValueType::Bool => "Bool",
                             ValueType::List => "List",
                             ValueType::Map => "Map",
+                            ValueType::File => "File",
                         };
                         return Err(Error::Interpreter(format!(
                             "function '{}' expects return type '{}' but got '{}'",
@@ -694,10 +1007,8 @@ pub fn call_fn(
         Flow::Normal => Ok(None),
         Flow::Err(e) => Err(e),
         Flow::Exit => Ok(None),
-        Flow::Break | Flow::Continue => {
-            Err(Error::Interpreter(
-                "break/continue used outside of loop".to_string(),
-            ))
-        }
+        Flow::Break | Flow::Continue => Err(Error::Interpreter(
+            "break/continue used outside of loop".to_string(),
+        )),
     }
 }

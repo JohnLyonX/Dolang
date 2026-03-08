@@ -31,6 +31,8 @@ result(a,b);
 - 缺少分号：`$>> "hello"` → 需要 `$>> "hello";`
 - 缺少大括号：`$if true` → 需要 `$if true { }`
 - 括号不匹配：函数调用参数未闭合
+- 无效转义字符：`$>> "Hello\qWorld"` → `[ERROR] lexer error: invalid escape sequence "\q"`
+- Char 类型不支持转义：`$ c = '\n';` → `[ERROR] lexer error: Char type does not support escape sequences`
 
 ---
 

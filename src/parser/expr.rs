@@ -2,7 +2,7 @@
 use std::borrow::Cow;
 
 use crate::ast::{
-    BinaryExpr, BoolLiteral, CharLiteral, Expr, FStringLiteral, FStringSegment, FnCallExpr, IndexAccess, ListLiteral, MapLiteral, MethodCall, NumberLiteral,
+    BinaryExpr, BoolLiteral, CharLiteral, ConfigReadExpr, Expr, FileReadExpr, FileWriteExpr, FStringLiteral, FStringSegment, FnCallExpr, IndexAccess, ListLiteral, MapLiteral, MethodCall, NumberLiteral,
     Span, Spanned, StringLiteral, UnaryExpr, VarLookup,
 };
 use crate::error::{Error, ParseError};
@@ -451,16 +451,165 @@ impl<'a> ExprParser<'a> {
                     entries,
                 })))
             }
-            // Read expression: $<<ENV("KEY") or $<<LINE("prompt")
+            // File write expression: $>>FILE("path", mode?) as expression
+            Type::Print => {
+                let start = tok.pos;
+                // Check if this is $>>FILE (single token with literal "$>>FILE")
+                if tok.literal == "$>>FILE" {
+                    // Expect parentheses
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                        return Err(self.error_expected("expected '(' after $>>FILE", "("));
+                    }
+                    self.pos += 1; // consume '('
+
+                    // Parse path argument
+                    let path = if self.pos < self.tokens.len() &&
+                        (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                        let path_tok = self.tokens[self.pos].clone();
+                        self.pos += 1;
+                        // Parse as expression
+                        parse_expr_tokens(&[path_tok])?
+                    } else {
+                        return Err(self.error_expected("expected file path", "string or identifier"));
+                    };
+
+                    // Parse optional mode argument
+                    let mode = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                        self.pos += 1; // consume ','
+                        if self.pos < self.tokens.len() &&
+                            (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident || self.tokens[self.pos].typ == Type::Number) {
+                            let mode_tok = self.tokens[self.pos].clone();
+                            self.pos += 1;
+                            Some(parse_expr_tokens(&[mode_tok])?)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                    // Check closing paren
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                        return Err(self.error_expected("expected ')'", ")"));
+                    }
+                    self.pos += 1; // consume ')'
+
+                    return Ok(Box::new(Expr::FileWrite(crate::ast::FileWriteExpr {
+                        span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                        path,
+                        mode,
+                    })));
+                }
+                // Not $>>FILE - this should be handled as a statement
+                return Err(self.error("unexpected token in expression"));
+            }
+            // Read expression: $<<ENV("KEY") or $<<LINE("prompt") or $<<FILE("path")
             Type::Read => {
                 let start = tok.pos;
+                // Check if this is $<<FILE (single token with literal "$<<FILE")
+                if tok.literal == "$<<FILE" {
+                    // Expect parentheses
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                        return Err(self.error_expected("expected '(' after FILE", "("));
+                    }
+                    self.pos += 1; // consume '('
+
+                    // Parse path argument
+                    let path = if self.pos < self.tokens.len() &&
+                        (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                        let path_tok = self.tokens[self.pos].clone();
+                        self.pos += 1;
+                        // Parse as expression
+                        parse_expr_tokens(&[path_tok])?
+                    } else {
+                        return Err(self.error_expected("expected file path", "string or identifier"));
+                    };
+
+                    // Parse optional mode argument
+                    let mode = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                        self.pos += 1; // consume ','
+                        if self.pos < self.tokens.len() &&
+                            (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident || self.tokens[self.pos].typ == Type::Number) {
+                            let mode_tok = self.tokens[self.pos].clone();
+                            self.pos += 1;
+                            Some(parse_expr_tokens(&[mode_tok])?)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                    // Check closing paren
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                        return Err(self.error_expected("expected ')'", ")"));
+                    }
+                    self.pos += 1; // consume ')'
+
+                    return Ok(Box::new(Expr::FileRead(crate::ast::FileReadExpr {
+                        span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                        path,
+                        mode,
+                    })));
+                }
+
+                // Otherwise, expect ENV or LINE
                 // Expect: ENV("key") or LINE("prompt")
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Ident {
                     return Err(self.error_expected("expected ENV or LINE after $<<", "identifier"));
                 }
                 let mode_name = self.tokens[self.pos].literal.clone();
+                // Handle $<<FILE as well (legacy support if tokenized separately)
+                if mode_name == "FILE" {
+                    self.pos += 1; // consume FILE
+
+                    // Expect parentheses
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                        return Err(self.error_expected("expected '(' after FILE", "("));
+                    }
+                    self.pos += 1; // consume '('
+
+                    // Parse path argument
+                    let path = if self.pos < self.tokens.len() &&
+                        (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                        let path_tok = self.tokens[self.pos].clone();
+                        self.pos += 1;
+                        // Parse as expression
+                        parse_expr_tokens(&[path_tok])?
+                    } else {
+                        return Err(self.error_expected("expected file path", "string or identifier"));
+                    };
+
+                    // Parse optional mode argument
+                    let mode = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                        self.pos += 1; // consume ','
+                        if self.pos < self.tokens.len() &&
+                            (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident || self.tokens[self.pos].typ == Type::Number) {
+                            let mode_tok = self.tokens[self.pos].clone();
+                            self.pos += 1;
+                            Some(parse_expr_tokens(&[mode_tok])?)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                    // Check closing paren
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                        return Err(self.error_expected("expected ')'", ")"));
+                    }
+                    self.pos += 1; // consume ')'
+
+                    return Ok(Box::new(Expr::FileRead(crate::ast::FileReadExpr {
+                        span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                        path,
+                        mode,
+                    })));
+                }
+
                 if mode_name != "ENV" && mode_name != "LINE" {
-                    return Err(self.error_expected("expected ENV or LINE", &format!("got {}", mode_name)));
+                    return Err(self.error_expected("expected ENV or LINE or FILE", &format!("got {}", mode_name)));
                 }
                 self.pos += 1; // consume ENV/LINE
 
@@ -511,6 +660,36 @@ impl<'a> ExprParser<'a> {
                     mode,
                     prompt,
                 })))
+            }
+            // Config read expression: $<<CONFIG("KEY")
+            Type::ConfigRead => {
+                let start = tok.pos;
+                // Expect parentheses
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                    return Err(self.error_expected("expected '(' after CONFIG", "("));
+                }
+                self.pos += 1; // consume '('
+
+                // Parse key argument
+                let key = if self.pos < self.tokens.len() &&
+                    (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                    let key_tok = self.tokens[self.pos].literal.clone();
+                    self.pos += 1;
+                    key_tok
+                } else {
+                    return Err(self.error_expected("expected config key", "string or identifier"));
+                };
+
+                // Check closing paren
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                    return Err(self.error_expected("expected ')'", ")"));
+                }
+                self.pos += 1; // consume ')'
+
+                return Ok(Box::new(Expr::ConfigRead(crate::ast::ConfigReadExpr {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    key,
+                })));
             }
             _ => Err(self.error(&format!("unexpected token: {:?} {}", tok.typ, tok.literal))),
         }

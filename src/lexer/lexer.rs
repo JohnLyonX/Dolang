@@ -189,6 +189,14 @@ impl Lexer {
             }
             '.' => {
                 self.advance();
+                // Check for ... (spread)
+                if self.pos < self.input.len() && self.peek() == '.' {
+                    self.advance();
+                    if self.pos < self.input.len() && self.peek() == '.' {
+                        self.advance();
+                        return Ok(Token::new(Type::Spread, "...", start));
+                    }
+                }
                 Ok(Token::new(Type::Dot, ".", start))
             }
             '$' => self.read_dollar(start),
@@ -222,9 +230,24 @@ impl Lexer {
     fn read_dollar(&mut self, start: usize) -> Result<Token, String> {
         // Order matters: match longer sequences first to avoid prefix collisions
 
+        if self.match_seq("$>>FILE") {
+            self.advance_n(7);
+            return Ok(Token::new(Type::Print, "$>>FILE", start));
+        }
+
         if self.match_seq("$>>") {
             self.advance_n(3);
             return Ok(Token::new(Type::Print, "$>>", start));
+        }
+
+        if self.match_seq("$<<FILE") {
+            self.advance_n(7);
+            return Ok(Token::new(Type::Read, "$<<FILE", start));
+        }
+
+        if self.match_seq("$<<CONFIG") {
+            self.advance_n(9);
+            return Ok(Token::new(Type::ConfigRead, "$<<CONFIG", start));
         }
 
         if self.match_seq("$<<") {
@@ -287,6 +310,16 @@ impl Lexer {
             return Ok(Token::new(Type::Return, "$#", start));
         }
 
+        if self.match_seq("$mod") {
+            self.advance_n(4);
+            return Ok(Token::new(Type::ModDecl, "$mod", start));
+        }
+
+        if self.match_seq("$main") {
+            self.advance_n(5);
+            return Ok(Token::new(Type::MainDecl, "$main", start));
+        }
+
         // Single $ is variable declaration
         self.advance();
         Ok(Token::new(Type::VarDecl, "$", start))
@@ -294,13 +327,38 @@ impl Lexer {
 
     fn read_string(&mut self, start: usize) -> Result<Token, String> {
         self.advance(); // consume opening "
-        let body = self.read_until_rune('"');
-        if body.is_empty() && self.pos >= self.input.len() {
-            return Err("unclosed string".to_string());
+        let mut result = String::new();
+
+        while self.pos < self.input.len() {
+            let ch = self.peek();
+            if ch == '"' {
+                self.advance(); // consume closing "
+                return Ok(Token::new(Type::String, &result, start));
+            } else if ch == '\\' {
+                // Escape sequence
+                self.advance(); // consume '\'
+                if self.pos >= self.input.len() {
+                    return Err("unclosed string".to_string());
+                }
+                let next = self.peek();
+                let escaped = match next {
+                    'n' => '\n',
+                    't' => '\t',
+                    'r' => '\r',
+                    '0' => '\0',
+                    '\\' => '\\',
+                    '"' => '"',
+                    _ => return Err(format!("invalid escape sequence \"\\{}\"", next)),
+                };
+                result.push(escaped);
+                self.advance(); // consume escaped char
+            } else {
+                result.push(ch);
+                self.advance();
+            }
         }
-        self.advance(); // consume closing "
-        let literal: String = body.iter().collect();
-        Ok(Token::new(Type::String, &literal, start))
+
+        Err("unclosed string".to_string())
     }
 
     /// Read an f-string: f"..."
@@ -342,6 +400,27 @@ impl Lexer {
                     self.advance(); // consume closing "
                     return Ok(Token::new(Type::FString, &literal, start));
                 }
+                '\\' => {
+                    // Escape sequence
+                    self.advance(); // consume '\'
+                    if self.pos >= self.input.len() {
+                        return Err("unclosed f-string".to_string());
+                    }
+                    let next = self.peek();
+                    let escaped = match next {
+                        'n' => '\n',
+                        't' => '\t',
+                        'r' => '\r',
+                        '0' => '\0',
+                        '\\' => '\\',
+                        '"' => '"',
+                        '{' => '{',
+                        '}' => '}',
+                        _ => return Err(format!("invalid escape sequence \"\\{}\" in f-string", next)),
+                    };
+                    literal.push(escaped);
+                    self.advance(); // consume escaped char
+                }
                 _ => {
                     literal.push(ch);
                     self.advance();
@@ -358,6 +437,12 @@ impl Lexer {
             return Err("unclosed char".to_string());
         }
         let ch = self.peek();
+
+        // Check for escape sequences - not supported in char
+        if ch == '\\' {
+            return Err("Char type does not support escape sequences".to_string());
+        }
+
         self.advance(); // consume the character
         if self.pos >= self.input.len() || self.peek() != '\'' {
             return Err("unclosed char".to_string());

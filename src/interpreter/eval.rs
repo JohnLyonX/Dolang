@@ -1,5 +1,6 @@
 // Expression evaluation - evaluates AST expressions to values.
 use crate::ast::{Expr, FnDeclStmt};
+use crate::config;
 use crate::error::Error;
 use crate::token::Type;
 
@@ -420,6 +421,7 @@ pub fn eval_expr(
                 span: lit.span,
                 name: fn_name.clone(),
                 params: lit.params.clone(),
+                variadic_param: lit.variadic_param.clone(),
                 return_type: lit.return_type.clone(),
                 body: lit.body.clone(),
             };
@@ -488,6 +490,72 @@ pub fn eval_expr(
                         }
                     }
                 }
+            }
+        }
+        Expr::FileRead(file_read) => {
+            // Evaluate path
+            let path_val = match eval_expr(&file_read.path, env, fns, w, false) {
+                Some(v) => v,
+                None => return Some(DolangValue::Str("[ERROR] runtime error: file path is required".to_string())),
+            };
+
+            let path_str = match path_val {
+                DolangValue::Str(s) => s,
+                _ => return Some(DolangValue::Str("[ERROR] runtime error: file path must be a String".to_string())),
+            };
+
+            // Evaluate mode (optional): "LINES"
+            let mode_str = if let Some(mode_expr) = &file_read.mode {
+                match eval_expr(mode_expr, env, fns, w, false) {
+                    Some(v) => Some(v.to_string()),
+                    None => None,
+                }
+            } else {
+                None
+            };
+
+            // Return a File object - reading is deferred to method call
+            Some(DolangValue::File { path: path_str, mode: mode_str })
+        }
+        Expr::FileWrite(file_write) => {
+            // Evaluate path
+            let path_val = match eval_expr(&file_write.path, env, fns, w, false) {
+                Some(v) => v,
+                None => return Some(DolangValue::Str("[ERROR] runtime error: file path is required".to_string())),
+            };
+
+            let path_str = match path_val {
+                DolangValue::Str(s) => s,
+                _ => return Some(DolangValue::Str("[ERROR] runtime error: file path must be a String".to_string())),
+            };
+
+            // Evaluate mode (optional): "W", "A"
+            let mode_str = if let Some(mode_expr) = &file_write.mode {
+                match eval_expr(mode_expr, env, fns, w, false) {
+                    Some(v) => Some(v.to_string()),
+                    None => None,
+                }
+            } else {
+                None
+            };
+
+            // Return a File object - writing is deferred to .content() method
+            Some(DolangValue::File { path: path_str, mode: mode_str })
+        }
+        Expr::ConfigRead(config) => {
+            // Check if in serve mode
+            if !config::is_serve_mode() {
+                return Some(DolangValue::Str("[ERROR] runtime error: $<<CONFIG() is only available in serve mode".to_string()));
+            }
+
+            // Get config value
+            if let Some(cfg) = config::get_serve_config() {
+                if let Some(value) = cfg.get(&config.key) {
+                    return Some(DolangValue::Str(value.to_string()));
+                }
+                Some(DolangValue::Str(format!("[ERROR] runtime error: config '{}' not found", config.key)))
+            } else {
+                Some(DolangValue::Str("[ERROR] runtime error: config not loaded".to_string()))
             }
         }
         Expr::FnCall(call) => {

@@ -3,7 +3,7 @@
 > *"我们不关心工程优雅，我们关心最快把想法变成收入。"*
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v1.6-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-v1.7-blue" alt="Version">
   <img src="https://img.shields.io/badge/Rust-1.70+-orange" alt="Rust">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
@@ -75,13 +75,46 @@ cargo build
 cargo run
 ```
 
+## CLI 命令
+
+```bash
+dolang               # REPL 交互模式
+dolang run <file>   # 运行单个 .dol 文件
+dolang serve [path] # 服务模式（默认当前目录）
+```
+
 ## 快速开始
 
 ```
-Dolang REPL v1.6
+Dolang REPL v1.7
 >> $>> "Hello, Dolang!";
 Hello, Dolang!
 >>
+```
+
+## 项目系统
+
+Dolang 支持完整的项目系统：
+
+```bash
+# 创建项目目录
+mkdir my-project
+cd my-project
+
+# 创建 package.toml
+echo 'name = "my-project"
+version = "0.1.0"
+DB_URL = "postgres://localhost/db"' > package.toml
+
+# 创建 main.dol
+echo '$main() {
+    $>> "Server started!";
+    $ db = $<<CONFIG("DB_URL");
+    $>> f"Database: {db}";
+}' > main.dol
+
+# 运行服务模式
+dolang serve
 ```
 
 ### 退出 REPL
@@ -121,4 +154,4 @@ Dolang 目前是一个解释型脚本语言的起点。
 
 ---
 
-*Dolang Team · v1.6 · MIT License*
+*Dolang Team · v1.7 · MIT License*

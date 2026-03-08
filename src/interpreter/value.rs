@@ -20,8 +20,13 @@ pub enum DolangValue {
     Map(IndexMap<String, DolangValue>),
     Function {
         params: Vec<String>,
+        variadic_param: Option<String>,
         body: Vec<Stmt>,
         return_type: Option<String>,
+    },
+    File {
+        path: String,
+        mode: Option<String>, // "LINES" for line reading
     },
     Null,
 }
@@ -42,6 +47,8 @@ impl PartialEq for DolangValue {
             (Self::Map(a), Self::Map(b)) => a == b,
             // Function 不可比较
             (Self::Function { .. }, _) => false,
+            // File 不可比较
+            (Self::File { .. }, _) => false,
             _ => false,
         }
     }
@@ -85,6 +92,9 @@ impl fmt::Display for DolangValue {
             Self::Function { params, .. } => {
                 write!(f, "<fn({})>", params.join(", "))
             }
+            Self::File { path, .. } => {
+                write!(f, "File({})", path)
+            }
         }
     }
 }
@@ -100,6 +110,7 @@ impl DolangValue {
             Self::List(_) => "List",
             Self::Map(_) => "Map",
             Self::Function { .. } => "Function",
+            Self::File { .. } => "File",
             Self::Null => "Null",
         }
     }
@@ -114,6 +125,7 @@ impl DolangValue {
             Self::List(l) => !l.is_empty(),
             Self::Map(m) => !m.is_empty(),
             Self::Function { .. } => true,
+            Self::File { .. } => true,
             Self::Null => false,
         }
     }

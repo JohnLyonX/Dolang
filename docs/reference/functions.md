@@ -47,6 +47,76 @@ $>> a;           // 输出: 10 (a 未改变)
 
 ---
 
+## 可变参数函数
+
+Dolang 支持可变参数函数，使用 `...参数名` 语法收集多余参数到列表。
+
+### 基本用法
+
+```dao
+$fn sum(...nums) {
+    $# nums;
+};
+
+$>> sum(1, 2, 3);
+[1, 2, 3]
+```
+
+**语法**：
+
+```dao
+$fn 函数名(...参数名) {
+    函数体;
+}
+```
+
+### 混合普通参数和可变参数
+
+可变参数必须是最后一个参数：
+
+```dao
+$fn greet(name, ...others) {
+    $# [name, others];
+};
+
+$>> greet("Tom");
+[Tom, []]
+$>> greet("Tom", "Jerry", "Bob");
+[Tom, [Jerry, Bob]]
+```
+
+### 获取参数个数
+
+使用 `.len()` 方法获取传入的参数个数：
+
+```dao
+$fn countArgs(...args) {
+    $# args.len();
+};
+
+$>> countArgs();
+0
+$>> countArgs(1);
+1
+$>> countArgs(1, 2, 3);
+3
+```
+
+### 匿名可变参数函数
+
+```dao
+$result = $fn(...args) {
+    $# args;
+};
+
+$>> result(1, 2);
+[1, 2]
+$>> result();
+[]
+```
+
+---
+
 ## 返回语句
 
 使用 `$#` 返回值：
@@ -354,4 +424,288 @@ $>> age;
 $>> "按回车继续...";
 $<<LINE();
 $>> "程序继续执行";
+```
+
+---
+
+## 文件读写
+
+Dolang 支持文件读写操作，使用 `$>>FILE` 创建文件对象，`$<<FILE` 读取文件。
+
+### 写入文件 `$>>FILE`
+
+`$>>FILE` 创建文件对象，使用 `.content()` 方法写入内容：
+
+```dao
+// 覆盖写入
+$ f = $>>FILE("output.txt");
+$ f.content("Hello World");
+
+// 追加写入
+$ f = $>>FILE("output.txt", "A");
+$ f.content("\n第二行");
+
+// 链式调用
+$>>FILE("output.txt").content("Hello");
+
+// 删除文件
+$>>FILE("temp.txt", "DEL");
+```
+
+**语法**：
+
+```dao
+$ f = $>>FILE(path);              // 创建文件对象（默认覆盖写入）
+$ f = $>>FILE(path, "W");        // 覆盖写入
+$ f = $>>FILE(path, "A");        // 追加写入
+$>>FILE(path, "DEL");            // 删除文件
+
+$ f.content("内容");              // 写入内容
+```
+
+### 读取文件 `$<<FILE`
+
+`$<<FILE("path")` 返回一个 File 对象，支持链式调用：
+
+```dao
+// 获取文件对象
+$ f = $<<FILE("data.txt");
+
+// 检查文件是否存在
+$>> f.exists();
+
+// 读取全部内容
+$ content = f.read();
+
+// 获取文件大小
+$>> f.size();
+
+// 判断是否为目录
+$>> f.is_dir();
+```
+
+**语法**：
+
+```dao
+$ f = $<<FILE(path);              // 获取文件对象
+$ f = $<<FILE(path, "LINES");    // 设置为行读取模式
+$ f.exists()                      // Bool - 文件是否存在
+$ f.read()                       // String - 读取全部内容
+$ f.read_lines()                 // List - 读取所有行（等效于设置 "LINES" 模式后调用 read()）
+$ f.size()                      // Int - 文件大小
+$ f.is_dir()                    // Bool - 是否为目录
+```
+
+### 示例
+
+```dao
+// 写入文件
+$ f = $>>FILE("data.txt");
+$ f.content("line1\nline2\nline3");
+
+// 检查文件是否存在
+$ f = $<<FILE("data.txt");
+$if f.exists() {
+    // 读取内容
+    $ content = f.read();
+    $>> content;
+}
+
+// 设置行读取模式
+$ f2 = $<<FILE("data.txt", "LINES");
+$ lines = f2.read();
+$for line in lines {
+    $>> line;
+}
+```
+
+### 错误情况
+
+```dao
+// 读取不存在的文件
+$ f = $<<FILE("not_exist.txt");
+$>> f.read();
+[ERROR] runtime error: cannot read file: Not found (os error 2)
+
+// 读取目录
+$ f = $<<FILE("./src");
+$>> f.read();
+[ERROR] runtime error: 'src' is a directory, not a file
+```
+
+---
+
+## 模块系统
+
+Dolang 支持模块系统，允许将代码拆分到多个文件中，通过 `$mod` 关键字导入。
+
+### 模块声明 `$mod`
+
+使用 `$mod 路径;` 导入模块：
+
+```dao
+$mod dao.user;
+```
+
+**语法**：
+
+```dao
+$mod 模块路径;
+```
+
+模块路径支持点分隔符：
+- `$mod dao.user;` 会加载 `dao/user.dol` 文件
+
+### 模块搜索路径
+
+模块按以下顺序搜索：
+1. 当前目录：`dao/user.dol`
+2. modules 目录：`modules/dao/user.dol`
+
+### 示例
+
+**项目结构**：
+
+```
+my-project/
+├── main.dol
+├── package.toml
+└── dao/
+    └── user.dol
+```
+
+**dao/user.dol**（模块文件）：
+
+```dao
+$fn get_user(id) -> String {
+    $# "User-" + id;
+};
+
+$fn create_user(name, email) -> String {
+    $# "Created: " + name + " (" + email + ")";
+};
+```
+
+**main.dol**（主文件）：
+
+```dao
+$mod dao.user;
+
+$main() {
+    $ result = get_user("123");
+    $>> result;           // 输出: User-123
+
+    $ user = create_user("Tom", "tom@example.com");
+    $>> user;            // 输出: Created: Tom (tom@example.com)
+};
+```
+
+### 错误情况
+
+```dao
+$mod non.existent.module;
+```
+
+运行结果（如果模块文件不存在）：
+```
+[ERROR] runtime error: module not found: 'non.existent.module' (tried: non/existent/module.dol, modules/non/existent/module.dol)
+```
+
+---
+
+## 项目系统
+
+Dolang 支持项目系统，提供服务模式、配置管理和主入口功能。
+
+### CLI 命令
+
+```bash
+dolang               # REPL 交互模式
+dolang run <file>   # 运行单个 .dol 文件
+dolang serve [path] # 服务模式（默认当前目录）
+```
+
+### 服务模式 `dolang serve`
+
+服务模式用于运行项目，会自动加载配置和执行主入口：
+
+```bash
+dolang serve .           # 从当前目录加载
+dolang serve main.dol    # 指定主入口文件
+```
+
+### 主入口 `$main`
+
+使用 `$main()` 定义程序入口，仅在服务模式下执行：
+
+```dao
+$main() {
+    $>> "Server started!";
+    $>> "Loading configuration...";
+};
+```
+
+**注意**：
+- `$main()` 只能在 `main.dol` 文件中使用
+- 只有在 `dolang serve` 模式下才会执行
+
+### 配置文件 package.toml
+
+在项目根目录创建 `package.toml` 文件：
+
+```toml
+name = "my-project"
+version = "0.1.0"
+DB_URL = "postgres://localhost/db"
+API_KEY = "your-api-key"
+port = 3000
+host = "0.0.0.0"
+```
+
+**配置项**：
+| 键 | 说明 | 默认值 |
+|---|---|---|
+| name | 项目名称 | - |
+| version | 项目版本 | - |
+| entry | 入口文件 | main.dol |
+| port | 服务器端口 | 8080 |
+| host | 服务器地址 | 0.0.0.0 |
+| 其他 | 环境变量 | - |
+
+### 配置读取 `$<<CONFIG`
+
+在服务模式下，可以使用 `$<<CONFIG("KEY")` 读取配置：
+
+```dao
+$mod dao.user;
+
+$main() {
+    $ db_url = $<<CONFIG("DB_URL");
+    $>> f"Connecting to: {db_url}";
+
+    $ api_key = $<<CONFIG("API_KEY");
+    $>> f"API Key loaded: {api_key}";
+};
+```
+
+**注意**：`$<<CONFIG` 仅在服务模式下可用
+
+运行结果：
+```
+$ dolang serve .
+Loaded project: my-project v0.1.0
+Connecting to: postgres://localhost/db
+API Key loaded: your-api-key
+```
+
+### 错误情况
+
+```dao
+// 在 REPL 模式下使用 $<<CONFIG
+$ a = $<<CONFIG("DB_URL");
+```
+
+运行结果：
+```
+[ERROR] runtime error: $<<CONFIG() is only available in serve mode
 ```

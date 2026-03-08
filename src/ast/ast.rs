@@ -45,6 +45,10 @@ pub enum Expr {
     FileRead(FileReadExpr), // $<<FILE("path") as expression
     FileWrite(FileWriteExpr), // $>>FILE("path", mode?) as expression
     ConfigRead(ConfigReadExpr), // $<<CONFIG("KEY") as expression
+    HdrRead(HdrReadExpr), // $HDR("Header-Name")
+    JsonConstructor(JsonConstructor), // $JSON { "key": value, ... }
+    HtmlConstructor(HtmlConstructor), // $HTML("<h1>...</h1>")
+    ResConstructor(ResConstructor), // $RES(status, body)
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +69,9 @@ pub enum Stmt {
     Continue(ContinueStmt), // $continue;
     Exit(ExitStmt),
     FnDecl(FnDeclStmt),     // $fn name(params) -> type { body }
+    HttpFn(HttpFnStmt),    // $GET("/path") name(params) -> type { body }
+    HttpBlock(HttpBlockStmt), // $HTTP { routes... }
+    Static(StaticStmt),       // $STATIC - static file serving
     Return(ReturnStmt),     // $# expression;
     ModDecl(ModDeclStmt),  // $mod path;
     MainDecl(MainDeclStmt), // $main() { body }
@@ -300,6 +307,36 @@ pub struct FnDeclStmt {
     pub body: Vec<Stmt>,
 }
 
+/// HTTP function: $GET("/path") name(params) -> type { body }
+#[derive(Debug, Clone)]
+pub struct HttpFnStmt {
+    pub span: Span,
+    pub method: String,           // "GET", "POST", "PUT", "DELETE", "PATCH"
+    pub path: String,             // "/user/:id"
+    pub name: String,             // function name
+    pub params: Vec<String>,
+    pub variadic_param: Option<String>,
+    pub return_type: Option<String>,
+    pub body: Vec<Stmt>,
+}
+
+/// HTTP block: $HTTP { routes... } or $HTTP(prefix).link(module)
+#[derive(Debug, Clone)]
+pub struct HttpBlockStmt {
+    pub span: Span,
+    pub prefix: Option<String>,   // 路径前缀，如 "/v1/api/"
+    pub link: Option<String>,      // 要链接的模块，如 "api"
+    pub routes: Vec<HttpFnStmt>,  // 内嵌的 HTTP 路由
+}
+
+/// Static file serving: $STATIC("/url-prefix", "dir.module") or $STATIC("dir")
+#[derive(Debug, Clone)]
+pub struct StaticStmt {
+    pub span: Span,
+    pub url_prefix: String,      // URL 前缀，如 "/css"
+    pub module_path: String,     // 模块路径，如 "css" 或 "css.dolang"
+}
+
 /// Module declaration: $mod path;
 #[derive(Debug, Clone)]
 pub struct ModDeclStmt {
@@ -360,6 +397,35 @@ pub struct FileWriteExpr {
 pub struct ConfigReadExpr {
     pub span: Span,
     pub key: String,
+}
+
+/// HTTP header read expression: $HDR("Header-Name")
+#[derive(Debug, Clone)]
+pub struct HdrReadExpr {
+    pub span: Span,
+    pub header_name: String,
+}
+
+/// JSON constructor: $JSON { "key": value, ... }
+#[derive(Debug, Clone)]
+pub struct JsonConstructor {
+    pub span: Span,
+    pub entries: Vec<(String, Expr)>, // (key, value expression)
+}
+
+/// HTML constructor: $HTML("<h1>...</h1>")
+#[derive(Debug, Clone)]
+pub struct HtmlConstructor {
+    pub span: Span,
+    pub content: Box<Expr>, // HTML content expression
+}
+
+/// Response constructor: $RES(status, body)
+#[derive(Debug, Clone)]
+pub struct ResConstructor {
+    pub span: Span,
+    pub status: Box<Expr>, // status code
+    pub body: Option<Box<Expr>>, // response body
 }
 
 #[derive(Debug, Clone)]
@@ -483,6 +549,30 @@ impl Spanned for ConfigReadExpr {
     }
 }
 
+impl Spanned for HdrReadExpr {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for JsonConstructor {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for HtmlConstructor {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for ResConstructor {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Spanned for ModDeclStmt {
     fn span(&self) -> Span {
         self.span
@@ -597,6 +687,24 @@ impl Spanned for FnDeclStmt {
     }
 }
 
+impl Spanned for HttpFnStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for HttpBlockStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for StaticStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
 impl Spanned for ReturnStmt {
     fn span(&self) -> Span {
         self.span
@@ -631,6 +739,10 @@ impl Expr {
             Expr::FileRead(f) => f.span(),
             Expr::FileWrite(f) => f.span(),
             Expr::ConfigRead(c) => c.span(),
+            Expr::HdrRead(h) => h.span(),
+            Expr::JsonConstructor(j) => j.span(),
+            Expr::HtmlConstructor(h) => h.span(),
+            Expr::ResConstructor(r) => r.span(),
         }
     }
 }
@@ -651,6 +763,9 @@ impl Stmt {
             Stmt::Continue(s) => s.span(),
             Stmt::Exit(s) => s.span(),
             Stmt::FnDecl(s) => s.span(),
+            Stmt::HttpFn(s) => s.span(),
+            Stmt::HttpBlock(s) => s.span(),
+            Stmt::Static(s) => s.span(),
             Stmt::Return(s) => s.span(),
             Stmt::ModDecl(s) => s.span(),
             Stmt::MainDecl(s) => s.span(),

@@ -1,0 +1,7 @@
+$main() {
+	$HTTP("/v1/api/").link("routers.api");
+
+    $GET("/") index() -> HTML {
+        $# $HTML().link("pages.dolang");
+    }
+}

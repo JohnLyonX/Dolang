@@ -250,6 +250,16 @@ impl Lexer {
             return Ok(Token::new(Type::ConfigRead, "$<<CONFIG", start));
         }
 
+        if self.match_seq("$HDR") {
+            self.advance_n(4);
+            return Ok(Token::new(Type::HdrRead, "$HDR", start));
+        }
+
+        if self.match_seq("$HTTP") {
+            self.advance_n(5);
+            return Ok(Token::new(Type::HttpBlock, "$HTTP", start));
+        }
+
         if self.match_seq("$<<") {
             self.advance_n(3);
             return Ok(Token::new(Type::Read, "$<<", start));
@@ -318,6 +328,51 @@ impl Lexer {
         if self.match_seq("$main") {
             self.advance_n(5);
             return Ok(Token::new(Type::MainDecl, "$main", start));
+        }
+
+        if self.match_seq("$JSON") {
+            self.advance_n(5);
+            return Ok(Token::new(Type::Json, "$JSON", start));
+        }
+
+        if self.match_seq("$HTML") {
+            self.advance_n(5);
+            return Ok(Token::new(Type::Html, "$HTML", start));
+        }
+
+        if self.match_seq("$RES") {
+            self.advance_n(4);
+            return Ok(Token::new(Type::Res, "$RES", start));
+        }
+
+        if self.match_seq("$STATIC") {
+            self.advance_n(7);
+            return Ok(Token::new(Type::Static, "$STATIC", start));
+        }
+
+        if self.match_seq("$GET") {
+            self.advance_n(4);
+            return Ok(Token::new(Type::HttpGet, "$GET", start));
+        }
+
+        if self.match_seq("$POST") {
+            self.advance_n(5);
+            return Ok(Token::new(Type::HttpPost, "$POST", start));
+        }
+
+        if self.match_seq("$PUT") {
+            self.advance_n(4);
+            return Ok(Token::new(Type::HttpPut, "$PUT", start));
+        }
+
+        if self.match_seq("$DEL") {
+            self.advance_n(4);
+            return Ok(Token::new(Type::HttpDel, "$DEL", start));
+        }
+
+        if self.match_seq("$PATCH") {
+            self.advance_n(6);
+            return Ok(Token::new(Type::HttpPatch, "$PATCH", start));
         }
 
         // Single $ is variable declaration
@@ -512,6 +567,7 @@ impl Lexer {
         self.input[start..self.pos].iter().collect()
     }
 
+    #[allow(dead_code)]
     fn read_until_rune(&mut self, target: char) -> Vec<char> {
         let start = self.pos;
         while self.pos < self.input.len() {

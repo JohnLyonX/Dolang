@@ -1,0 +1,19 @@
+$main() {
+	$HTTP("/v1/api/").link("routers.api");
+
+
+    $STATIC("/css","pages.css");
+    $STATIC("/js","pages.js");
+
+    $GET("/") index() -> HTML {
+        $ web = $HTML().link("pages.dolang");
+
+        $# web;
+    }
+
+    $GET("/cn") index() -> HTML {
+        $ web = $HTML().link("pages.dolang-cn");
+
+        $# web;
+    }
+}

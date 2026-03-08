@@ -45,6 +45,19 @@ pub enum Type {
     ModDecl,    // $mod - module declaration
     MainDecl,   // $main - main entry point
     ConfigRead, // $<<CONFIG - read from package.toml
+    HdrRead,    // $HDR - read HTTP header
+    Json,       // $JSON - JSON constructor
+    Html,       // $HTML - HTML constructor
+    Res,        // $RES - HTTP response constructor
+    Static,     // $STATIC - static file serving
+
+    // HTTP method keywords
+    HttpGet,    // $GET
+    HttpPost,   // $POST
+    HttpPut,    // $PUT
+    HttpDel,    // $DEL
+    HttpPatch,  // $PATCH
+    HttpBlock,  // $HTTP - HTTP block
 
     // Block delimiters
     LBrace,     // {
@@ -114,6 +127,17 @@ impl fmt::Display for Type {
             Type::ModDecl => write!(f, "$mod"),
             Type::MainDecl => write!(f, "$main"),
             Type::ConfigRead => write!(f, "$<<CONFIG"),
+            Type::HdrRead => write!(f, "$HDR"),
+            Type::Json => write!(f, "$JSON"),
+            Type::Html => write!(f, "$HTML"),
+            Type::Res => write!(f, "$RES"),
+            Type::Static => write!(f, "$STATIC"),
+            Type::HttpGet => write!(f, "$GET"),
+            Type::HttpPost => write!(f, "$POST"),
+            Type::HttpPut => write!(f, "$PUT"),
+            Type::HttpDel => write!(f, "$DEL"),
+            Type::HttpPatch => write!(f, "$PATCH"),
+            Type::HttpBlock => write!(f, "$HTTP"),
             Type::LBrace => write!(f, "{{"),
             Type::RBrace => write!(f, "}}"),
             Type::LParen => write!(f, "("),

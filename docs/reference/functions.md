@@ -151,6 +151,26 @@ $>> double(5);
 - `String` - 字符串类型
 - `Bool` / `Boolean` - 布尔类型
 
+### HTTP 返回类型
+
+在 HTTP 路由中，还可以使用以下返回类型：
+
+- `JSON` - JSON 响应（默认）
+- `HTML` - HTML 页面响应
+- `String` - 纯文本响应
+
+```dao
+// JSON 响应
+$GET("/api/users") get_users() -> JSON {
+    $# $JSON { "users": ["tom", "jerry"] };
+}
+
+// HTML 响应
+$GET("/pages/home") home() -> HTML {
+    $# "<h1>Welcome</h1><p>Hello World!</p>";
+}
+```
+
 **返回类型不匹配时报错**：
 
 ```dao

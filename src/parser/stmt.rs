@@ -1,7 +1,7 @@
 // Statement parser - handles all statement parsing.
 use crate::ast::{
     AssignStmt, BinaryExpr, BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, Expr, FnDeclStmt, ForInStmt, ForStmt,
-    FileReadStmt, FileWriteStmt, IfBranch, IfStmt, LoopStmt, MainDeclStmt, ModDeclStmt, ReturnStmt, Span, Stmt, VarDeclStmt, WhileStmt,
+    FileReadStmt, FileWriteStmt, HttpBlockStmt, HttpFnStmt, IfBranch, IfStmt, LoopStmt, MainDeclStmt, ModDeclStmt, ReturnStmt, Span, StaticStmt, Stmt, VarDeclStmt, WhileStmt,
 };
 use crate::error::Error;
 use crate::parser::parse_expr_tokens;
@@ -134,6 +134,32 @@ impl<'a> StmtParser<'a> {
                     return self.parse_fn_decl().map(Some);
                 }
                 // Otherwise, let it be parsed as an expression (anonymous function)
+
+        // --- HTTP route: $GET, $POST, $PUT, $DEL, $PATCH ---
+        if matches!(typ, Type::HttpGet | Type::HttpPost | Type::HttpPut | Type::HttpDel | Type::HttpPatch) {
+            return self.parse_http_fn().map(Some);
+        }
+
+        // --- HTTP block: $HTTP { ... } ---
+        if typ == Type::HttpBlock {
+            return self.parse_http_block().map(Some);
+        }
+
+        // --- Static file serving: $STATIC("/url-prefix", "dir.module") or $STATIC("dir") ---
+        if typ == Type::Static {
+            self.advance(); // consume $STATIC
+            // Collect all remaining tokens until semicolon or end
+            let mut tokens = Vec::new();
+            while !self.at_end() && self.peek().typ != Type::Semicolon {
+                tokens.push(self.peek().clone());
+                self.advance();
+            }
+            // Consume semicolon if present
+            if !self.at_end() && self.peek().typ == Type::Semicolon {
+                self.advance();
+            }
+            return parse_static_stmt(&tokens).map(Some);
+        }
 
         // --- $# return ---
         if typ == Type::Return {
@@ -926,6 +952,290 @@ impl<'a> StmtParser<'a> {
         }))
     }
 
+    /// Parse HTTP route: $GET("/path") name(params) -> return_type { body }
+    /// Supported: $GET, $POST, $PUT, $DEL, $PATCH
+    pub fn parse_http_fn(&mut self) -> Result<Stmt, Error> {
+        let start = self.peek().pos;
+
+        // Get HTTP method from current token
+        let method = match self.peek().typ {
+            Type::HttpGet => "GET",
+            Type::HttpPost => "POST",
+            Type::HttpPut => "PUT",
+            Type::HttpDel => "DELETE",
+            Type::HttpPatch => "PATCH",
+            _ => return Err(Error::InvalidStatement(None)),
+        };
+        self.advance(); // consume HTTP method token (e.g., $GET)
+
+        // Expect '(' for path
+        self.expect(Type::LParen)?;
+
+        // Expect string literal for path
+        if self.at_end() || self.peek().typ != Type::String {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: format!("expected path string after ${}", method.to_lowercase()),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: Some("path string".to_string()),
+            }));
+        }
+        let path = self.advance().literal.clone();
+
+        // Expect ')' after path
+        self.expect(Type::RParen)?;
+
+        // Expect function name
+        if self.at_end() || self.peek().typ != Type::Ident {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "expected function name after path".to_string(),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: Some("function name".to_string()),
+            }));
+        }
+        let name = self.advance().literal.clone();
+
+        // Expect '(' for parameters
+        self.expect(Type::LParen)?;
+
+        // Parse parameter names (same as fn_decl)
+        let mut params: Vec<String> = Vec::new();
+        let mut variadic_param: Option<String> = None;
+        if !self.at_end() && self.peek().typ != Type::RParen {
+            loop {
+                // Check for variadic parameter: ...identifier
+                if self.peek().typ == Type::Spread {
+                    self.advance(); // consume '...'
+                    if self.at_end() || self.peek().typ != Type::Ident {
+                        return Err(Error::InvalidStatement(None));
+                    }
+                    variadic_param = Some(self.advance().literal.clone());
+                    break;
+                }
+                if self.at_end() || self.peek().typ != Type::Ident {
+                    return Err(Error::InvalidStatement(None));
+                }
+                params.push(self.advance().literal.clone());
+                if self.at_end() || self.peek().typ != Type::Comma {
+                    break;
+                }
+                self.advance(); // consume ','
+            }
+        }
+
+        // Expect ')'
+        self.expect(Type::RParen)?;
+
+        // Optional: -> return_type
+        let return_type = if !self.at_end() && self.peek().typ == Type::Arrow {
+            self.advance(); // consume '->'
+            if self.at_end() || self.peek().typ != Type::Ident {
+                return Err(Error::InvalidStatement(None));
+            }
+            Some(self.advance().literal.clone())
+        } else {
+            None
+        };
+
+        // Parse body block
+        let body = self.parse_block()?;
+
+        Ok(Stmt::HttpFn(HttpFnStmt {
+            span: Span::from_token(start),
+            method: method.to_string(),
+            path,
+            name,
+            params,
+            variadic_param,
+            return_type,
+            body,
+        }))
+    }
+
+    /// Parse $HTTP { ... } block
+    pub fn parse_http_block(&mut self) -> Result<Stmt, Error> {
+        use crate::token::Type;
+
+        let start = self.peek().pos;
+        self.advance(); // consume $HTTP
+
+        // Check if there's a path prefix: $HTTP(path)...
+        let mut prefix: Option<String> = None;
+
+        if !self.at_end() && self.peek().typ == Type::LParen {
+            // Parse: $HTTP(path)...
+            self.advance(); // consume '('
+
+            // Collect the path string
+            let mut path = String::new();
+            while !self.at_end() && self.peek().typ != Type::RParen {
+                path.push_str(&self.peek().literal);
+                self.advance();
+            }
+            if self.at_end() || self.peek().typ != Type::RParen {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected ')' after $HTTP(path".to_string(),
+                    line: 1,
+                    column: 1,
+                    expected: Some("')'".to_string()),
+                    found: None,
+                }));
+            }
+            self.advance(); // consume ')'
+            prefix = Some(path);
+        }
+
+        // Now check what comes after the path: .link(...) or { ... }
+        if !self.at_end() && self.peek().typ == Type::Dot {
+            // It's .link() syntax - could be chained
+            let mut links: Vec<String> = Vec::new();
+
+            // Parse first .link(module)
+            while !self.at_end() && self.peek().typ == Type::Dot {
+                self.advance(); // consume '.'
+
+                if self.at_end() || self.peek().literal != "link" {
+                    return Err(Error::Parse(crate::error::ParseError {
+                        message: "expected 'link' after '.'".to_string(),
+                        line: 1,
+                        column: 1,
+                        expected: Some("'link'".to_string()),
+                        found: None,
+                    }));
+                }
+                self.advance(); // consume 'link'
+
+                // Expect (
+                if self.at_end() || self.peek().typ != Type::LParen {
+                    return Err(Error::Parse(crate::error::ParseError {
+                        message: "expected '(' after .link".to_string(),
+                        line: 1,
+                        column: 1,
+                        expected: Some("'('".to_string()),
+                        found: None,
+                    }));
+                }
+                self.advance(); // consume '('
+
+                // Collect the module path string
+                let mut module_path = String::new();
+                while !self.at_end() && self.peek().typ != Type::RParen {
+                    module_path.push_str(&self.peek().literal);
+                    self.advance();
+                }
+                if self.at_end() || self.peek().typ != Type::RParen {
+                    return Err(Error::Parse(crate::error::ParseError {
+                        message: "expected ')' after .link(module".to_string(),
+                        line: 1,
+                        column: 1,
+                        expected: Some("')'".to_string()),
+                        found: None,
+                    }));
+                }
+                self.advance(); // consume ')'
+
+                links.push(module_path);
+            }
+
+            // If there are links, register them and return
+            if !links.is_empty() {
+                // Consume semicolon if present
+                if !self.at_end() && self.peek().typ == Type::Semicolon {
+                    self.advance();
+                }
+
+                // For now, just use the first link (can extend to support multiple)
+                return Ok(Stmt::HttpBlock(HttpBlockStmt {
+                    span: Span::new(start, start + 1),
+                    prefix,
+                    link: links.into_iter().next(),
+                    routes: Vec::new(),
+                }));
+            }
+        }
+
+        // If we have a prefix but no .link, expect { ... } block
+        if prefix.is_some() {
+            if self.at_end() || self.peek().typ != Type::LBrace {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected '{' or '.link' after $HTTP(path)".to_string(),
+                    line: 1,
+                    column: 1,
+                    expected: Some("'{' or '.link'".to_string()),
+                    found: None,
+                }));
+            }
+        }
+
+        // If no path prefix and no .link, expect { ... }
+        if self.at_end() || self.peek().typ != Type::LBrace {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "expected '{' after $HTTP".to_string(),
+                line: 1,
+                column: 1,
+                expected: Some("'{'".to_string()),
+                found: None,
+            }));
+        }
+        self.advance(); // consume '{'
+
+        // Collect tokens inside the block
+        let mut tokens = Vec::new();
+        let mut brace_depth = 1;
+        while !self.at_end() {
+            let tok = self.peek().clone();
+            if tok.typ == Type::LBrace {
+                brace_depth += 1;
+            } else if tok.typ == Type::RBrace {
+                brace_depth -= 1;
+                if brace_depth == 0 {
+                    self.advance(); // consume '}'
+                    break;
+                }
+            }
+            tokens.push(tok);
+            self.advance();
+        }
+
+        // Parse each route inside the block
+        let mut routes = Vec::new();
+        let mut pos = 0;
+        while pos < tokens.len() {
+            let tok = &tokens[pos];
+            if matches!(tok.typ, Type::HttpGet | Type::HttpPost | Type::HttpPut | Type::HttpDel | Type::HttpPatch) {
+                // Parse this HTTP route using StmtParser
+                let mut sub_parser = StmtParser::new(&tokens[pos..], "");
+                match sub_parser.parse_http_fn() {
+                    Ok(Stmt::HttpFn(route)) => {
+                        routes.push(route);
+                    }
+                    Ok(_) => {
+                        pos += 1;
+                        continue;
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+                // Advance past the parsed tokens
+                // Find how many tokens were consumed by counting to sub_parser.pos
+                pos += sub_parser.pos;
+            } else {
+                pos += 1;
+            }
+        }
+
+        Ok(Stmt::HttpBlock(HttpBlockStmt {
+            span: Span::new(start, start + 1),
+            prefix,
+            link: None,
+            routes,
+        }))
+    }
+
     /// Parse $>>FILE(path, content, mode?, buffer?)
     pub fn parse_file_write(&mut self, start: usize) -> Result<Option<Stmt>, Error> {
         // Collect tokens inside parentheses: path, mode?
@@ -1196,4 +1506,82 @@ fn parse_init_or_update(toks: &[Token]) -> Result<Option<Box<Stmt>>, Error> {
     }
 
     Err(Error::InvalidStatement(None))
+}
+
+/// Parse $STATIC("/url-prefix", "dir.module") or $STATIC("dir")
+pub fn parse_static_stmt(tokens: &[Token]) -> Result<Stmt, Error> {
+    // This is a standalone function that parses the $STATIC statement
+    // It expects tokens starting from after $STATIC
+    if tokens.is_empty() {
+        return Err(Error::Parse(crate::error::ParseError {
+            message: "$STATIC requires arguments".to_string(),
+            line: 1,
+            column: 1,
+            expected: Some("arguments".to_string()),
+            found: None,
+        }));
+    }
+
+    let mut args = Vec::new();
+    let mut collected = String::new();
+    let mut paren_depth = 0;
+
+    for tok in tokens {
+        match tok.typ {
+            Type::LParen => {
+                if paren_depth == 0 {
+                    // Skip the opening parenthesis
+                } else {
+                    collected.push_str(&tok.literal);
+                }
+                paren_depth += 1;
+            }
+            Type::RParen => {
+                paren_depth -= 1;
+                if paren_depth == 0 {
+                    if !collected.is_empty() {
+                        args.push(collected.trim().to_string());
+                    }
+                    break;
+                }
+                collected.push_str(&tok.literal);
+            }
+            Type::Comma if paren_depth == 1 => {
+                args.push(collected.trim().to_string());
+                collected.clear();
+            }
+            _ => {
+                collected.push_str(&tok.literal);
+            }
+        }
+    }
+
+    // Parse arguments
+    let (url_prefix, module_path) = match args.len() {
+        1 => {
+            // $STATIC("dir") - default URL prefix is /static
+            ("/static".to_string(), args[0].clone())
+        }
+        2 => {
+            // $STATIC("/url-prefix", "dir.module")
+            let prefix = args[0].trim_matches('"').to_string();
+            let module = args[1].trim_matches('"').to_string();
+            (prefix, module)
+        }
+        _ => {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "$STATIC requires 1 or 2 arguments: $STATIC(\"url-prefix\", \"module\") or $STATIC(\"module\")".to_string(),
+                line: 1,
+                column: 1,
+                expected: Some("1 or 2 arguments".to_string()),
+                found: Some(format!("{} arguments", args.len())),
+            }));
+        }
+    };
+
+    Ok(Stmt::Static(StaticStmt {
+        span: Span::new(0, 0),
+        url_prefix,
+        module_path,
+    }))
 }

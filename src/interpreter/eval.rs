@@ -191,7 +191,39 @@ pub fn eval_expr(
             // Evaluate the object to DolangValue
             let obj_val = eval_expr(&call.object, env, fns, w, false)?;
 
-            // Evaluate arguments to DolangValue
+            // Handle ModuleProxy method calls
+            if let DolangValue::ModuleProxy { path: _, fns: module_fns } = &obj_val {
+                // This is a method call on a module proxy
+                let method_name = &call.method;
+
+                // Find the function in the module
+                let fn_def = match module_fns.get(method_name) {
+                    Some(f) => f.clone(),
+                    None => return Some(DolangValue::Str(format!("[ERROR] module function '{}' not found", method_name))),
+                };
+
+                // Evaluate arguments
+                let mut arg_vals: Vec<DolangValue> = Vec::new();
+                for arg in &call.args {
+                    if let Some(val) = eval_expr(arg, env, fns, w, false) {
+                        arg_vals.push(val);
+                    }
+                }
+
+                // Call the module function
+                match super::exec::call_fn(&fn_def, &arg_vals, fns, w) {
+                    Ok(Some(val)) => return Some(val),
+                    Ok(None) => return Some(DolangValue::Null),
+                    Err(Error::Interpreter(msg)) => {
+                        return Some(DolangValue::Str(format!("[ERROR] {}", msg)));
+                    }
+                    Err(_) => {
+                        return Some(DolangValue::Str("invalid expression".to_string()));
+                    }
+                }
+            }
+
+            // Evaluate arguments to DolangValue for regular method calls
             let mut arg_vals: Vec<DolangValue> = Vec::new();
             for arg in &call.args {
                 if let Some(val) = eval_expr(arg, env, fns, w, false) {
@@ -558,6 +590,68 @@ pub fn eval_expr(
                 Some(DolangValue::Str("[ERROR] runtime error: config not loaded".to_string()))
             }
         }
+        Expr::HdrRead(hdr) => {
+            // Look up header from __headers__ in env
+            // HTTP headers are case-insensitive, so we convert to lowercase
+            let header_key = hdr.header_name.to_lowercase();
+            if let Some(headers_val) = env.get("__headers__") {
+                if let DolangValue::Json(headers) = headers_val {
+                    // Try lowercase key first
+                    if let Some(value) = headers.get(&header_key) {
+                        return Some(value.clone());
+                    }
+                    // Also try the original key
+                    if let Some(value) = headers.get(&hdr.header_name) {
+                        return Some(value.clone());
+                    }
+                    Some(DolangValue::Str("".to_string()))
+                } else {
+                    Some(DolangValue::Str("".to_string()))
+                }
+            } else {
+                // Not in HTTP context
+                Some(DolangValue::Str("".to_string()))
+            }
+        }
+        Expr::JsonConstructor(json) => {
+            use indexmap::IndexMap;
+            let mut map = IndexMap::new();
+            for (key, value_expr) in &json.entries {
+                if let Some(val) = eval_expr(value_expr, env, fns, w, false) {
+                    map.insert(key.clone(), val);
+                }
+            }
+            Some(DolangValue::Json(map))
+        }
+        Expr::HtmlConstructor(html) => {
+            // Evaluate HTML content
+            if let Some(val) = eval_expr(&html.content, env, fns, w, false) {
+                Some(DolangValue::Html(Box::new(val)))
+            } else {
+                Some(DolangValue::Null)
+            }
+        }
+        Expr::ResConstructor(res) => {
+            // Evaluate status code
+            let status_val = match eval_expr(&res.status, env, fns, w, false) {
+                Some(DolangValue::Int(n)) => n as u16,
+                _ => {
+                    return Some(DolangValue::Str("[ERROR] runtime error: $RES status must be an integer".to_string()));
+                }
+            };
+
+            // Evaluate body (optional)
+            let body_val = if let Some(body_expr) = &res.body {
+                eval_expr(body_expr, env, fns, w, false).map(Box::new)
+            } else {
+                None
+            };
+
+            Some(DolangValue::Response {
+                status: status_val,
+                body: body_val,
+            })
+        }
         Expr::FnCall(call) => {
             let mut arg_vals: Vec<DolangValue> = Vec::new();
             for arg in &call.args {
@@ -570,6 +664,51 @@ pub fn eval_expr(
                         return None;
                     }
                 }
+            }
+
+            // Special handling for link() function
+            if call.name == "link" {
+                let module_path = match arg_vals.first() {
+                    Some(DolangValue::Str(s)) => s.clone(),
+                    _ => return Some(DolangValue::Str("[ERROR] link() requires module path".to_string())),
+                };
+
+                // Try to load the module
+                let module_file = format!("{}.dol", module_path.replace('.', "/"));
+                let content = match std::fs::read_to_string(&module_file) {
+                    Ok(c) => c,
+                    Err(_) => {
+                        // Try with modules/ prefix
+                        let module_with_prefix = format!("modules/{}.dol", module_path.replace('.', "/"));
+                        match std::fs::read_to_string(&module_with_prefix) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                return Some(DolangValue::Str(format!("[ERROR] cannot load module '{}': {}", module_path, e)));
+                            }
+                        }
+                    }
+                };
+
+                // Parse the module
+                let module_stmts = match crate::parser::parse(&content) {
+                    Ok(stmts) => stmts,
+                    Err(e) => {
+                        return Some(DolangValue::Str(format!("[ERROR] parse module '{}' failed: {}", module_path, e)));
+                    }
+                };
+
+                // Extract functions from the module
+                let mut module_fns: super::env::FnEnv = std::collections::HashMap::new();
+                for stmt in module_stmts {
+                    if let crate::ast::Stmt::FnDecl(fn_decl) = stmt {
+                        module_fns.insert(fn_decl.name.clone(), fn_decl);
+                    }
+                }
+
+                return Some(DolangValue::ModuleProxy {
+                    path: module_path,
+                    fns: module_fns,
+                });
             }
 
             let fn_name = if let Some(var_val) = env.get(&call.name) {

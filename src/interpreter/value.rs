@@ -28,6 +28,16 @@ pub enum DolangValue {
         path: String,
         mode: Option<String>, // "LINES" for line reading
     },
+    Json(IndexMap<String, DolangValue>), // JSON object
+    Html(Box<DolangValue>), // HTML content
+    Response {
+        status: u16,
+        body: Option<Box<DolangValue>>, // response body
+    },
+    ModuleProxy {
+        path: String,
+        fns: super::env::FnEnv, // 模块函数
+    },
     Null,
 }
 
@@ -49,6 +59,14 @@ impl PartialEq for DolangValue {
             (Self::Function { .. }, _) => false,
             // File 不可比较
             (Self::File { .. }, _) => false,
+            // Json 不可比较
+            (Self::Json(..), _) => false,
+            // Html 不可比较
+            (Self::Html(..), _) => false,
+            // Response 不可比较
+            (Self::Response { .. }, _) => false,
+            // ModuleProxy 不可比较
+            (Self::ModuleProxy { .. }, _) => false,
             _ => false,
         }
     }
@@ -95,6 +113,35 @@ impl fmt::Display for DolangValue {
             Self::File { path, .. } => {
                 write!(f, "File({})", path)
             }
+            Self::Json(map) => {
+                // Serialize as JSON string
+
+                let mut s = String::from("{");
+                let mut first = true;
+                for (k, v) in map.iter() {
+                    if !first {
+                        s.push_str(", ");
+                    }
+                    first = false;
+                    s.push_str(&format!("\"{}\": {}", k, value_to_json(v)));
+                }
+                s.push_str("}");
+                write!(f, "{}", s)
+            }
+            Self::Html(val) => {
+                // Display HTML content
+                write!(f, "{}", val)
+            }
+            Self::Response { status, body } => {
+                if let Some(b) = body {
+                    write!(f, "Response({}, {})", status, b)
+                } else {
+                    write!(f, "Response({})", status)
+                }
+            }
+            Self::ModuleProxy { path, .. } => {
+                write!(f, "ModuleProxy({})", path)
+            }
         }
     }
 }
@@ -111,6 +158,10 @@ impl DolangValue {
             Self::Map(_) => "Map",
             Self::Function { .. } => "Function",
             Self::File { .. } => "File",
+            Self::Json(_) => "Json",
+            Self::Html(_) => "Html",
+            Self::Response { .. } => "Response",
+            Self::ModuleProxy { .. } => "ModuleProxy",
             Self::Null => "Null",
         }
     }
@@ -126,7 +177,40 @@ impl DolangValue {
             Self::Map(m) => !m.is_empty(),
             Self::Function { .. } => true,
             Self::File { .. } => true,
+            Self::Json(m) => !m.is_empty(),
+            Self::Html(v) => v.is_truthy(),
+            Self::Response { .. } => true,
+            Self::ModuleProxy { .. } => true,
             Self::Null => false,
         }
+    }
+}
+
+/// Convert DolangValue to JSON-compatible serde_json::Value
+pub fn value_to_json(value: &DolangValue) -> serde_json::Value {
+    use serde_json::json;
+    match value {
+        DolangValue::Int(n) => json!(*n),
+        DolangValue::Float(f) => json!(*f),
+        DolangValue::Str(s) => json!(s),
+        DolangValue::Bool(b) => json!(*b),
+        DolangValue::List(arr) => {
+            json!(arr.iter().map(value_to_json).collect::<Vec<_>>())
+        }
+        DolangValue::Map(m) => {
+            let obj = m.iter()
+                .map(|(k, v)| (k.clone(), value_to_json(v)))
+                .collect::<serde_json::Map<String, serde_json::Value>>();
+            serde_json::Value::Object(obj)
+        }
+        DolangValue::Json(m) => {
+            let obj = m.iter()
+                .map(|(k, v)| (k.clone(), value_to_json(v)))
+                .collect::<serde_json::Map<String, serde_json::Value>>();
+            serde_json::Value::Object(obj)
+        }
+        DolangValue::Html(v) => value_to_json(v),
+        DolangValue::Null => serde_json::Value::Null,
+        _ => serde_json::Value::Null,
     }
 }

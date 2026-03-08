@@ -1,0 +1,8 @@
+$GET("/getUsers") getUsers() -> JSON{
+	$result = $JSON {
+		"id": 1,
+		"name": "John Lyon"
+	};
+	$# result;
+}
+

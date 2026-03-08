@@ -78,10 +78,55 @@ cargo run
 ## CLI 命令
 
 ```bash
-dolang               # REPL 交互模式
-dolang run <file>   # 运行单个 .dol 文件
-dolang serve [path] # 服务模式（默认当前目录）
+dolang                    # REPL 交互模式
+dolang run <file>        # 运行单个 .dol 文件
+dolang serve [path]      # 服务模式（默认当前目录）
+dolang serve --routertab # 服务模式，显示路由表
+dolang test [file]       # 测试模式
 ```
+
+## HTTP 超函数
+
+Dolang 内置完整的 HTTP 超函数支持，详见 [HTTP 参考文档](./reference/http.md)：
+
+```dao
+// 定义 GET 路由
+$GET("/users/:id") get_user(id) -> JSON {
+    $# $JSON { "id": id, "name": "John" };
+}
+
+// 定义 POST 路由
+$POST("/users") create_user(body) -> JSON {
+    $# $JSON { "created": true };
+}
+
+// 定义 HTML 页面（使用 $HTML() 构造器）
+$GET("/pages/home") home_page() -> HTML {
+    $# $HTML("<h1>Welcome to Dolang</h1><p>Hello World!</p>");
+}
+
+// 链接外部 HTML 文件
+$GET("/") index() -> HTML {
+    $# $HTML().link("pages.index");
+}
+
+// 挂载外部模块
+$HTTP("/v1/api/").link("routers.api");
+```
+
+### 主要特性
+
+- `$GET` / `$POST` / `$PUT` / `$DELETE` / `$PATCH` - HTTP 方法
+- `$HTTP { }` / `$HTTP(path) { }` - HTTP 块语法（支持路径前缀）
+- `$HTTP(prefix).link(module)` - 模块挂载
+- `$HDR("Header")` - 获取请求头
+- `$HTML(...)` / `$JSON(...)` - 响应构造器
+- `$HTML().link()` - 链接外部 HTML/CSS/JS/XML 文件
+- `$#` - 返回响应
+- `-> HTML` / `-> JSON` / `-> String` - 返回类型
+- `$>>` - 日志输出
+- `$main()` - 服务入口点
+- `$mod` - 模块导入
 
 ## 快速开始
 

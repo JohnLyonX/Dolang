@@ -2,7 +2,6 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
 use std::process;
 
 use crossterm::{
@@ -10,7 +9,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, is_raw_mode_enabled},
 };
 
-use dolang::interpreter::{exec, FnEnv, DolangValue};
+use dolang::interpreter::{exec, set_current_file, FnEnv, DolangValue};
 use dolang::interpreter::env::ValueType;
 use dolang::parser;
 use dolang::syntax;
@@ -216,7 +215,7 @@ fn read_line_raw(prompt: &str, history: &mut Vec<String>) -> Option<String> {
 // ─── REPL main loop ────────────────────────────────────────────────────────
 
 pub fn run_repl() {
-        let mut env: HashMap<String, DolangValue> = HashMap::new();
+    let mut env: HashMap<String, DolangValue> = HashMap::new();
     let mut type_env: HashMap<String, ValueType> = HashMap::new();
     let mut const_env: HashMap<String, bool> = HashMap::new();
     let mut fns: FnEnv = HashMap::new();
@@ -359,6 +358,13 @@ pub fn run_repl() {
 // ─── File execution ────────────────────────────────────────────────────────
 
 pub fn run_file(filename: &str) {
+    // Set current file for $main() scope checking
+    let file_path = std::path::Path::new(filename);
+    let file_name = file_path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| filename.to_string());
+    set_current_file(Some(file_name.clone()));
+
     let content = match fs::read_to_string(filename) {
         Ok(c) => c,
         Err(e) => {
@@ -376,7 +382,7 @@ pub fn run_file(filename: &str) {
         }
     };
 
-        let mut env: HashMap<String, DolangValue> = HashMap::new();
+    let mut env: HashMap<String, DolangValue> = HashMap::new();
     let mut type_env: HashMap<String, ValueType> = HashMap::new();
     let mut const_env: HashMap<String, bool> = HashMap::new();
     let mut fns: FnEnv = HashMap::new();
@@ -391,80 +397,7 @@ pub fn run_file(filename: &str) {
             process::exit(0);
         }
     }
-}
 
-// ─── Serve mode ───────────────────────────────────────────────────────────────
-
-pub fn run_serve(path: PathBuf) {
-    use dolang::config;
-
-    // Determine the serve directory and main file
-    let serve_dir = if path.is_file() {
-        path.parent().unwrap_or(Path::new(".")).to_path_buf()
-    } else {
-        path.clone()
-    };
-
-    // Load project config if exists
-    if let Some(loaded_config) = config::ProjectConfig::load_from_dir(&serve_dir) {
-        println!("Loaded project: {} v{}", loaded_config.name, loaded_config.version);
-        config::set_serve_config(loaded_config);
-    }
-
-    // Find main.dol
-    let main_file = if path.is_file() {
-        path
-    } else {
-        path.join("main.dol")
-    };
-
-    let main_path = main_file.to_string_lossy().to_string();
-
-    if !Path::new(&main_path).exists() {
-        err_red(&format!("[ERROR] main file not found: {}", main_path));
-        process::exit(1);
-    }
-
-    println!("Running serve mode: {}", main_path);
-    println!("Use $main() {{ ... }} to define server logic");
-    println!();
-
-    // Read and parse the main file
-    let content = match fs::read_to_string(&main_path) {
-        Ok(c) => c,
-        Err(e) => {
-            err_red(&format!("[ERROR] cannot read file '{}': {}", main_path, e));
-            process::exit(1);
-        }
-    };
-
-    let statements = match parser::parse(&content) {
-        Ok(stmts) => stmts,
-        Err(e) => {
-            err_red(&format!("[ERROR] {}", e));
-            process::exit(1);
-        }
-    };
-
-    // Execute statements
-    let mut env: HashMap<String, DolangValue> = HashMap::new();
-    let mut type_env: HashMap<String, dolang::interpreter::env::ValueType> = HashMap::new();
-    let mut const_env: HashMap<String, bool> = HashMap::new();
-    let mut fns: FnEnv = HashMap::new();
-
-    for stmt in statements {
-        let (cont, exec_err) = exec(&stmt, &mut env, &mut fns, &mut type_env, &mut const_env);
-        if let Err(e) = exec_err {
-            err_red(&format!("[ERROR] {}", e));
-            process::exit(1);
-        }
-        if !cont {
-            process::exit(0);
-        }
-    }
-
-    // If no $main() was executed, just run the file
-    if !config::is_serve_mode() || true {
-        // Normal execution completed
-    }
+    // Clear current file after execution
+    set_current_file(None);
 }

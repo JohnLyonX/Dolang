@@ -2,8 +2,8 @@
 use std::borrow::Cow;
 
 use crate::ast::{
-    BinaryExpr, BoolLiteral, CharLiteral, ConfigReadExpr, Expr, FileReadExpr, FileWriteExpr, FStringLiteral, FStringSegment, FnCallExpr, IndexAccess, ListLiteral, MapLiteral, MethodCall, NumberLiteral,
-    Span, Spanned, StringLiteral, UnaryExpr, VarLookup,
+    BinaryExpr, BoolLiteral, CharLiteral, Expr, FStringLiteral, FStringSegment, FnCallExpr, HdrReadExpr, HtmlConstructor, IndexAccess, JsonConstructor, ListLiteral, MapLiteral, MethodCall, NumberLiteral,
+    ResConstructor, Span, Spanned, StringLiteral, UnaryExpr, VarLookup,
 };
 use crate::error::{Error, ParseError};
 use crate::parser::calc_line_col;
@@ -220,6 +220,7 @@ impl<'a> ExprParser<'a> {
     }
 
     pub fn parse_unary_expr(&mut self) -> Result<Box<Expr>, Error> {
+        // Handle unary operators
         if self.pos < self.tokens.len() {
             let typ = &self.tokens[self.pos].typ;
             if *typ == Type::Not || *typ == Type::Minus {
@@ -234,74 +235,84 @@ impl<'a> ExprParser<'a> {
                 })));
             }
         }
-        // Parse primary expression and then handle postfix index access
+
+        // Parse primary expression and handle postfix operators in a loop
+        // This allows method chaining on constructors like $HTML().link()
         let mut expr = self.parse_primary()?;
 
-        // Handle chained index access: expr[expr][expr]...
-        while self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::LBracket {
-            let start = self.tokens[self.pos].pos;
-            self.pos += 1; // consume '['
+        // Handle chained index access and method calls: expr[expr].method()...
+        loop {
+            // Handle index access: expr[expr]
+            if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::LBracket {
+                let start = self.tokens[self.pos].pos;
+                self.pos += 1; // consume '['
 
-            let index = self.parse_expr()?;
+                let index = self.parse_expr()?;
 
-            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RBracket {
-                return Err(self.error_expected("expected closing bracket in index access", "]"));
-            }
-            self.pos += 1; // consume ']'
-
-            expr = Box::new(Expr::IndexAccess(IndexAccess {
-                span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
-                object: expr,
-                index,
-            }));
-        }
-
-        // Handle chained method calls: expr.method(args).method(args)...
-        while self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Dot {
-            let start = self.tokens[self.pos].pos;
-            self.pos += 1; // consume '.'
-
-            // Expect method name
-            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Ident {
-                return Err(self.error_expected("expected method name after '.'", "identifier"));
-            }
-            let method = self.tokens[self.pos].literal.clone();
-            self.pos += 1; // consume method name
-
-            // Method calls MUST have parentheses - error if missing
-            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
-                return Err(self.error_expected(
-                    &format!("method '{}' requires parentheses, use '{}(...)' instead", method, method),
-                    "("
-                ));
-            }
-
-            // Parse arguments
-            let mut args: Vec<Expr> = Vec::new();
-            self.pos += 1; // consume '('
-
-            if self.pos < self.tokens.len() && self.tokens[self.pos].typ != Type::RParen {
-                loop {
-                    let arg = self.parse_expr()?;
-                    args.push(*arg);
-                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma {
-                        break;
-                    }
-                    self.pos += 1; // consume ','
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RBracket {
+                    return Err(self.error_expected("expected closing bracket in index access", "]"));
                 }
+                self.pos += 1; // consume ']'
+
+                expr = Box::new(Expr::IndexAccess(IndexAccess {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    object: expr,
+                    index,
+                }));
+                continue;
             }
 
-            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
-                return Err(self.error_expected("expected closing parenthesis in method call", ")"));
-            }
-            self.pos += 1; // consume ')'
+            // Handle method calls: expr.method(args)
+            if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Dot {
+                let start = self.tokens[self.pos].pos;
+                self.pos += 1; // consume '.'
 
-            expr = Box::new(Expr::MethodCall(MethodCall {
-                span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
-                object: expr,
-                method,
-                args,
-            }));
+                // Expect method name
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Ident {
+                    return Err(self.error_expected("expected method name after '.'", "identifier"));
+                }
+                let method = self.tokens[self.pos].literal.clone();
+                self.pos += 1; // consume method name
+
+                // Method calls MUST have parentheses
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                    return Err(self.error_expected(
+                        &format!("method '{}' requires parentheses, use '{}(...)' instead", method, method),
+                        "("
+                    ));
+                }
+
+                // Parse arguments
+                let mut args: Vec<Expr> = Vec::new();
+                self.pos += 1; // consume '('
+
+                if self.pos < self.tokens.len() && self.tokens[self.pos].typ != Type::RParen {
+                    loop {
+                        let arg = self.parse_expr()?;
+                        args.push(*arg);
+                        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma {
+                            break;
+                        }
+                        self.pos += 1; // consume ','
+                    }
+                }
+
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                    return Err(self.error_expected("expected closing parenthesis in method call", ")"));
+                }
+                self.pos += 1; // consume ')'
+
+                expr = Box::new(Expr::MethodCall(MethodCall {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    object: expr,
+                    method,
+                    args,
+                }));
+                continue;
+            }
+
+            // No more postfix operators
+            break;
         }
 
         Ok(expr)
@@ -689,6 +700,157 @@ impl<'a> ExprParser<'a> {
                 return Ok(Box::new(Expr::ConfigRead(crate::ast::ConfigReadExpr {
                     span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
                     key,
+                })));
+            }
+            // HTTP header read expression: $HDR("Header-Name")
+            Type::HdrRead => {
+                let start = tok.pos;
+                // Expect parentheses
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                    return Err(self.error_expected("expected '(' after HDR", "("));
+                }
+                self.pos += 1; // consume '('
+
+                // Parse header name argument
+                let header_name = if self.pos < self.tokens.len() &&
+                    (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                    let name_tok = self.tokens[self.pos].literal.clone();
+                    self.pos += 1;
+                    name_tok
+                } else {
+                    return Err(self.error_expected("expected header name", "string or identifier"));
+                };
+
+                // Check closing paren
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                    return Err(self.error_expected("expected ')'", ")"));
+                }
+                self.pos += 1; // consume ')'
+
+                return Ok(Box::new(Expr::HdrRead(HdrReadExpr {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    header_name,
+                })));
+            }
+            // JSON constructor: $JSON { "key": value, ... }
+            Type::Json => {
+                let start = tok.pos;
+                // Note: tok is already consumed by the parser at line 315
+                // so we don't need to advance self.pos again
+
+                // Expect block
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LBrace {
+                    return Err(self.error_expected("expected '{' after $JSON", "{"));
+                }
+                self.pos += 1; // consume '{'
+
+                let mut entries = Vec::new();
+
+                // Parse entries
+                while self.pos < self.tokens.len() && self.tokens[self.pos].typ != Type::RBrace {
+                    // Expect string key
+                    let key_tok = if self.pos < self.tokens.len() &&
+                        (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString) {
+                        self.tokens[self.pos].literal.clone()
+                    } else {
+                        return Err(self.error_expected("expected string key in $JSON", "string"));
+                    };
+                    self.pos += 1;
+
+                    // Expect colon
+                    if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Colon {
+                        return Err(self.error_expected("expected ':' after key", ":"));
+                    }
+                    self.pos += 1;
+
+                    // Parse value expression
+                    let value = self.parse_expr()?;
+
+                    entries.push((key_tok, *value));
+
+                    // Expect comma or end
+                    if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                        self.pos += 1; // consume comma
+                    }
+                }
+
+                // Expect closing brace
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RBrace {
+                    return Err(self.error_expected("expected '}' in $JSON", "}"));
+                }
+                self.pos += 1; // consume '}'
+
+                return Ok(Box::new(Expr::JsonConstructor(JsonConstructor {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    entries,
+                })));
+            }
+            // HTML constructor: $HTML("<h1>...</h1>") or $HTML()
+            Type::Html => {
+                let start = tok.pos;
+
+                // Expect parentheses
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                    return Err(self.error_expected("expected '(' after $HTML", "("));
+                }
+                self.pos += 1; // consume '('
+
+                // Allow empty content: $HTML()
+                let content = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::RParen {
+                    // Empty - use empty string as default
+                    Box::new(Expr::StringLiteral(StringLiteral {
+                        span: Span::new(start, start + 1),
+                        value: Cow::Owned("".to_string()),
+                    }))
+                } else {
+                    // Parse HTML content expression
+                    self.parse_expr()?
+                };
+
+                // Expect closing paren
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                    return Err(self.error_expected("expected ')' in $HTML", ")"));
+                }
+                self.pos += 1; // consume ')'
+
+                return Ok(Box::new(Expr::HtmlConstructor(HtmlConstructor {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    content,
+                })))
+            }
+            // Response constructor: $RES(status, body?)
+            Type::Res => {
+                let start = tok.pos;
+                // Note: tok is already consumed by the parser at line 315
+                // so we don't need to advance self.pos again
+
+                // Expect parentheses
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                    return Err(self.error_expected("expected '(' after $RES", "("));
+                }
+                self.pos += 1; // consume '('
+
+                // Parse status code
+                let status = self.parse_expr()?;
+
+                // Optional body
+                let body = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                    self.pos += 1; // consume comma
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
+
+                // Expect closing paren
+                if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
+                    return Err(self.error_expected("expected ')' in $RES", ")"));
+                }
+                self.pos += 1; // consume ')'
+
+                return Ok(Box::new(Expr::ResConstructor(ResConstructor {
+                    span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                    status,
+                    body,
                 })));
             }
             _ => Err(self.error(&format!("unexpected token: {:?} {}", tok.typ, tok.literal))),

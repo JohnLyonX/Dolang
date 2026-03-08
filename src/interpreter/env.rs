@@ -15,6 +15,8 @@ pub enum ValueType {
     List,
     Map,
     File,
+    Json,
+    Response,
 }
 
 /// Get the ValueType from a DolangValue
@@ -28,6 +30,10 @@ pub fn get_value_type(val: &DolangValue) -> ValueType {
         DolangValue::Map(_) => ValueType::Map,
         DolangValue::Function { .. } => ValueType::Dynamic,
         DolangValue::File { .. } => ValueType::File,
+        DolangValue::Json(_) => ValueType::Json,
+        DolangValue::Html(_) => ValueType::Dynamic,
+        DolangValue::Response { .. } => ValueType::Response,
+        DolangValue::ModuleProxy { .. } => ValueType::Dynamic,
         DolangValue::Null => ValueType::Dynamic,
     }
 }
@@ -79,5 +85,7 @@ pub fn type_name(vt: &ValueType) -> &'static str {
         ValueType::List => "List",
         ValueType::Map => "Map",
         ValueType::File => "File",
+        ValueType::Json => "Json",
+        ValueType::Response => "Response",
     }
 }

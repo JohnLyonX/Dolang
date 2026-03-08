@@ -10,6 +10,7 @@ use super::env::{
 };
 use super::eval::{check_eval_result, eval_expr};
 use super::value::DolangValue;
+use super::{get_current_file, HttpRoute, StaticRoute, STATIC_ROUTES};
 
 /// Internal control-flow signal returned by exec_inner.
 #[derive(Debug)]
@@ -60,7 +61,7 @@ fn find_undefined_var(expr: &Expr) -> Option<String> {
     }
 }
 
-fn exec_inner(
+pub(super) fn exec_inner(
     stmt: &Stmt,
     env: &mut Env,
     fns: &mut FnEnv,
@@ -123,7 +124,6 @@ fn exec_inner(
             };
 
             // Register functions from the module
-            let mut imported_count = 0;
             for module_stmt in module_stmts {
                 if let Stmt::FnDecl(fn_decl) = module_stmt {
                     // Check if function already exists
@@ -132,16 +132,29 @@ fn exec_inner(
                         continue;
                     }
                     fns.insert(fn_decl.name.clone(), fn_decl);
-                    imported_count += 1;
                 }
             }
 
-            // Could print debug info: println!("Loaded module '{}' with {} functions", stmt.path, imported_count);
             Flow::Normal
         }
 
         // --- $main main entry point ---
         Stmt::MainDecl(stmt) => {
+            // Check if $main() is only used in main.dol (allow path prefix like "./main.dol")
+            let current_file = get_current_file();
+            let is_main_dol = current_file.as_ref().map(|f| {
+                std::path::Path::new(f)
+                    .file_name()
+                    .map(|n| n.to_string_lossy() == "main.dol")
+                    .unwrap_or(false)
+            }).unwrap_or(false);
+
+            if !is_main_dol {
+                return Flow::Err(Error::Interpreter(
+                    "$main() can only be declared in main.dol".to_string()
+                ));
+            }
+
             // Execute the main function body immediately
             for main_stmt in &stmt.body {
                 let (cont, err) = exec(main_stmt, env, fns, type_env, const_env);
@@ -688,6 +701,126 @@ fn exec_inner(
             Flow::Normal
         }
 
+        // --- HTTP function: $GET, $POST, etc. ---
+        Stmt::HttpFn(st) => {
+            // Register HTTP route in global registry
+            use crate::interpreter::{HttpRoute, HTTP_ROUTES};
+
+            let route = HttpRoute {
+                method: st.method.clone(),
+                path: st.path.clone(),
+                name: st.name.clone(),
+                params: st.params.clone(),
+                variadic_param: st.variadic_param.clone(),
+                return_type: st.return_type.clone(),
+                body: st.body.clone(),
+            };
+
+            if let Ok(mut routes) = HTTP_ROUTES.lock() {
+                routes.push(route);
+            }
+
+            writeln!(w, "[DEBUG] HTTP route registered: {} {}", st.method, st.path).ok();
+            Flow::Normal
+        }
+
+        // --- HTTP block: $HTTP { ... } or $HTTP(path).link(module) ---
+        Stmt::HttpBlock(st) => {
+            use crate::interpreter::{HttpRoute, HTTP_ROUTES};
+
+            // Handle $HTTP(path).link(module) syntax
+            if let Some(link_module) = &st.link {
+                // Load the linked module and register its routes with prefix
+                let prefix = st.prefix.as_deref().unwrap_or("");
+                let module_routes = match load_module_routes(link_module) {
+                    Ok(routes) => routes,
+                    Err(e) => return Flow::Err(e),
+                };
+
+                let route_count = module_routes.len();
+                for route in module_routes {
+                    // Prepend prefix to the path, handling trailing/leading slashes
+                    let prefix_trimmed = prefix.trim_start_matches('/').trim_end_matches('/');
+                    let path_trimmed = route.path.trim_start_matches('/');
+                    let full_path = if prefix_trimmed.is_empty() {
+                        format!("/{}", path_trimmed)
+                    } else {
+                        format!("/{}/{}", prefix_trimmed, path_trimmed)
+                    };
+                    let route = HttpRoute {
+                        method: route.method.clone(),
+                        path: full_path,
+                        name: route.name.clone(),
+                        params: route.params.clone(),
+                        variadic_param: route.variadic_param.clone(),
+                        return_type: route.return_type.clone(),
+                        body: route.body.clone(),
+                    };
+
+                    if let Ok(mut routes) = HTTP_ROUTES.lock() {
+                        routes.push(route);
+                    }
+                }
+
+                writeln!(w, "[DEBUG] HTTP linked module '{}' with prefix '{}' ({} routes)", link_module, prefix, route_count).ok();
+                Flow::Normal
+            } else {
+                // Register all routes in the block ($HTTP { ... } or $HTTP(path) { ... } syntax)
+                for route_stmt in &st.routes {
+                    // Apply prefix if present
+                    let full_path = if let Some(prefix) = &st.prefix {
+                        let prefix_trimmed = prefix.trim_start_matches('/').trim_end_matches('/');
+                        let path_trimmed = route_stmt.path.trim_start_matches('/');
+                        if prefix_trimmed.is_empty() {
+                            format!("/{}", path_trimmed)
+                        } else {
+                            format!("/{}/{}", prefix_trimmed, path_trimmed)
+                        }
+                    } else {
+                        route_stmt.path.clone()
+                    };
+
+                    let route = HttpRoute {
+                        method: route_stmt.method.clone(),
+                        path: full_path,
+                        name: route_stmt.name.clone(),
+                        params: route_stmt.params.clone(),
+                        variadic_param: route_stmt.variadic_param.clone(),
+                        return_type: route_stmt.return_type.clone(),
+                        body: route_stmt.body.clone(),
+                    };
+
+                    if let Ok(mut routes) = HTTP_ROUTES.lock() {
+                        routes.push(route);
+                    }
+                }
+
+                writeln!(w, "[DEBUG] HTTP block registered {} routes", st.routes.len()).ok();
+                Flow::Normal
+            }
+        }
+
+        // --- Static file serving: $STATIC("/url-prefix", "dir.module") or $STATIC("dir") ---
+        Stmt::Static(st) => {
+            // Get base directory from current file
+            let base_dir = get_current_file()
+                .and_then(|f| Path::new(&f).parent().map(|p| p.to_path_buf()))
+                .unwrap_or_else(|| Path::new(".").to_path_buf());
+
+            let static_route = StaticRoute {
+                url_prefix: st.url_prefix.clone(),
+                module_path: st.module_path.clone(),
+                base_dir: base_dir.display().to_string(),
+            };
+
+            if let Ok(mut routes) = STATIC_ROUTES.lock() {
+                routes.push(static_route);
+            }
+
+            writeln!(w, "[DEBUG] Static route registered: {} -> {}", st.url_prefix, st.module_path).ok();
+            Flow::Normal
+        }
+
         // --- $>>FILE file write ---
         Stmt::FileWrite(st) => {
             use std::fs;
@@ -748,7 +881,7 @@ fn exec_inner(
         // --- $<<FILE file read ---
         Stmt::FileRead(st) => {
             use std::fs;
-            use std::io::{self, Read};
+            use std::io::{self};
 
             // Evaluate path
             let path_val = match check_eval_result(eval_expr(&st.path, env, fns, w, false)) {
@@ -965,6 +1098,10 @@ pub fn call_fn(
                         DolangValue::Map(_) => ValueType::Map,
                         DolangValue::Function { .. } => ValueType::Dynamic,
                         DolangValue::File { .. } => ValueType::File,
+                        DolangValue::Json(_) => ValueType::Json,
+                        DolangValue::Html(_) => ValueType::Dynamic,
+                        DolangValue::Response { .. } => ValueType::Response,
+                        DolangValue::ModuleProxy { .. } => ValueType::Dynamic,
                         DolangValue::Null => ValueType::Dynamic,
                     };
                     let (expected, expected_str) = match expected_type.to_lowercase().as_str() {
@@ -972,6 +1109,7 @@ pub fn call_fn(
                         "float" => (ValueType::Float, "Float"),
                         "string" => (ValueType::String, "String"),
                         "bool" | "boolean" => (ValueType::Bool, "Bool"),
+                        "json" => (ValueType::Json, "Json"),
                         _ => {
                             return Err(Error::Interpreter(format!(
                                 "unknown return type '{}' for function '{}'",
@@ -989,6 +1127,8 @@ pub fn call_fn(
                             ValueType::List => "List",
                             ValueType::Map => "Map",
                             ValueType::File => "File",
+                            ValueType::Json => "Json",
+                            ValueType::Response => "Response",
                         };
                         return Err(Error::Interpreter(format!(
                             "function '{}' expects return type '{}' but got '{}'",
@@ -1011,4 +1151,96 @@ pub fn call_fn(
             "break/continue used outside of loop".to_string(),
         )),
     }
+}
+
+/// Load HTTP routes from a module file (e.g., "routers.api")
+fn load_module_routes(module_path: &str) -> Result<Vec<HttpRoute>, Error> {
+    use crate::parser;
+    use crate::ast::Stmt;
+
+    // Convert module path to file path
+    // "routers.api" -> "routers/api.dol"
+    let file_path = module_path.replace('.', "/") + ".dol";
+
+    // Try to find the module file
+    // Check in current directory first, then relative to main file
+    let current_file = get_current_file();
+
+    // Get current working directory
+    let cwd = std::env::current_dir().unwrap_or_default();
+
+    // Search paths: current dir, cwd + file_path, modules/ prefix, and relative to main file
+    let mut search_paths = vec![
+        Path::new(&file_path).to_path_buf(),
+        cwd.join(&file_path),
+        cwd.join("modules").join(&file_path),
+    ];
+
+    // If main_file has a directory component, search relative to it
+    if let Some(main_file) = current_file {
+        let main_path = Path::new(&main_file);
+        if let Some(main_dir) = main_path.parent() {
+            if !main_dir.as_os_str().is_empty() {
+                search_paths.push(main_dir.join(&file_path));
+                search_paths.push(main_dir.join("modules").join(&file_path));
+            }
+        }
+    }
+
+    let mut full_path = None;
+    for p in &search_paths {
+        if p.exists() {
+            full_path = Some(p.clone());
+            break;
+        }
+    }
+
+    let path = match full_path {
+        Some(p) => p,
+        None => {
+            return Err(Error::Interpreter(format!(
+                "module file not found: {}.dol (tried: {:?})",
+                module_path, search_paths
+            )));
+        }
+    };
+
+    // Read and parse the module file
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(e) => {
+            return Err(Error::Interpreter(format!(
+                "cannot read module file '{}': {}",
+                path.display(), e
+            )));
+        }
+    };
+
+    let statements = match parser::parse(&content) {
+        Ok(stmts) => stmts,
+        Err(e) => {
+            return Err(Error::Interpreter(format!(
+                "failed to parse module '{}': {}",
+                module_path, e
+            )));
+        }
+    };
+
+    // Extract HTTP routes from the module
+    let mut routes = Vec::new();
+    for stmt in statements {
+        if let Stmt::HttpFn(http_fn) = stmt {
+            routes.push(HttpRoute {
+                method: http_fn.method,
+                path: http_fn.path,
+                name: http_fn.name,
+                params: http_fn.params,
+                variadic_param: http_fn.variadic_param,
+                return_type: http_fn.return_type,
+                body: http_fn.body,
+            });
+        }
+    }
+
+    Ok(routes)
 }

@@ -16,7 +16,10 @@ impl Span {
     }
 
     pub fn from_token(pos: usize) -> Self {
-        Self { start: pos, end: pos }
+        Self {
+            start: pos,
+            end: pos,
+        }
     }
 }
 
@@ -31,7 +34,7 @@ pub enum Expr {
     Char(CharLiteral),
     Bool(BoolLiteral),
     StringLiteral(StringLiteral),
-    FString(FStringLiteral),  // f"Hello {name}"
+    FString(FStringLiteral), // f"Hello {name}"
     ListLiteral(ListLiteral),
     MapLiteral(MapLiteral),
     VarLookup(VarLookup),
@@ -40,12 +43,12 @@ pub enum Expr {
     Binary(BinaryExpr),
     Unary(UnaryExpr),
     FnCall(FnCallExpr),
-    FnLiteral(FnLiteral),  // Anonymous function: $fn(x, y) -> Int { ... }
-    Read(ExprRead),       // $<<ENV("KEY") or $<<LINE("prompt") as expression
-    FileRead(FileReadExpr), // $<<FILE("path") as expression
-    FileWrite(FileWriteExpr), // $>>FILE("path", mode?) as expression
+    FnLiteral(FnLiteral),       // Anonymous function: $fn(x, y) -> Int { ... }
+    Read(ExprRead),             // $<<ENV("KEY") or $<<LINE("prompt") as expression
+    FileRead(FileReadExpr),     // $<<FILE("path") as expression
+    FileWrite(FileWriteExpr),   // $>>FILE("path", mode?) as expression
     ConfigRead(ConfigReadExpr), // $<<CONFIG("KEY") as expression
-    HdrRead(HdrReadExpr), // $HDR("Header-Name")
+    HdrRead(HdrReadExpr),       // $HDR("Header-Name")
     JsonConstructor(JsonConstructor), // $JSON { "key": value, ... }
     HtmlConstructor(HtmlConstructor), // $HTML("<h1>...</h1>")
     ResConstructor(ResConstructor), // $RES(status, body)
@@ -54,28 +57,28 @@ pub enum Expr {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Print(PrintStmt),
-    Read(ReadStmt),   // $<<ENV("KEY") or $<<LINE("prompt")
+    Read(ReadStmt),           // $<<ENV("KEY") or $<<LINE("prompt")
     FileWrite(FileWriteStmt), // $>>FILE(path, content, ...)
     FileRead(FileReadStmt),   // $<<FILE(path, ...)
     Assign(AssignStmt),
-    VarDecl(VarDeclStmt),   // $ a = 1;
+    VarDecl(VarDeclStmt),     // $ a = 1;
     ConstDecl(ConstDeclStmt), // $@ a = 1;
-    If(IfStmt),             // $if condition { ... } $elif ... $else ...
-    While(WhileStmt),       // $while condition { ... }
-    Loop(LoopStmt),         // $loop { ... }
-    For(ForStmt),           // $for init; condition; update { ... }
-    ForIn(ForInStmt),       // $for item in iterable { ... }
-    Break(BreakStmt),       // $break;
-    Continue(ContinueStmt), // $continue;
+    If(IfStmt),               // $if condition { ... } $elif ... $else ...
+    While(WhileStmt),         // $while condition { ... }
+    Loop(LoopStmt),           // $loop { ... }
+    For(ForStmt),             // $for init; condition; update { ... }
+    ForIn(ForInStmt),         // $for item in iterable { ... }
+    Break(BreakStmt),         // $break;
+    Continue(ContinueStmt),   // $continue;
     Exit(ExitStmt),
-    FnDecl(FnDeclStmt),     // $fn name(params) -> type { body }
-    HttpFn(HttpFnStmt),    // $GET("/path") name(params) -> type { body }
+    FnDecl(FnDeclStmt),       // $fn name(params) -> type { body }
+    HttpFn(HttpFnStmt),       // $GET("/path") name(params) -> type { body }
     HttpBlock(HttpBlockStmt), // $HTTP { routes... }
     Static(StaticStmt),       // $STATIC - static file serving
-    Return(ReturnStmt),     // $# expression;
-    ModDecl(ModDeclStmt),  // $mod path;
-    MainDecl(MainDeclStmt), // $main() { body }
-    ExprStmt(Box<Expr>),    // expression statement (for function calls as statements)
+    Return(ReturnStmt),       // $# expression;
+    ModDecl(ModDeclStmt),     // $mod path;
+    MainDecl(MainDeclStmt),   // $main() { body }
+    ExprStmt(Box<Expr>),      // expression statement (for function calls as statements)
 }
 
 #[derive(Debug, Clone)]
@@ -135,7 +138,7 @@ pub struct ListLiteral {
 #[derive(Debug, Clone)]
 pub struct MapLiteral {
     pub span: Span,
-    pub entries: Vec<(String, Expr)>,  // (key, value expression)
+    pub entries: Vec<(String, Expr)>, // (key, value expression)
 }
 
 #[derive(Debug, Clone)]
@@ -177,7 +180,7 @@ pub struct PrintStmt {
 #[derive(Debug, Clone)]
 pub struct ReadStmt {
     pub span: Span,
-    pub mode: ReadMode,   // ENV or LINE
+    pub mode: ReadMode,            // ENV or LINE
     pub prompt: Option<Box<Expr>>, // optional prompt for LINE mode
 }
 
@@ -188,13 +191,14 @@ pub enum ReadMode {
     Line, // $<<LINE("prompt")
 }
 
-/// File write statement: $>>FILE(path, mode)
-/// Creates a file object for writing, use .content() to write
+/// File write statement: $>>FILE(path, content, mode?)
+/// If content is provided, writes immediately; otherwise returns File object for chaining
 #[derive(Debug, Clone)]
 pub struct FileWriteStmt {
     pub span: Span,
     pub path: Box<Expr>,
-    pub mode: Option<Box<Expr>>,  // "W", "A", "DEL"
+    pub content: Option<Box<Expr>>, // content to write (if provided directly)
+    pub mode: Option<Box<Expr>>,    // "W", "A", "DEL"
 }
 
 /// File read statement: $<<FILE(path, mode)
@@ -245,7 +249,7 @@ pub struct IfBranch {
 pub struct IfStmt {
     pub span: Span,
     pub branches: Vec<IfBranch>,
-    pub else_body: Vec<Stmt>,  // $else branch
+    pub else_body: Vec<Stmt>, // $else branch
 }
 
 #[derive(Debug, Clone)]
@@ -277,8 +281,8 @@ pub struct ForStmt {
 #[derive(Debug, Clone)]
 pub struct ForInStmt {
     pub span: Span,
-    pub var: String,           // loop variable name
-    pub iterable: Box<Expr>,   // expression to iterate over
+    pub var: String,         // loop variable name
+    pub iterable: Box<Expr>, // expression to iterate over
     pub body: Vec<Stmt>,
 }
 
@@ -311,9 +315,9 @@ pub struct FnDeclStmt {
 #[derive(Debug, Clone)]
 pub struct HttpFnStmt {
     pub span: Span,
-    pub method: String,           // "GET", "POST", "PUT", "DELETE", "PATCH"
-    pub path: String,             // "/user/:id"
-    pub name: String,             // function name
+    pub method: String, // "GET", "POST", "PUT", "DELETE", "PATCH"
+    pub path: String,   // "/user/:id"
+    pub name: String,   // function name
     pub params: Vec<String>,
     pub variadic_param: Option<String>,
     pub return_type: Option<String>,
@@ -324,24 +328,24 @@ pub struct HttpFnStmt {
 #[derive(Debug, Clone)]
 pub struct HttpBlockStmt {
     pub span: Span,
-    pub prefix: Option<String>,   // 路径前缀，如 "/v1/api/"
-    pub link: Option<String>,      // 要链接的模块，如 "api"
-    pub routes: Vec<HttpFnStmt>,  // 内嵌的 HTTP 路由
+    pub prefix: Option<String>,  // 路径前缀，如 "/v1/api/"
+    pub link: Option<String>,    // 要链接的模块，如 "api"
+    pub routes: Vec<HttpFnStmt>, // 内嵌的 HTTP 路由
 }
 
 /// Static file serving: $STATIC("/url-prefix", "dir.module") or $STATIC("dir")
 #[derive(Debug, Clone)]
 pub struct StaticStmt {
     pub span: Span,
-    pub url_prefix: String,      // URL 前缀，如 "/css"
-    pub module_path: String,     // 模块路径，如 "css" 或 "css.dolang"
+    pub url_prefix: String,  // URL 前缀，如 "/css"
+    pub module_path: String, // 模块路径，如 "css" 或 "css.dolang"
 }
 
 /// Module declaration: $mod path;
 #[derive(Debug, Clone)]
 pub struct ModDeclStmt {
     pub span: Span,
-    pub path: String,  // e.g., "dao.user"
+    pub path: String, // e.g., "dao.user"
 }
 
 /// Main entry point: $main() { body }
@@ -424,7 +428,7 @@ pub struct HtmlConstructor {
 #[derive(Debug, Clone)]
 pub struct ResConstructor {
     pub span: Span,
-    pub status: Box<Expr>, // status code
+    pub status: Box<Expr>,       // status code
     pub body: Option<Box<Expr>>, // response body
 }
 

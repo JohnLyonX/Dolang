@@ -471,7 +471,12 @@ impl Lexer {
                         '"' => '"',
                         '{' => '{',
                         '}' => '}',
-                        _ => return Err(format!("invalid escape sequence \"\\{}\" in f-string", next)),
+                        _ => {
+                            return Err(format!(
+                                "invalid escape sequence \"\\{}\" in f-string",
+                                next
+                            ));
+                        }
                     };
                     literal.push(escaped);
                     self.advance(); // consume escaped char
@@ -551,9 +556,13 @@ impl Lexer {
 
         // Validate the number
         if is_float {
-            literal.parse::<f64>().map_err(|_| "invalid float literal".to_string())?;
+            literal
+                .parse::<f64>()
+                .map_err(|_| "invalid float literal".to_string())?;
         } else {
-            literal.parse::<i64>().map_err(|_| "invalid integer literal".to_string())?;
+            literal
+                .parse::<i64>()
+                .map_err(|_| "invalid integer literal".to_string())?;
         }
 
         Ok(Token::new(Type::Number, &literal, start))
@@ -603,7 +612,10 @@ impl Lexer {
     /// Skip multi-line comment starting with /* and ending with */
     fn skip_multi_line_comment(&mut self) -> Result<(), String> {
         while self.pos < self.input.len() {
-            if self.peek() == '*' && self.pos + 1 < self.input.len() && self.input[self.pos + 1] == '/' {
+            if self.peek() == '*'
+                && self.pos + 1 < self.input.len()
+                && self.input[self.pos + 1] == '/'
+            {
                 self.advance_n(2); // Skip */
                 return Ok(());
             }
@@ -615,7 +627,6 @@ impl Lexer {
     fn peek(&self) -> char {
         self.input[self.pos]
     }
-
 
     fn advance(&mut self) {
         self.pos += 1;
@@ -639,7 +650,34 @@ impl Lexer {
 }
 
 fn is_delimiter(ch: char) -> bool {
-    matches!(ch, ' ' | '\t' | '\n' | '\r' | ';' | '+' | '-' | '*' | '/' | '%'
-        | '<' | '>' | '=' | '!' | '&' | '|' | '$' | '"' | '\'' | '{' | '}'
-        | '(' | ')' | '[' | ']' | ',' | '.' | ':')
+    matches!(
+        ch,
+        ' ' | '\t'
+            | '\n'
+            | '\r'
+            | ';'
+            | '+'
+            | '-'
+            | '*'
+            | '/'
+            | '%'
+            | '<'
+            | '>'
+            | '='
+            | '!'
+            | '&'
+            | '|'
+            | '$'
+            | '"'
+            | '\''
+            | '{'
+            | '}'
+            | '('
+            | ')'
+            | '['
+            | ']'
+            | ','
+            | '.'
+            | ':'
+    )
 }

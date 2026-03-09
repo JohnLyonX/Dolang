@@ -40,6 +40,13 @@ pub fn read_line(prompt: &str, history: &mut Vec<String>) -> Option<String> {
         return read_line_simple(prompt, history);
     }
 
+    // On Windows, use simple input mode to avoid character duplication issues
+    // This is a known issue with crossterm on Windows where input characters are duplicated
+    #[cfg(target_os = "windows")]
+    {
+        return read_line_simple(prompt, history);
+    }
+
     // Try to enable raw mode
     let raw_mode_was_enabled = is_raw_mode_enabled().unwrap_or(false);
     if !raw_mode_was_enabled {

@@ -2,8 +2,9 @@
 use std::borrow::Cow;
 
 use crate::ast::{
-    BinaryExpr, BoolLiteral, CharLiteral, Expr, FStringLiteral, FStringSegment, FnCallExpr, HdrReadExpr, HtmlConstructor, IndexAccess, JsonConstructor, ListLiteral, MapLiteral, MethodCall, NumberLiteral,
-    ResConstructor, Span, Spanned, StringLiteral, UnaryExpr, VarLookup,
+    BinaryExpr, BoolLiteral, CharLiteral, Expr, FStringLiteral, FStringSegment, FnCallExpr,
+    HdrReadExpr, HtmlConstructor, IndexAccess, JsonConstructor, ListLiteral, MapLiteral,
+    MethodCall, NumberLiteral, ResConstructor, Span, Spanned, StringLiteral, UnaryExpr, VarLookup,
 };
 use crate::error::{Error, ParseError};
 use crate::parser::calc_line_col;
@@ -250,7 +251,9 @@ impl<'a> ExprParser<'a> {
                 let index = self.parse_expr()?;
 
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RBracket {
-                    return Err(self.error_expected("expected closing bracket in index access", "]"));
+                    return Err(
+                        self.error_expected("expected closing bracket in index access", "]")
+                    );
                 }
                 self.pos += 1; // consume ']'
 
@@ -277,8 +280,11 @@ impl<'a> ExprParser<'a> {
                 // Method calls MUST have parentheses
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
                     return Err(self.error_expected(
-                        &format!("method '{}' requires parentheses, use '{}(...)' instead", method, method),
-                        "("
+                        &format!(
+                            "method '{}' requires parentheses, use '{}(...)' instead",
+                            method, method
+                        ),
+                        "(",
                     ));
                 }
 
@@ -290,7 +296,8 @@ impl<'a> ExprParser<'a> {
                     loop {
                         let arg = self.parse_expr()?;
                         args.push(*arg);
-                        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma {
+                        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma
+                        {
                             break;
                         }
                         self.pos += 1; // consume ','
@@ -298,7 +305,9 @@ impl<'a> ExprParser<'a> {
                 }
 
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
-                    return Err(self.error_expected("expected closing parenthesis in method call", ")"));
+                    return Err(
+                        self.error_expected("expected closing parenthesis in method call", ")")
+                    );
                 }
                 self.pos += 1; // consume ')'
 
@@ -326,17 +335,32 @@ impl<'a> ExprParser<'a> {
         self.pos += 1;
 
         match tok.typ {
-            Type::Number => Ok(Box::new(Expr::Number(NumberLiteral { span: Span::from_token(tok.pos), value: Cow::Owned(tok.literal) }))),
-            Type::Char => Ok(Box::new(Expr::Char(CharLiteral { span: Span::from_token(tok.pos), value: Cow::Owned(tok.literal) }))),
+            Type::Number => Ok(Box::new(Expr::Number(NumberLiteral {
+                span: Span::from_token(tok.pos),
+                value: Cow::Owned(tok.literal),
+            }))),
+            Type::Char => Ok(Box::new(Expr::Char(CharLiteral {
+                span: Span::from_token(tok.pos),
+                value: Cow::Owned(tok.literal),
+            }))),
             Type::Bool => {
                 let value = tok.literal == "true";
-                Ok(Box::new(Expr::Bool(BoolLiteral { span: Span::from_token(tok.pos), value })))
+                Ok(Box::new(Expr::Bool(BoolLiteral {
+                    span: Span::from_token(tok.pos),
+                    value,
+                })))
             }
-            Type::String => Ok(Box::new(Expr::StringLiteral(StringLiteral { span: Span::from_token(tok.pos), value: Cow::Owned(tok.literal) }))),
+            Type::String => Ok(Box::new(Expr::StringLiteral(StringLiteral {
+                span: Span::from_token(tok.pos),
+                value: Cow::Owned(tok.literal),
+            }))),
             Type::FString => {
                 // Parse f-string segments
                 let segments = parse_fstring_segments(&tok.literal, tok.pos)?;
-                Ok(Box::new(Expr::FString(FStringLiteral { span: Span::from_token(tok.pos), segments })))
+                Ok(Box::new(Expr::FString(FStringLiteral {
+                    span: Span::from_token(tok.pos),
+                    segments,
+                })))
             }
             // $fn: anonymous function literal
             Type::Fn => self.parse_fn_literal(),
@@ -350,14 +374,17 @@ impl<'a> ExprParser<'a> {
                         loop {
                             let arg = self.parse_expr()?;
                             args.push(*arg);
-                            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Comma {
+                            if self.pos >= self.tokens.len()
+                                || self.tokens[self.pos].typ != Type::Comma
+                            {
                                 break;
                             }
                             self.pos += 1; // consume ','
                         }
                     }
                     if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
-                        return Err(self.error_expected("expected closing parenthesis in function call", ")"));
+                        return Err(self
+                            .error_expected("expected closing parenthesis in function call", ")"));
                     }
                     self.pos += 1; // consume ')'
                     Ok(Box::new(Expr::FnCall(FnCallExpr {
@@ -366,7 +393,10 @@ impl<'a> ExprParser<'a> {
                         args,
                     })))
                 } else {
-                    Ok(Box::new(Expr::VarLookup(VarLookup { span: Span::from_token(tok.pos), name: Cow::Owned(tok.literal) })))
+                    Ok(Box::new(Expr::VarLookup(VarLookup {
+                        span: Span::from_token(tok.pos),
+                        name: Cow::Owned(tok.literal),
+                    })))
                 }
             }
             // Parenthesized expression
@@ -403,7 +433,9 @@ impl<'a> ExprParser<'a> {
                 }
 
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RBracket {
-                    return Err(self.error_expected("expected closing bracket in list literal", "]"));
+                    return Err(
+                        self.error_expected("expected closing bracket in list literal", "]")
+                    );
                 }
                 self.pos += 1; // consume ']'
 
@@ -430,7 +462,9 @@ impl<'a> ExprParser<'a> {
                 loop {
                     // Expect string key
                     if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::String {
-                        return Err(self.error_expected("expected string key in map literal", "string"));
+                        return Err(
+                            self.error_expected("expected string key in map literal", "string")
+                        );
                     }
                     let key = self.tokens[self.pos].literal.clone();
                     self.pos += 1; // consume string
@@ -474,21 +508,32 @@ impl<'a> ExprParser<'a> {
                     self.pos += 1; // consume '('
 
                     // Parse path argument
-                    let path = if self.pos < self.tokens.len() &&
-                        (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                    let path = if self.pos < self.tokens.len()
+                        && (self.tokens[self.pos].typ == Type::String
+                            || self.tokens[self.pos].typ == Type::FString
+                            || self.tokens[self.pos].typ == Type::Ident)
+                    {
                         let path_tok = self.tokens[self.pos].clone();
                         self.pos += 1;
                         // Parse as expression
                         parse_expr_tokens(&[path_tok])?
                     } else {
-                        return Err(self.error_expected("expected file path", "string or identifier"));
+                        return Err(
+                            self.error_expected("expected file path", "string or identifier")
+                        );
                     };
 
                     // Parse optional mode argument
-                    let mode = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                    let mode = if self.pos < self.tokens.len()
+                        && self.tokens[self.pos].typ == Type::Comma
+                    {
                         self.pos += 1; // consume ','
-                        if self.pos < self.tokens.len() &&
-                            (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident || self.tokens[self.pos].typ == Type::Number) {
+                        if self.pos < self.tokens.len()
+                            && (self.tokens[self.pos].typ == Type::String
+                                || self.tokens[self.pos].typ == Type::FString
+                                || self.tokens[self.pos].typ == Type::Ident
+                                || self.tokens[self.pos].typ == Type::Number)
+                        {
                             let mode_tok = self.tokens[self.pos].clone();
                             self.pos += 1;
                             Some(parse_expr_tokens(&[mode_tok])?)
@@ -526,21 +571,32 @@ impl<'a> ExprParser<'a> {
                     self.pos += 1; // consume '('
 
                     // Parse path argument
-                    let path = if self.pos < self.tokens.len() &&
-                        (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                    let path = if self.pos < self.tokens.len()
+                        && (self.tokens[self.pos].typ == Type::String
+                            || self.tokens[self.pos].typ == Type::FString
+                            || self.tokens[self.pos].typ == Type::Ident)
+                    {
                         let path_tok = self.tokens[self.pos].clone();
                         self.pos += 1;
                         // Parse as expression
                         parse_expr_tokens(&[path_tok])?
                     } else {
-                        return Err(self.error_expected("expected file path", "string or identifier"));
+                        return Err(
+                            self.error_expected("expected file path", "string or identifier")
+                        );
                     };
 
                     // Parse optional mode argument
-                    let mode = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                    let mode = if self.pos < self.tokens.len()
+                        && self.tokens[self.pos].typ == Type::Comma
+                    {
                         self.pos += 1; // consume ','
-                        if self.pos < self.tokens.len() &&
-                            (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident || self.tokens[self.pos].typ == Type::Number) {
+                        if self.pos < self.tokens.len()
+                            && (self.tokens[self.pos].typ == Type::String
+                                || self.tokens[self.pos].typ == Type::FString
+                                || self.tokens[self.pos].typ == Type::Ident
+                                || self.tokens[self.pos].typ == Type::Number)
+                        {
                             let mode_tok = self.tokens[self.pos].clone();
                             self.pos += 1;
                             Some(parse_expr_tokens(&[mode_tok])?)
@@ -581,21 +637,32 @@ impl<'a> ExprParser<'a> {
                     self.pos += 1; // consume '('
 
                     // Parse path argument
-                    let path = if self.pos < self.tokens.len() &&
-                        (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                    let path = if self.pos < self.tokens.len()
+                        && (self.tokens[self.pos].typ == Type::String
+                            || self.tokens[self.pos].typ == Type::FString
+                            || self.tokens[self.pos].typ == Type::Ident)
+                    {
                         let path_tok = self.tokens[self.pos].clone();
                         self.pos += 1;
                         // Parse as expression
                         parse_expr_tokens(&[path_tok])?
                     } else {
-                        return Err(self.error_expected("expected file path", "string or identifier"));
+                        return Err(
+                            self.error_expected("expected file path", "string or identifier")
+                        );
                     };
 
                     // Parse optional mode argument
-                    let mode = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                    let mode = if self.pos < self.tokens.len()
+                        && self.tokens[self.pos].typ == Type::Comma
+                    {
                         self.pos += 1; // consume ','
-                        if self.pos < self.tokens.len() &&
-                            (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident || self.tokens[self.pos].typ == Type::Number) {
+                        if self.pos < self.tokens.len()
+                            && (self.tokens[self.pos].typ == Type::String
+                                || self.tokens[self.pos].typ == Type::FString
+                                || self.tokens[self.pos].typ == Type::Ident
+                                || self.tokens[self.pos].typ == Type::Number)
+                        {
                             let mode_tok = self.tokens[self.pos].clone();
                             self.pos += 1;
                             Some(parse_expr_tokens(&[mode_tok])?)
@@ -620,19 +687,27 @@ impl<'a> ExprParser<'a> {
                 }
 
                 if mode_name != "ENV" && mode_name != "LINE" {
-                    return Err(self.error_expected("expected ENV or LINE or FILE", &format!("got {}", mode_name)));
+                    return Err(self.error_expected(
+                        "expected ENV or LINE or FILE",
+                        &format!("got {}", mode_name),
+                    ));
                 }
                 self.pos += 1; // consume ENV/LINE
 
                 // Expect parentheses
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
-                    return Err(self.error_expected(&format!("expected '(' after {}", mode_name), "("));
+                    return Err(
+                        self.error_expected(&format!("expected '(' after {}", mode_name), "(")
+                    );
                 }
                 self.pos += 1; // consume '('
 
                 // Parse optional string argument
                 let mut prompt = None;
-                if self.pos < self.tokens.len() && (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString) {
+                if self.pos < self.tokens.len()
+                    && (self.tokens[self.pos].typ == Type::String
+                        || self.tokens[self.pos].typ == Type::FString)
+                {
                     let arg_tok = self.tokens[self.pos].clone();
                     self.pos += 1;
                     if arg_tok.typ == Type::FString {
@@ -659,7 +734,9 @@ impl<'a> ExprParser<'a> {
                 // ENV requires exactly one argument, LINE accepts at most one
                 let mode = if mode_name == "ENV" {
                     if prompt.is_none() {
-                        return Err(self.error_expected("ENV requires a key: $<<ENV(\"KEY\")", "string"));
+                        return Err(
+                            self.error_expected("ENV requires a key: $<<ENV(\"KEY\")", "string")
+                        );
                     }
                     crate::ast::ReadMode::Env
                 } else {
@@ -682,8 +759,11 @@ impl<'a> ExprParser<'a> {
                 self.pos += 1; // consume '('
 
                 // Parse key argument
-                let key = if self.pos < self.tokens.len() &&
-                    (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                let key = if self.pos < self.tokens.len()
+                    && (self.tokens[self.pos].typ == Type::String
+                        || self.tokens[self.pos].typ == Type::FString
+                        || self.tokens[self.pos].typ == Type::Ident)
+                {
                     let key_tok = self.tokens[self.pos].literal.clone();
                     self.pos += 1;
                     key_tok
@@ -712,8 +792,11 @@ impl<'a> ExprParser<'a> {
                 self.pos += 1; // consume '('
 
                 // Parse header name argument
-                let header_name = if self.pos < self.tokens.len() &&
-                    (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString || self.tokens[self.pos].typ == Type::Ident) {
+                let header_name = if self.pos < self.tokens.len()
+                    && (self.tokens[self.pos].typ == Type::String
+                        || self.tokens[self.pos].typ == Type::FString
+                        || self.tokens[self.pos].typ == Type::Ident)
+                {
                     let name_tok = self.tokens[self.pos].literal.clone();
                     self.pos += 1;
                     name_tok
@@ -749,8 +832,10 @@ impl<'a> ExprParser<'a> {
                 // Parse entries
                 while self.pos < self.tokens.len() && self.tokens[self.pos].typ != Type::RBrace {
                     // Expect string key
-                    let key_tok = if self.pos < self.tokens.len() &&
-                        (self.tokens[self.pos].typ == Type::String || self.tokens[self.pos].typ == Type::FString) {
+                    let key_tok = if self.pos < self.tokens.len()
+                        && (self.tokens[self.pos].typ == Type::String
+                            || self.tokens[self.pos].typ == Type::FString)
+                    {
                         self.tokens[self.pos].literal.clone()
                     } else {
                         return Err(self.error_expected("expected string key in $JSON", "string"));
@@ -796,16 +881,17 @@ impl<'a> ExprParser<'a> {
                 self.pos += 1; // consume '('
 
                 // Allow empty content: $HTML()
-                let content = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::RParen {
-                    // Empty - use empty string as default
-                    Box::new(Expr::StringLiteral(StringLiteral {
-                        span: Span::new(start, start + 1),
-                        value: Cow::Owned("".to_string()),
-                    }))
-                } else {
-                    // Parse HTML content expression
-                    self.parse_expr()?
-                };
+                let content =
+                    if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::RParen {
+                        // Empty - use empty string as default
+                        Box::new(Expr::StringLiteral(StringLiteral {
+                            span: Span::new(start, start + 1),
+                            value: Cow::Owned("".to_string()),
+                        }))
+                    } else {
+                        // Parse HTML content expression
+                        self.parse_expr()?
+                    };
 
                 // Expect closing paren
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
@@ -816,7 +902,7 @@ impl<'a> ExprParser<'a> {
                 return Ok(Box::new(Expr::HtmlConstructor(HtmlConstructor {
                     span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
                     content,
-                })))
+                })));
             }
             // Response constructor: $RES(status, body?)
             Type::Res => {
@@ -834,12 +920,13 @@ impl<'a> ExprParser<'a> {
                 let status = self.parse_expr()?;
 
                 // Optional body
-                let body = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
-                    self.pos += 1; // consume comma
-                    Some(self.parse_expr()?)
-                } else {
-                    None
-                };
+                let body =
+                    if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                        self.pos += 1; // consume comma
+                        Some(self.parse_expr()?)
+                    } else {
+                        None
+                    };
 
                 // Expect closing paren
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
@@ -865,7 +952,10 @@ impl<'a> ExprParser<'a> {
 
 /// Parse f-string segments from the raw literal
 /// Format: "Hello {name}, you have {count + 1} items"
-pub fn parse_fstring_segments(literal: &str, start_pos: usize) -> Result<Vec<FStringSegment>, Error> {
+pub fn parse_fstring_segments(
+    literal: &str,
+    start_pos: usize,
+) -> Result<Vec<FStringSegment>, Error> {
     use crate::lexer::Lexer;
 
     let mut segments = Vec::new();
@@ -898,7 +988,9 @@ pub fn parse_fstring_segments(literal: &str, start_pos: usize) -> Result<Vec<FSt
                                 // Parse the expression
                                 if expr_str.trim().is_empty() {
                                     return Err(Error::Parse(ParseError {
-                                        message: "f-string syntax error: empty expression in \"{}\"".to_string(),
+                                        message:
+                                            "f-string syntax error: empty expression in \"{}\""
+                                                .to_string(),
                                         line: 1,
                                         column: pos - 1,
                                         found: None,
@@ -907,24 +999,26 @@ pub fn parse_fstring_segments(literal: &str, start_pos: usize) -> Result<Vec<FSt
                                 }
                                 // Tokenize the expression and parse it
                                 let mut lexer = Lexer::new(&expr_str);
-                                let mut expr_tokens = lexer.lex_all()
-                                    .map_err(|e| Error::Parse(ParseError {
+                                let mut expr_tokens = lexer.lex_all().map_err(|e| {
+                                    Error::Parse(ParseError {
                                         message: format!("f-string expression parse error: {}", e),
                                         line: 1,
                                         column: pos,
                                         found: None,
                                         expected: None,
-                                    }))?;
+                                    })
+                                })?;
                                 // Filter out Eof token for parsing
                                 expr_tokens.retain(|t| t.typ != Type::Eof);
-                                let expr = parse_expr_tokens(&expr_tokens)
-                                    .map_err(|e| Error::Parse(ParseError {
+                                let expr = parse_expr_tokens(&expr_tokens).map_err(|e| {
+                                    Error::Parse(ParseError {
                                         message: format!("f-string expression parse error: {}", e),
                                         line: 1,
                                         column: pos,
                                         found: None,
                                         expected: None,
-                                    }))?;
+                                    })
+                                })?;
                                 segments.push(FStringSegment::Expression(expr));
                                 break;
                             } else {

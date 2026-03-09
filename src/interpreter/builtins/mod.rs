@@ -8,6 +8,7 @@ pub mod str_methods;
 pub mod bool_methods;
 pub mod file;
 pub mod html;
+pub mod json;
 
 use crate::error::Error;
 use crate::interpreter::DolangValue;
@@ -30,10 +31,7 @@ pub fn dispatch(
         DolangValue::Int(_) | DolangValue::Float(_) => number::call(receiver, method, args),
         DolangValue::Bool(_) => bool_methods::call(receiver, method, args),
         DolangValue::File { .. } => file::call(receiver, method, args),
-        DolangValue::Json(_) => Err(Error::Interpreter(format!(
-            "Json has no method '{}'",
-            method
-        ))),
+        DolangValue::Json(_) => json::call(receiver, method, args),
         DolangValue::Html(_) => html::call(receiver, method, args),
         DolangValue::Response { .. } => Err(Error::Interpreter(format!(
             "Response has no method '{}'",

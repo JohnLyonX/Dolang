@@ -32,8 +32,7 @@ pub fn strip_comments(line: &str) -> Result<String, String> {
         // Check for single-line comment
         else if chars[i] == '/' && i + 1 < chars.len() && chars[i + 1] == '/' {
             break; // Rest of line is a comment
-        }
-        else {
+        } else {
             result.push(chars[i]);
             i += 1;
         }
@@ -56,7 +55,7 @@ const DOLLAR_PREFIXES: &[&str] = &[
     "$if",
     "$@",
     "$#",
-    "$",   // bare $ = variable declaration (must be last)
+    "$", // bare $ = variable declaration (must be last)
 ];
 
 /// ValidateDollarLiterals ensures every `$` in the line is the start of

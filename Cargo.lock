@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "dolang"
-version = "1.7.0"
+version = "2026.0.0"
 dependencies = [
  "atty",
  "axum",

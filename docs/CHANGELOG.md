@@ -2,6 +2,28 @@
 
 All notable changes to DaoLang will be documented in this file.
 
+## [v2026.0.0] - 2026-03-09
+
+### Added
+- **$STATIC 静态文件服务**：
+  - `$STATIC("/css", "css")` - 指定 URL 前缀和目录
+  - `$STATIC("public")` - 默认前缀 /static
+  - 支持点号格式：`css.dolang` -> `css/`
+  - 使用 tower-http 的 ServeDir 高效服务静态文件
+- **$>>FILE 直接写入语法**：
+  - `$>>FILE("path", "content")` - 覆盖写入
+  - `$>>FILE("path", "content", "W")` - 覆盖写入
+  - `$>>FILE("path", "content", "A")` - 追加写入
+- **HTTP handler $>> 输出支持**：
+  - `$>> "message"` 可以在 HTTP handler 中输出到服务器终端
+- **JSON 内置方法**：
+  - `.to_str()` - 转换为字符串
+  - `.type()` - 获取类型名
+- **HTML 内置方法**：
+  - `.to_str()` - 转换为字符串
+  - `.type()` - 获取类型名
+  - `.link("module.path")` - 链接外部文件
+
 ## [v1.7.0] - 2026-03-08
 
 ### Added

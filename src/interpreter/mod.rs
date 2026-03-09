@@ -97,10 +97,10 @@ pub fn exec_http_handler(
     type_env: &mut env::TypeEnv,
     const_env: &mut HashMap<String, bool>,
 ) -> (bool, Option<DolangValue>, Option<String>) {
-    use std::io::sink;
+    use std::io::stdout;
     use super::exec::{exec_inner, Flow};
 
-    let mut output = sink();
+    let mut output = stdout();
     let mut result: Option<DolangValue> = None;
 
     for stmt in body {

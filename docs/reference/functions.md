@@ -454,10 +454,35 @@ Dolang 支持文件读写操作，使用 `$>>FILE` 创建文件对象，`$<<FILE
 
 ### 写入文件 `$>>FILE`
 
-`$>>FILE` 创建文件对象，使用 `.content()` 方法写入内容：
+`$>>FILE` 支持两种语法：
 
-```dao
+#### 1. 直接写入语法（推荐）
+
+```dolang
 // 覆盖写入
+$>>FILE("output.txt", "Hello World");
+
+// 追加写入
+$>>FILE("output.txt", "第二行", "A");
+
+// 使用变量
+$ content = "Hello";
+$>>FILE("output.txt", content, "W");
+```
+
+**语法**：
+```dolang
+$>>FILE(path, content);           // 覆盖写入
+$>>FILE(path, content, "W");     // 覆盖写入
+$>>FILE(path, content, "A");     // 追加写入
+$>>FILE(path, content, "a");     // 追加写入
+$>>FILE(path, "", "DEL");        // 删除文件（content 为空时）
+```
+
+#### 2. 链式调用语法（对象方式）
+
+```dolang
+// 创建文件对象
 $ f = $>>FILE("output.txt");
 $ f.content("Hello World");
 
@@ -465,16 +490,12 @@ $ f.content("Hello World");
 $ f = $>>FILE("output.txt", "A");
 $ f.content("\n第二行");
 
-// 链式调用
-$>>FILE("output.txt").content("Hello");
-
 // 删除文件
 $>>FILE("temp.txt", "DEL");
 ```
 
 **语法**：
-
-```dao
+```dolang
 $ f = $>>FILE(path);              // 创建文件对象（默认覆盖写入）
 $ f = $>>FILE(path, "W");        // 覆盖写入
 $ f = $>>FILE(path, "A");        // 追加写入
@@ -552,6 +573,48 @@ $ f = $<<FILE("./src");
 $>> f.read();
 [ERROR] runtime error: 'src' is a directory, not a file
 ```
+
+---
+
+## JSON 和 HTML 方法
+
+JSON 和 HTML 类型支持以下内置方法：
+
+### JSON 方法
+
+```dolang
+$ j = $JSON {"name": "John", "age": 30};
+
+// 转换为字符串
+$ str = j.to_str();
+
+// 获取类型名
+$ t = j.type();
+```
+
+**可用方法**：
+- `.to_str()` - 将 JSON 对象转换为字符串表示
+- `.type()` - 返回类型名 "Json"
+
+### HTML 方法
+
+```dolang
+$ h = $HTML("Hello World");
+
+// 转换为字符串
+$ str = h.to_str();
+
+// 获取类型名
+$ t = h.type();
+
+// 链接外部文件
+$ h = $HTML().link("pages.index");
+```
+
+**可用方法**：
+- `.to_str()` - 将 HTML 内容转换为字符串
+- `.type()` - 返回类型名 "Html"
+- `.link("module.path")` - 链接外部 HTML/CSS/JS/XML 文件
 
 ---
 

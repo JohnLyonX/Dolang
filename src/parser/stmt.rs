@@ -1,7 +1,9 @@
 // Statement parser - handles all statement parsing.
 use crate::ast::{
-    AssignStmt, BinaryExpr, BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, Expr, FnDeclStmt, ForInStmt, ForStmt,
-    FileReadStmt, FileWriteStmt, HttpBlockStmt, HttpFnStmt, IfBranch, IfStmt, LoopStmt, MainDeclStmt, ModDeclStmt, ReturnStmt, Span, StaticStmt, Stmt, VarDeclStmt, WhileStmt,
+    AssignStmt, BinaryExpr, BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, Expr, FileReadStmt,
+    FileWriteStmt, FnDeclStmt, ForInStmt, ForStmt, HttpBlockStmt, HttpFnStmt, IfBranch, IfStmt,
+    LoopStmt, MainDeclStmt, ModDeclStmt, ReturnStmt, Span, StaticStmt, Stmt, VarDeclStmt,
+    WhileStmt,
 };
 use crate::error::Error;
 use crate::parser::parse_expr_tokens;
@@ -17,7 +19,11 @@ pub struct StmtParser<'a> {
 
 impl<'a> StmtParser<'a> {
     pub fn new(tokens: &'a [Token], src: &'a str) -> Self {
-        Self { tokens, pos: 0, src }
+        Self {
+            tokens,
+            pos: 0,
+            src,
+        }
     }
 
     pub fn peek(&self) -> &Token {
@@ -64,7 +70,6 @@ impl<'a> StmtParser<'a> {
             if self.at_end() || self.peek().typ == Type::RBrace {
                 break;
             }
-            std::fs::write("/tmp/debug.txt", format!("DEBUG: about to parse, peek = {:?}", self.peek())).unwrap();
             let stmt = self.parse_one_stmt()?;
             if let Some(s) = stmt {
                 stmts.push(s);
@@ -89,7 +94,9 @@ impl<'a> StmtParser<'a> {
         let mut brace_depth = 0;
         while !self.at_end() {
             let typ = self.peek().typ.clone();
-            if brace_depth == 0 && (typ == Type::Semicolon || typ == Type::RBrace || typ == Type::Eof) {
+            if brace_depth == 0
+                && (typ == Type::Semicolon || typ == Type::RBrace || typ == Type::Eof)
+            {
                 break;
             }
             if typ == Type::LBrace {
@@ -130,13 +137,17 @@ impl<'a> StmtParser<'a> {
         // Only parse as named function if followed by an identifier
         if typ == Type::Fn
             && let Some(next_pos) = self.peek_next()
-                && next_pos.typ == Type::Ident {
-                    return self.parse_fn_decl().map(Some);
-                }
-                // Otherwise, let it be parsed as an expression (anonymous function)
+            && next_pos.typ == Type::Ident
+        {
+            return self.parse_fn_decl().map(Some);
+        }
+        // Otherwise, let it be parsed as an expression (anonymous function)
 
         // --- HTTP route: $GET, $POST, $PUT, $DEL, $PATCH ---
-        if matches!(typ, Type::HttpGet | Type::HttpPost | Type::HttpPut | Type::HttpDel | Type::HttpPatch) {
+        if matches!(
+            typ,
+            Type::HttpGet | Type::HttpPost | Type::HttpPut | Type::HttpDel | Type::HttpPatch
+        ) {
             return self.parse_http_fn().map(Some);
         }
 
@@ -167,16 +178,25 @@ impl<'a> StmtParser<'a> {
             self.advance(); // consume $#
             if !self.at_end() && self.peek().typ == Type::Semicolon {
                 self.skip_semis();
-                return Ok(Some(Stmt::Return(ReturnStmt { span: Span::from_token(start), value: None })));
+                return Ok(Some(Stmt::Return(ReturnStmt {
+                    span: Span::from_token(start),
+                    value: None,
+                })));
             }
             let expr_toks = self.collect_until_semi();
             if expr_toks.is_empty() {
                 self.skip_semis();
-                return Ok(Some(Stmt::Return(ReturnStmt { span: Span::from_token(start), value: None })));
+                return Ok(Some(Stmt::Return(ReturnStmt {
+                    span: Span::from_token(start),
+                    value: None,
+                })));
             }
             let expr = parse_expr_tokens(&expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::Return(ReturnStmt { span: Span::from_token(start), value: Some(expr) })));
+            return Ok(Some(Stmt::Return(ReturnStmt {
+                span: Span::from_token(start),
+                value: Some(expr),
+            })));
         }
 
         // --- $mod module declaration ---
@@ -269,7 +289,9 @@ impl<'a> StmtParser<'a> {
             let start = self.peek().pos;
             self.advance();
             self.skip_semis();
-            return Ok(Some(Stmt::Break(BreakStmt { span: Span::from_token(start) })));
+            return Ok(Some(Stmt::Break(BreakStmt {
+                span: Span::from_token(start),
+            })));
         }
 
         // --- $continue ---
@@ -277,20 +299,20 @@ impl<'a> StmtParser<'a> {
             let start = self.peek().pos;
             self.advance();
             self.skip_semis();
-            return Ok(Some(Stmt::Continue(ContinueStmt { span: Span::from_token(start) })));
+            return Ok(Some(Stmt::Continue(ContinueStmt {
+                span: Span::from_token(start),
+            })));
         }
 
         // --- Exit ---
-        if typ == Type::Ident
-            && matches!(
-                self.peek().literal.as_str(),
-                "exit" | "exit()" | "quit"
-            )
+        if typ == Type::Ident && matches!(self.peek().literal.as_str(), "exit" | "exit()" | "quit")
         {
             let start = self.peek().pos;
             self.advance();
             self.skip_semis();
-            return Ok(Some(Stmt::Exit(ExitStmt { span: Span::from_token(start) })));
+            return Ok(Some(Stmt::Exit(ExitStmt {
+                span: Span::from_token(start),
+            })));
         }
 
         // --- $>> print / $>>FILE file write ---
@@ -314,7 +336,10 @@ impl<'a> StmtParser<'a> {
             let print_target = crate::ast::PrintTarget::Stdout;
 
             // Handle $>>ERR("msg") - stderr output with exactly 1 argument
-            if expr_toks.len() >= 2 && expr_toks[0].typ == Type::Ident && expr_toks[0].literal == "ERR" {
+            if expr_toks.len() >= 2
+                && expr_toks[0].typ == Type::Ident
+                && expr_toks[0].literal == "ERR"
+            {
                 if expr_toks[1].typ != Type::LParen {
                     return Err(Error::Parse(crate::error::ParseError {
                         message: "ERR requires parentheses: $>>ERR(\"msg\")".to_string(),
@@ -365,14 +390,17 @@ impl<'a> StmtParser<'a> {
                 };
                 // Create a string or f-string literal expression
                 let str_expr = if is_fstring {
-                    let segments = crate::parser::expr::parse_fstring_segments(&arg_tok.literal, arg_tok.pos)
-                        .map_err(|e| Error::Parse(crate::error::ParseError {
-                            message: e.to_string(),
-                            line: 1,
-                            column: 1,
-                            found: None,
-                            expected: None,
-                        }))?;
+                    let segments =
+                        crate::parser::expr::parse_fstring_segments(&arg_tok.literal, arg_tok.pos)
+                            .map_err(|e| {
+                                Error::Parse(crate::error::ParseError {
+                                    message: e.to_string(),
+                                    line: 1,
+                                    column: 1,
+                                    found: None,
+                                    expected: None,
+                                })
+                            })?;
                     Box::new(crate::ast::Expr::FString(crate::ast::FStringLiteral {
                         span: crate::ast::Span::from_token(arg_tok.pos),
                         segments,
@@ -414,7 +442,8 @@ impl<'a> StmtParser<'a> {
             let expr_toks = self.collect_until_semi();
             if expr_toks.is_empty() {
                 return Err(Error::Parse(crate::error::ParseError {
-                    message: "invalid read statement, use $<<ENV(\"KEY\") or $<<LINE(\"prompt\")".to_string(),
+                    message: "invalid read statement, use $<<ENV(\"KEY\") or $<<LINE(\"prompt\")"
+                        .to_string(),
                     line: 1,
                     column: 1,
                     found: None,
@@ -442,7 +471,10 @@ impl<'a> StmtParser<'a> {
 
             if mode_name != "ENV" && mode_name != "LINE" {
                 return Err(Error::Parse(crate::error::ParseError {
-                    message: format!("unknown read mode '{}', expected ENV, LINE, or FILE", mode_name),
+                    message: format!(
+                        "unknown read mode '{}', expected ENV, LINE, or FILE",
+                        mode_name
+                    ),
                     line: 1,
                     column: 1,
                     found: Some(mode_name),
@@ -453,7 +485,10 @@ impl<'a> StmtParser<'a> {
             // Must have parentheses
             if expr_toks.len() < 2 || expr_toks[1].typ != Type::LParen {
                 return Err(Error::Parse(crate::error::ParseError {
-                    message: format!("{} requires parentheses: $<<{}(\"KEY\")", mode_name, mode_name),
+                    message: format!(
+                        "{} requires parentheses: $<<{}(\"KEY\")",
+                        mode_name, mode_name
+                    ),
                     line: 1,
                     column: 1,
                     found: None,
@@ -502,7 +537,11 @@ impl<'a> StmtParser<'a> {
                         message: "ENV requires a key: $<<ENV(\"KEY\")".to_string(),
                         line: 1,
                         column: 1,
-                        found: if args.is_empty() { None } else { Some("multiple arguments".to_string()) },
+                        found: if args.is_empty() {
+                            None
+                        } else {
+                            Some("multiple arguments".to_string())
+                        },
                         expected: Some("one string argument".to_string()),
                     }));
                 }
@@ -545,14 +584,17 @@ impl<'a> StmtParser<'a> {
             let prompt = if args.len() == 1 {
                 let arg_tok = &args[0];
                 let prompt_expr = if arg_tok.typ == Type::FString {
-                    let segments = crate::parser::expr::parse_fstring_segments(&arg_tok.literal, arg_tok.pos)
-                        .map_err(|e| Error::Parse(crate::error::ParseError {
-                            message: e.to_string(),
-                            line: 1,
-                            column: 1,
-                            found: None,
-                            expected: None,
-                        }))?;
+                    let segments =
+                        crate::parser::expr::parse_fstring_segments(&arg_tok.literal, arg_tok.pos)
+                            .map_err(|e| {
+                                Error::Parse(crate::error::ParseError {
+                                    message: e.to_string(),
+                                    line: 1,
+                                    column: 1,
+                                    found: None,
+                                    expected: None,
+                                })
+                            })?;
                     Box::new(crate::ast::Expr::FString(crate::ast::FStringLiteral {
                         span: crate::ast::Span::from_token(arg_tok.pos),
                         segments,
@@ -605,7 +647,12 @@ impl<'a> StmtParser<'a> {
             let expr_toks = self.collect_until_semi();
             let expr = parse_expr_tokens(&expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::VarDecl(VarDeclStmt { span: Span::from_token(start), name, type_annotation, value: expr })));
+            return Ok(Some(Stmt::VarDecl(VarDeclStmt {
+                span: Span::from_token(start),
+                name,
+                type_annotation,
+                value: expr,
+            })));
         }
 
         // --- $@ constDecl ---
@@ -636,7 +683,12 @@ impl<'a> StmtParser<'a> {
             let expr_toks = self.collect_until_semi();
             let expr = parse_expr_tokens(&expr_toks)?;
             self.skip_semis();
-            return Ok(Some(Stmt::ConstDecl(ConstDeclStmt { span: Span::from_token(start), name, type_annotation, value: expr })));
+            return Ok(Some(Stmt::ConstDecl(ConstDeclStmt {
+                span: Span::from_token(start),
+                name,
+                type_annotation,
+                value: expr,
+            })));
         }
 
         // --- Function call as statement: name(args); ---
@@ -723,7 +775,11 @@ impl<'a> StmtParser<'a> {
         }
         let cond = parse_expr_tokens(&cond_toks)?;
         let body = self.parse_block()?;
-        branches.push(IfBranch { span: Span::from_token(0), condition: cond, body });
+        branches.push(IfBranch {
+            span: Span::from_token(0),
+            condition: cond,
+            body,
+        });
 
         // Zero or more $elif branches
         loop {
@@ -736,7 +792,11 @@ impl<'a> StmtParser<'a> {
                 }
                 let cond = parse_expr_tokens(&cond_toks)?;
                 let body = self.parse_block()?;
-                branches.push(IfBranch { span: Span::from_token(0), condition: cond, body });
+                branches.push(IfBranch {
+                    span: Span::from_token(0),
+                    condition: cond,
+                    body,
+                });
             } else {
                 break;
             }
@@ -749,16 +809,17 @@ impl<'a> StmtParser<'a> {
             else_body = self.parse_block()?;
         }
 
-        Ok(Stmt::If(IfStmt { span: Span::from_token(start), branches, else_body }))
+        Ok(Stmt::If(IfStmt {
+            span: Span::from_token(start),
+            branches,
+            else_body,
+        }))
     }
 
     /// Collect tokens up to the next `{` (not consuming it).
     pub fn collect_until_lbrace(&mut self) -> Vec<Token> {
         let mut toks = Vec::new();
-        while !self.at_end()
-            && self.peek().typ != Type::LBrace
-            && self.peek().typ != Type::Eof
-        {
+        while !self.at_end() && self.peek().typ != Type::LBrace && self.peek().typ != Type::Eof {
             toks.push(self.advance().clone());
         }
         toks
@@ -774,7 +835,11 @@ impl<'a> StmtParser<'a> {
         }
         let condition = parse_expr_tokens(&cond_toks)?;
         let body = self.parse_block()?;
-        Ok(Stmt::While(WhileStmt { span: Span::from_token(start), condition, body }))
+        Ok(Stmt::While(WhileStmt {
+            span: Span::from_token(start),
+            condition,
+            body,
+        }))
     }
 
     /// Parse: $loop { body }
@@ -782,7 +847,10 @@ impl<'a> StmtParser<'a> {
         let start = self.peek().pos;
         self.advance(); // consume `$loop`
         let body = self.parse_block()?;
-        Ok(Stmt::Loop(LoopStmt { span: Span::from_token(start), body }))
+        Ok(Stmt::Loop(LoopStmt {
+            span: Span::from_token(start),
+            body,
+        }))
     }
 
     /// Parse: $for [init;] [condition;] [update] { body }
@@ -800,13 +868,12 @@ impl<'a> StmtParser<'a> {
         if has_in {
             // Parse: $for item in iterable { body }
             // Split by $in
-            let parts: Vec<&[Token]> = header_toks
-                .split(|t| t.typ == Type::In)
-                .collect();
+            let parts: Vec<&[Token]> = header_toks.split(|t| t.typ == Type::In).collect();
 
             if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
                 return Err(Error::Parse(crate::error::ParseError {
-                    message: "invalid for-in syntax, expected: $for item in iterable { ... }".to_string(),
+                    message: "invalid for-in syntax, expected: $for item in iterable { ... }"
+                        .to_string(),
                     line: 1,
                     column: 1,
                     found: None,
@@ -1205,7 +1272,10 @@ impl<'a> StmtParser<'a> {
         let mut pos = 0;
         while pos < tokens.len() {
             let tok = &tokens[pos];
-            if matches!(tok.typ, Type::HttpGet | Type::HttpPost | Type::HttpPut | Type::HttpDel | Type::HttpPatch) {
+            if matches!(
+                tok.typ,
+                Type::HttpGet | Type::HttpPost | Type::HttpPut | Type::HttpDel | Type::HttpPatch
+            ) {
                 // Parse this HTTP route using StmtParser
                 let mut sub_parser = StmtParser::new(&tokens[pos..], "");
                 match sub_parser.parse_http_fn() {
@@ -1242,7 +1312,7 @@ impl<'a> StmtParser<'a> {
         let expr_toks = self.collect_until_semi();
         if expr_toks.is_empty() {
             return Err(Error::Parse(crate::error::ParseError {
-                message: "invalid file write statement, use $>>FILE(path) or $>>FILE(path, mode)".to_string(),
+                message: "invalid file write statement, use $>>FILE(path, content) or $>>FILE(path, content, mode)".to_string(),
                 line: 1,
                 column: 1,
                 found: None,
@@ -1278,43 +1348,61 @@ impl<'a> StmtParser<'a> {
                 _ => {}
             }
             // Collect top-level arguments
-            if paren_depth == 1 && (tok.typ == Type::String || tok.typ == Type::FString || tok.typ == Type::Ident || tok.typ == Type::Number) {
+            if paren_depth == 1
+                && (tok.typ == Type::String
+                    || tok.typ == Type::FString
+                    || tok.typ == Type::Ident
+                    || tok.typ == Type::Number)
+            {
                 args.push(tok.clone());
             }
             i += 1;
         }
 
-        // Validate arguments: at least path required
-        if args.len() < 1 {
+        // Validate arguments: path and content required
+        if args.len() < 2 {
             return Err(Error::Parse(crate::error::ParseError {
-                message: "FILE write requires at least 1 argument: path".to_string(),
+                message: "FILE write requires at least 2 arguments: path, content".to_string(),
                 line: 1,
                 column: 1,
                 found: Some(format!("{} arguments", args.len())),
-                expected: Some("path".to_string()),
+                expected: Some("path, content".to_string()),
             }));
         }
 
         // Parse path expression
-        let path_expr = parse_expr_tokens(&[args[0].clone()])
-            .map_err(|_| Error::Parse(crate::error::ParseError {
+        let path_expr = parse_expr_tokens(&[args[0].clone()]).map_err(|_| {
+            Error::Parse(crate::error::ParseError {
                 message: "invalid path expression".to_string(),
                 line: 1,
                 column: 1,
                 found: None,
                 expected: None,
-            }))?;
+            })
+        })?;
+
+        // Parse content expression
+        let content_expr = parse_expr_tokens(&[args[1].clone()]).map_err(|_| {
+            Error::Parse(crate::error::ParseError {
+                message: "invalid content expression".to_string(),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: None,
+            })
+        })?;
 
         // Parse optional mode
-        let mode = if args.len() >= 2 {
-            Some(parse_expr_tokens(&[args[1].clone()])
-                .map_err(|_| Error::Parse(crate::error::ParseError {
+        let mode = if args.len() >= 3 {
+            Some(parse_expr_tokens(&[args[2].clone()]).map_err(|_| {
+                Error::Parse(crate::error::ParseError {
                     message: "invalid mode expression".to_string(),
                     line: 1,
                     column: 1,
                     found: None,
                     expected: None,
-                }))?)
+                })
+            })?)
         } else {
             None
         };
@@ -1322,6 +1410,7 @@ impl<'a> StmtParser<'a> {
         Ok(Some(Stmt::FileWrite(FileWriteStmt {
             span: Span::from_token(start),
             path: path_expr,
+            content: Some(content_expr),
             mode,
         })))
     }
@@ -1368,7 +1457,12 @@ impl<'a> StmtParser<'a> {
                 _ => {}
             }
             // Collect top-level arguments
-            if paren_depth == 1 && (tok.typ == Type::String || tok.typ == Type::FString || tok.typ == Type::Ident || tok.typ == Type::Number) {
+            if paren_depth == 1
+                && (tok.typ == Type::String
+                    || tok.typ == Type::FString
+                    || tok.typ == Type::Ident
+                    || tok.typ == Type::Number)
+            {
                 args.push(tok.clone());
             }
             i += 1;
@@ -1386,25 +1480,27 @@ impl<'a> StmtParser<'a> {
         }
 
         // Parse path expression
-        let path_expr = parse_expr_tokens(&[args[0].clone()])
-            .map_err(|_| Error::Parse(crate::error::ParseError {
+        let path_expr = parse_expr_tokens(&[args[0].clone()]).map_err(|_| {
+            Error::Parse(crate::error::ParseError {
                 message: "invalid path expression".to_string(),
                 line: 1,
                 column: 1,
                 found: None,
                 expected: None,
-            }))?;
+            })
+        })?;
 
         // Parse optional mode (e.g., "LINES" or buffer size)
         let mode = if args.len() >= 2 {
-            Some(parse_expr_tokens(&[args[1].clone()])
-                .map_err(|_| Error::Parse(crate::error::ParseError {
+            Some(parse_expr_tokens(&[args[1].clone()]).map_err(|_| {
+                Error::Parse(crate::error::ParseError {
                     message: "invalid mode expression".to_string(),
                     line: 1,
                     column: 1,
                     found: None,
                     expected: None,
-                }))?)
+                })
+            })?)
         } else {
             None
         };
@@ -1490,7 +1586,12 @@ fn parse_init_or_update(toks: &[Token]) -> Result<Option<Box<Stmt>>, Error> {
         }
 
         let expr = parse_expr_tokens(&toks[value_start_idx..])?;
-        return Ok(Some(Box::new(Stmt::VarDecl(VarDeclStmt { span: Span::from_token(start), name, type_annotation, value: expr }))));
+        return Ok(Some(Box::new(Stmt::VarDecl(VarDeclStmt {
+            span: Span::from_token(start),
+            name,
+            type_annotation,
+            value: expr,
+        }))));
     }
 
     // Assign: look for =

@@ -10,7 +10,7 @@ use super::env::{
 };
 use super::eval::{check_eval_result, eval_expr};
 use super::value::DolangValue;
-use super::{get_current_file, HttpRoute, StaticRoute, STATIC_ROUTES};
+use super::{HttpRoute, STATIC_ROUTES, StaticRoute, get_current_file};
 
 /// Internal control-flow signal returned by exec_inner.
 #[derive(Debug)]
@@ -142,16 +142,19 @@ pub(super) fn exec_inner(
         Stmt::MainDecl(stmt) => {
             // Check if $main() is only used in main.dol (allow path prefix like "./main.dol")
             let current_file = get_current_file();
-            let is_main_dol = current_file.as_ref().map(|f| {
-                std::path::Path::new(f)
-                    .file_name()
-                    .map(|n| n.to_string_lossy() == "main.dol")
-                    .unwrap_or(false)
-            }).unwrap_or(false);
+            let is_main_dol = current_file
+                .as_ref()
+                .map(|f| {
+                    std::path::Path::new(f)
+                        .file_name()
+                        .map(|n| n.to_string_lossy() == "main.dol")
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
 
             if !is_main_dol {
                 return Flow::Err(Error::Interpreter(
-                    "$main() can only be declared in main.dol".to_string()
+                    "$main() can only be declared in main.dol".to_string(),
                 ));
             }
 
@@ -704,7 +707,7 @@ pub(super) fn exec_inner(
         // --- HTTP function: $GET, $POST, etc. ---
         Stmt::HttpFn(st) => {
             // Register HTTP route in global registry
-            use crate::interpreter::{HttpRoute, HTTP_ROUTES};
+            use crate::interpreter::{HTTP_ROUTES, HttpRoute};
 
             let route = HttpRoute {
                 method: st.method.clone(),
@@ -720,13 +723,13 @@ pub(super) fn exec_inner(
                 routes.push(route);
             }
 
-            writeln!(w, "[DEBUG] HTTP route registered: {} {}", st.method, st.path).ok();
+            writeln!(w, "[INFO] HTTP route registered: {} {}", st.method, st.path).ok();
             Flow::Normal
         }
 
         // --- HTTP block: $HTTP { ... } or $HTTP(path).link(module) ---
         Stmt::HttpBlock(st) => {
-            use crate::interpreter::{HttpRoute, HTTP_ROUTES};
+            use crate::interpreter::{HTTP_ROUTES, HttpRoute};
 
             // Handle $HTTP(path).link(module) syntax
             if let Some(link_module) = &st.link {
@@ -762,7 +765,12 @@ pub(super) fn exec_inner(
                     }
                 }
 
-                writeln!(w, "[DEBUG] HTTP linked module '{}' with prefix '{}' ({} routes)", link_module, prefix, route_count).ok();
+                writeln!(
+                    w,
+                    "[INFO] HTTP linked module '{}' with prefix '{}' ({} routes)",
+                    link_module, prefix, route_count
+                )
+                .ok();
                 Flow::Normal
             } else {
                 // Register all routes in the block ($HTTP { ... } or $HTTP(path) { ... } syntax)
@@ -795,7 +803,7 @@ pub(super) fn exec_inner(
                     }
                 }
 
-                writeln!(w, "[DEBUG] HTTP block registered {} routes", st.routes.len()).ok();
+                writeln!(w, "[INFO] HTTP block registered {} routes", st.routes.len()).ok();
                 Flow::Normal
             }
         }
@@ -817,13 +825,19 @@ pub(super) fn exec_inner(
                 routes.push(static_route);
             }
 
-            writeln!(w, "[DEBUG] Static route registered: {} -> {}", st.url_prefix, st.module_path).ok();
+            writeln!(
+                w,
+                "[INFO] Static route registered: {} -> {}",
+                st.url_prefix, st.module_path
+            )
+            .ok();
             Flow::Normal
         }
 
         // --- $>>FILE file write ---
         Stmt::FileWrite(st) => {
-            use std::fs;
+            use std::fs::{self, OpenOptions};
+            use std::io::Write;
 
             // Evaluate path
             let path_val = match check_eval_result(eval_expr(&st.path, env, fns, w, false)) {
@@ -863,13 +877,74 @@ pub(super) fn exec_inner(
                     }
                 }
                 Some("W") | Some("w") | Some("A") | Some("a") | None => {
-                    // Write/Append mode - return File object for chaining .content()
-                    // Use mode to distinguish write vs append, store in File mode
-                    let file_mode = mode_str.clone();
-                    Flow::Return(Some(DolangValue::File {
-                        path: path_str,
-                        mode: file_mode,
-                    }))
+                    // Check if content is provided directly
+                    if let Some(content_expr) = &st.content {
+                        let content_val =
+                            match check_eval_result(eval_expr(content_expr, env, fns, w, false)) {
+                                Ok(Some(v)) => v,
+                                Ok(None) => {
+                                    return Flow::Err(Error::Interpreter(
+                                        "FILE content is required".to_string(),
+                                    ));
+                                }
+                                Err(e) => return Flow::Err(e),
+                            };
+
+                        let content_str = match content_val {
+                            DolangValue::Str(s) => s,
+                            _ => {
+                                return Flow::Err(Error::Interpreter(
+                                    "FILE content must be a String".to_string(),
+                                ));
+                            }
+                        };
+
+                        // Write directly based on mode
+                        match mode_str.as_deref() {
+                            Some("A") | Some("a") | Some("append") => {
+                                // Append mode
+                                match OpenOptions::new().create(true).append(true).open(&path_str) {
+                                    Ok(mut file) => match file.write_all(content_str.as_bytes()) {
+                                        Ok(_) => Flow::Normal,
+                                        Err(e) => Flow::Err(Error::Interpreter(format!(
+                                            "write error: {}",
+                                            e
+                                        ))),
+                                    },
+                                    Err(e) => Flow::Err(Error::Interpreter(format!(
+                                        "cannot open file: {}",
+                                        e
+                                    ))),
+                                }
+                            }
+                            _ => {
+                                // Write mode (default)
+                                match fs::write(&path_str, &content_str) {
+                                    Ok(_) => Flow::Normal,
+                                    Err(e) => {
+                                        if e.kind() == std::io::ErrorKind::NotFound {
+                                            Flow::Err(Error::Interpreter(format!(
+                                                "directory not found for path: {}",
+                                                path_str
+                                            )))
+                                        } else {
+                                            Flow::Err(Error::Interpreter(format!(
+                                                "write error: {}",
+                                                e
+                                            )))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // No content provided - return File object for chaining .content()
+                        let file_mode = mode_str.clone();
+                        Flow::Return(Some(DolangValue::File {
+                            path: path_str,
+                            mode: file_mode,
+                        }))
+                    }
                 }
                 Some(m) => Flow::Err(Error::Interpreter(format!(
                     "invalid file mode '{}', supported modes: \"W\", \"A\", \"DEL\"",
@@ -1155,8 +1230,8 @@ pub fn call_fn(
 
 /// Load HTTP routes from a module file (e.g., "routers.api")
 fn load_module_routes(module_path: &str) -> Result<Vec<HttpRoute>, Error> {
-    use crate::parser;
     use crate::ast::Stmt;
+    use crate::parser;
 
     // Convert module path to file path
     // "routers.api" -> "routers/api.dol"
@@ -1211,7 +1286,8 @@ fn load_module_routes(module_path: &str) -> Result<Vec<HttpRoute>, Error> {
         Err(e) => {
             return Err(Error::Interpreter(format!(
                 "cannot read module file '{}': {}",
-                path.display(), e
+                path.display(),
+                e
             )));
         }
     };

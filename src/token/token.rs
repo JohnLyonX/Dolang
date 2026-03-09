@@ -6,29 +6,29 @@ pub enum Type {
     Eof,
     Semicolon,
     Plus,
-    Minus,      // -
-    Mul,        // *
-    Div,        // /
-    Mod,        // %
+    Minus, // -
+    Mul,   // *
+    Div,   // /
+    Mod,   // %
     Print,
-    Read,      // $<< - read from stdin
-    File,      // FILE - file I/O
+    Read, // $<< - read from stdin
+    File, // FILE - file I/O
     Assign,
-    VarDecl,    // $ - variable declaration
-    ConstDecl,  // $@ - constant declaration
+    VarDecl,   // $ - variable declaration
+    ConstDecl, // $@ - constant declaration
 
     // Comparison operators
-    Eq,         // ==
-    Ne,         // !=
-    Gt,         // >
-    Lt,         // <
-    Gte,        // >=
-    Lte,        // <=
+    Eq,  // ==
+    Ne,  // !=
+    Gt,  // >
+    Lt,  // <
+    Gte, // >=
+    Lte, // <=
 
     // Logical operators
-    And,        // &&
-    Or,         // ||
-    Not,        // !
+    And, // &&
+    Or,  // ||
+    Not, // !
 
     // Control flow keywords
     If,         // $if
@@ -52,39 +52,39 @@ pub enum Type {
     Static,     // $STATIC - static file serving
 
     // HTTP method keywords
-    HttpGet,    // $GET
-    HttpPost,   // $POST
-    HttpPut,    // $PUT
-    HttpDel,    // $DEL
-    HttpPatch,  // $PATCH
-    HttpBlock,  // $HTTP - HTTP block
+    HttpGet,   // $GET
+    HttpPost,  // $POST
+    HttpPut,   // $PUT
+    HttpDel,   // $DEL
+    HttpPatch, // $PATCH
+    HttpBlock, // $HTTP - HTTP block
 
     // Block delimiters
-    LBrace,     // {
-    RBrace,     // }
-    LParen,     // (
-    RParen,     // )
-    LBracket,   // [
-    RBracket,   // ]
-    Colon,      // :
-    Dot,        // .
-    Spread,     // ...
-    Comma,      // ,
-    Arrow,      // ->
+    LBrace,   // {
+    RBrace,   // }
+    LParen,   // (
+    RParen,   // )
+    LBracket, // [
+    RBracket, // ]
+    Colon,    // :
+    Dot,      // .
+    Spread,   // ...
+    Comma,    // ,
+    Arrow,    // ->
 
     // Compound assignment operators
-    PlusAssign,   // +=
-    MinusAssign,  // -=
-    MulAssign,    // *=
-    DivAssign,    // /=
-    ModAssign,    // %=
+    PlusAssign,  // +=
+    MinusAssign, // -=
+    MulAssign,   // *=
+    DivAssign,   // /=
+    ModAssign,   // %=
 
     // Literals
     Number,
     Char,
     Bool,
     String,
-    FString,  // f"..." formatted string
+    FString, // f"..." formatted string
     Ident,
 }
 

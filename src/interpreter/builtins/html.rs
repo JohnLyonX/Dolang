@@ -21,6 +21,18 @@ fn get_base_dir() -> PathBuf {
 pub fn call(receiver: &DolangValue, method: &str, args: &[DolangValue]) -> Result<DolangValue, Error> {
     match method {
         "link" => html_link(receiver, args),
+        "to_str" => {
+            // 将 HTML 转换为字符串
+            let content = match receiver {
+                DolangValue::Html(inner) => match *inner.clone() {
+                    DolangValue::Str(s) => s,
+                    _ => "".to_string(),
+                },
+                _ => "".to_string(),
+            };
+            Ok(DolangValue::Str(content))
+        }
+        "type" => Ok(DolangValue::Str("Html".to_string())),
         _ => Err(Error::Interpreter(format!(
             "Html has no method '{}'",
             method

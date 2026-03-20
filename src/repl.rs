@@ -1,6 +1,4 @@
 // REPL - interactive interpreter loop.
-use std::collections::HashMap;
-use std::fs;
 use std::io::{self, Write};
 use std::process;
 
@@ -9,9 +7,13 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, is_raw_mode_enabled},
 };
 
-use dolang::interpreter::{exec, set_current_file, FnEnv, DolangValue};
-use dolang::interpreter::env::ValueType;
+use dolang::diagnostics::{Diagnostic, codes};
+use dolang::interpreter::exec;
 use dolang::parser;
+use dolang::runtime::{
+    ProgramState, RuntimeContext, RuntimeMode, execute_program_with_writer,
+    load_context_and_program,
+};
 use dolang::syntax;
 
 const COLOR_RED: &str = "\x1b[31m";
@@ -21,16 +23,24 @@ fn err_red(msg: &str) {
     println!("{}{}{}", COLOR_RED, msg, COLOR_RESET);
 }
 
+fn err_red_display(err: &dyn std::fmt::Display) {
+    err_red(&err.to_string());
+}
+
+fn err_red_message(code: &'static str, message: impl Into<String>) {
+    err_red_display(&Diagnostic::error(code, message));
+}
+
 // ─── Raw mode for terminal input ───────────────────────────────────────────
 
 fn refresh_line(prompt: &str, buf: &[char], cursor: usize) {
     print!("\r\x1b[K");
     print!("{}", prompt);
     print!("{}", buf.iter().collect::<String>());
-    if let Some(moved) = buf.len().checked_sub(cursor) {
-        if moved > 0 {
-            print!("\x1b[{}D", moved);
-        }
+    if let Some(moved) = buf.len().checked_sub(cursor)
+        && moved > 0
+    {
+        print!("\x1b[{}D", moved);
     }
     io::stdout().flush().ok();
 }
@@ -49,10 +59,8 @@ pub fn read_line(prompt: &str, history: &mut Vec<String>) -> Option<String> {
 
     // Try to enable raw mode
     let raw_mode_was_enabled = is_raw_mode_enabled().unwrap_or(false);
-    if !raw_mode_was_enabled {
-        if let Err(_) = enable_raw_mode() {
-            return read_line_simple(prompt, history);
-        }
+    if !raw_mode_was_enabled && enable_raw_mode().is_err() {
+        return read_line_simple(prompt, history);
     }
 
     let result = read_line_raw(prompt, history);
@@ -74,7 +82,7 @@ fn read_line_simple(prompt: &str, history: &mut Vec<String>) -> Option<String> {
         return None;
     }
 
-    let line = line.trim_end_matches(|c| c == '\n' || c == '\r').to_string();
+    let line = line.trim_end_matches(['\n', '\r']).to_string();
     if !line.trim().is_empty() {
         history.push(line.clone());
     }
@@ -222,26 +230,19 @@ fn read_line_raw(prompt: &str, history: &mut Vec<String>) -> Option<String> {
 // ─── REPL main loop ────────────────────────────────────────────────────────
 
 pub fn run_repl() {
-    let mut env: HashMap<String, DolangValue> = HashMap::new();
-    let mut type_env: HashMap<String, ValueType> = HashMap::new();
-    let mut const_env: HashMap<String, bool> = HashMap::new();
-    let mut fns: FnEnv = HashMap::new();
+    let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let mut context = RuntimeContext::new(RuntimeMode::Repl, project_root);
+    let mut state = ProgramState::new();
     let mut history: Vec<String> = Vec::new();
 
-    loop {
-        let line = match read_line(">> ", &mut history) {
-            Some(l) => l,
-            None => break,
-        };
-
+    while let Some(line) = read_line(">> ", &mut history) {
         let first = line.trim().to_string();
         if first.is_empty() {
             continue;
         }
 
         // Check for exit/quit commands
-        if first == "exit"
-        {
+        if first == "exit" {
             break;
         }
 
@@ -278,12 +279,18 @@ pub fn run_repl() {
         let line = full.trim();
 
         if syntax::contains_raw_english(line) {
-            err_red("[ERROR] illegal identifier: raw english is not allowed");
+            err_red_message(
+                codes::PARSE_GENERIC,
+                "illegal identifier: raw english is not allowed",
+            );
             continue;
         }
 
         if let (false, bad) = syntax::validate_dollar_literals(line) {
-            err_red(&format!("[ERROR] invalid $...$ literal: {}", bad));
+            err_red_message(
+                codes::PARSE_GENERIC,
+                format!("invalid $...$ literal: {}", bad),
+            );
             continue;
         }
 
@@ -295,10 +302,12 @@ pub fn run_repl() {
             // In multiline mode, don't strip comments but still trim
             line_without_comments = line.trim().to_string();
             // Check if the line (after trimming) is effectively empty (comment-only)
-            is_empty_after_strip = line_without_comments.is_empty() ||
-                line_without_comments.chars().all(|c| c.is_whitespace() ||
-                    (c == '/' && line_without_comments.contains("//")) ||
-                    (c == '/' && line_without_comments.contains("/*")));
+            is_empty_after_strip = line_without_comments.is_empty()
+                || line_without_comments.chars().all(|c| {
+                    c.is_whitespace()
+                        || (c == '/' && line_without_comments.contains("//"))
+                        || (c == '/' && line_without_comments.contains("/*"))
+                });
         } else {
             // In single-line mode, strip comments
             match syntax::syntax::strip_comments(line) {
@@ -307,7 +316,7 @@ pub fn run_repl() {
                     is_empty_after_strip = line_without_comments.is_empty();
                 }
                 Err(e) => {
-                    err_red(&format!("[ERROR] {}", e));
+                    err_red_display(&e);
                     continue;
                 }
             }
@@ -327,8 +336,12 @@ pub fn run_repl() {
             || line_without_comments.starts_with("$loop ");
 
         // In multiline mode or likely multiline statements, we don't check for semicolon
-        if !is_multiline && !is_likely_multiline && !is_block_stmt && !line_without_comments.ends_with(';') {
-            err_red("[ERROR] missing ';'");
+        if !is_multiline
+            && !is_likely_multiline
+            && !is_block_stmt
+            && !line_without_comments.ends_with(';')
+        {
+            err_red_message(codes::PARSE_EXPECTED_TOKEN, "missing ';'");
             continue;
         }
 
@@ -344,15 +357,15 @@ pub fn run_repl() {
         let statements = match parser::parse(src) {
             Ok(stmts) => stmts,
             Err(e) => {
-                err_red(&format!("[ERROR] {}", e));
+                err_red_display(&e);
                 continue;
             }
         };
 
         for stmt in statements {
-            let (cont, exec_err) = exec(&stmt, &mut env, &mut fns, &mut type_env, &mut const_env);
+            let (cont, exec_err) = exec(&stmt, &mut state, &mut context);
             if let Err(e) = exec_err {
-                err_red(&format!("[ERROR] {}", e));
+                err_red_display(&e);
                 break;
             }
             if !cont {
@@ -365,46 +378,27 @@ pub fn run_repl() {
 // ─── File execution ────────────────────────────────────────────────────────
 
 pub fn run_file(filename: &str) {
-    // Set current file for $main() scope checking
-    let file_path = std::path::Path::new(filename);
-    let file_name = file_path.file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| filename.to_string());
-    set_current_file(Some(file_name.clone()));
+    let (mut context, program) =
+        match load_context_and_program(RuntimeMode::Run, std::path::Path::new(filename)) {
+            Ok(loaded) => loaded,
+            Err(e) => {
+                err_red_display(&e);
+                process::exit(1);
+            }
+        };
+    let mut state = ProgramState::new();
 
-    let content = match fs::read_to_string(filename) {
-        Ok(c) => c,
+    match execute_program_with_writer(
+        &program.statements,
+        &mut state,
+        &mut context,
+        &mut io::stdout(),
+    ) {
+        Ok(true) => {}
+        Ok(false) => process::exit(0),
         Err(e) => {
-            err_red(&format!("[ERROR] cannot read file '{}': {}", filename, e));
+            err_red_display(&e);
             process::exit(1);
-        }
-    };
-
-    // Parse the file - validation is handled by the parser
-    let statements = match parser::parse(&content) {
-        Ok(stmts) => stmts,
-        Err(e) => {
-            err_red(&format!("[ERROR] {}", e));
-            process::exit(1);
-        }
-    };
-
-    let mut env: HashMap<String, DolangValue> = HashMap::new();
-    let mut type_env: HashMap<String, ValueType> = HashMap::new();
-    let mut const_env: HashMap<String, bool> = HashMap::new();
-    let mut fns: FnEnv = HashMap::new();
-
-    for stmt in statements {
-        let (cont, exec_err) = exec(&stmt, &mut env, &mut fns, &mut type_env, &mut const_env);
-        if let Err(e) = exec_err {
-            err_red(&format!("[ERROR] {}", e));
-            process::exit(1);
-        }
-        if !cont {
-            process::exit(0);
         }
     }
-
-    // Clear current file after execution
-    set_current_file(None);
 }

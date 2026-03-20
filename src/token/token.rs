@@ -41,6 +41,7 @@ pub enum Type {
     Break,      // $break
     Continue,   // $continue
     Fn,         // $fn
+    PrivateFn,  // _$fn
     Return,     // $#
     ModDecl,    // $mod - module declaration
     MainDecl,   // $main - main entry point
@@ -123,6 +124,7 @@ impl fmt::Display for Type {
             Type::Break => write!(f, "$break"),
             Type::Continue => write!(f, "$continue"),
             Type::Fn => write!(f, "$fn"),
+            Type::PrivateFn => write!(f, "_$fn"),
             Type::Return => write!(f, "$#"),
             Type::ModDecl => write!(f, "$mod"),
             Type::MainDecl => write!(f, "$main"),

@@ -1,144 +1,63 @@
 # Changelog
 
-All notable changes to DaoLang will be documented in this file.
+本文件记录 Dolang 的用户可见变化。
 
-## [v2026.0.0] - 2026-03-09
+记录规则：
 
-### Added
-- **$STATIC 静态文件服务**：
-  - `$STATIC("/css", "css")` - 指定 URL 前缀和目录
-  - `$STATIC("public")` - 默认前缀 /static
-  - 支持点号格式：`css.dolang` -> `css/`
-  - 使用 tower-http 的 ServeDir 高效服务静态文件
-- **$>>FILE 直接写入语法**：
-  - `$>>FILE("path", "content")` - 覆盖写入
-  - `$>>FILE("path", "content", "W")` - 覆盖写入
-  - `$>>FILE("path", "content", "A")` - 追加写入
-- **HTTP handler $>> 输出支持**：
-  - `$>> "message"` 可以在 HTTP handler 中输出到服务器终端
-- **JSON 内置方法**：
-  - `.to_str()` - 转换为字符串
-  - `.type()` - 获取类型名
-- **HTML 内置方法**：
-  - `.to_str()` - 转换为字符串
-  - `.type()` - 获取类型名
-  - `.link("module.path")` - 链接外部文件
+- 只记录用户可见变化
+- 每次发布都按固定栏目归档
+- breaking change、弃用、移除必须写清兼容影响
 
-## [v1.7.0] - 2026-03-08
+## Unreleased
 
 ### Added
-- **可变参数函数**：
-  - 具名函数：`$fn add(...nums) { $# nums; }`
-  - 匿名函数：`$ result = $fn(...args) { $# args; };`
-  - 混合参数：`$fn greet(name, ...others) { $# [name, others]; }`
-  - 使用 `.len()` 获取参数个数
-- **文件读写**（拆分写法）：
-  - `$>>FILE(path)` - 创建文件对象
-  - `.content("内容")` - 链式写入内容
-  - `$>>FILE(path, "W")` - 覆盖写入模式
-  - `$>>FILE(path, "A")` - 追加写入模式
-  - `$>>FILE(path, "DEL")` - 删除文件
-  - `$<<FILE(path)` - 读取文件（返回 File 对象）
-  - File 方法：`.exists()`、`.read()`、`.read_lines()`、`.size()`、`.is_dir()`
-- **转义字符支持**：
-  - 字符串：`\n`, `\t`, `\r`, `\0`, `\\`, `\"`
-  - f-string 同样支持
-- **项目系统**：
-  - `dolang serve [path]` - 服务模式
-  - `$mod 路径;` - 模块导入
-  - `$main() { }` - 主入口声明
-  - `$<<CONFIG("KEY")` - 配置读取（仅服务模式）
-  - `package.toml` - 项目配置文件
 
-## [v1.6] - 2026-03-02
-
-### Added
-- **标准输入**：
-  - `$<<ENV("KEY")` - 读取环境变量
-  - `$<<LINE()` - 读取 stdin 一行
-  - `$<<LINE("提示")` - 读取 stdin（带提示）
-- **方法调用必须使用括号**：如 `obj.method()`，不再支持 `obj.method`
-- 错误信息改进：方法调用缺少括号时会给出明确的错误提示
-
-### Fixed
-- 修复：`$<<ENV()` 在未赋值情况下会自动打印值的 bug
-- 修复：方法调用缺少括号时报错信息不准确的问题
-
-## [v1.3] - 2026-03-01
-
-### Added
-- **渐进式类型系统**：支持类型注解（`$ x: Int = 30`）
-- 动态模式（默认）：变量可随时改变类型
-- 静态模式：使用类型注解后，类型检查生效
-- 支持的类型注解：`Int`/`Integer`、`Float`、`String`/`Str`、`Bool`/`Boolean`
-- 常量类型注解支持
+- 建立 `docs/spec/` 正式语言规范目录
+- 增加 Phase 9 的版本、兼容性、弃用规则文档
 
 ### Changed
-- **Breaking Change**：动态模式下重新赋值可以改变类型（之前会报错）
-- 类型错误信息格式更新，更清晰易读
+
+- 规范化语言行为文档与 `tests/spec` 的映射关系
+
+### Deprecated
+
+- None
+
+### Removed
+
+- None
 
 ### Fixed
-- 修复 Bug #4：`to_str()` 等方法返回值可直接赋值给原变量（动态模式下）
 
-## [v1.2] - 2026-02-28
+- 对齐 spec 样例与当前 parser/runtime 真实行为
+
+## Release Template
+
+后续版本请按如下模板追加：
+
+```md
+## x.y.z - YYYY-MM-DD
 
 ### Added
-- 代码解耦、模块化重构
-- 复合赋值运算符 (`+=`, `-=`, `*=`, `/=`, `%=`)
-- 列表类型 (List)
-- 字典类型 (Map)
-- 方法调用语法 (`obj.method()`)
-- for-in 遍历语法
-- 字符串内置方法 (`len`, `upper`, `lower`, `contains`, `replace`, `trim`, `split`, etc.)
-- 列表内置方法 (`push`, `pop`, `reverse`, `len`, `contains`, `join`)
-- 字典内置方法 (`keys`, `values`, `len`, `contains_key`, `remove`)
+
+- ...
 
 ### Changed
-- 代码解耦：拆分 parser、interpreter、main 模块，提升代码可维护性
 
-## [v1.1] - 2026-02-27
+- ...
 
-### Added
-- 函数作为值（匿名函数赋值给变量）
-- 改进解析错误消息显示
+### Deprecated
 
-## [v1.0] - 2026-02-27
+- 当前行为：
+- 替代行为：
+- 起始版本：
+- 计划移除版本：
 
-### Added
-- 函数定义 (`$fn`)
-- 返回语句 (`$#`)
-- 函数返回类型检查
-- 未定义变量检查
+### Removed
 
-## [v0.9] - 2026-02-27
+- ...
 
-### Added
-- 循环语句 (`$while`, `$loop`, `$for`)
+### Fixed
 
-## [v0.8] - 2026-02-27
-
-### Added
-- 条件语句 (`$if`, `$elif`, `$else`)
-
-## [v0.7] - 2026-02-27
-
-### Added
-- 布尔类型
-- 比较运算 (`==`, `!=`, `>`, `<`, `>=`, `<=`)
-- 逻辑运算 (`&&`, `||`, `!`)
-
-## [v0.6] - 2026-02-26
-
-### Added
-- 变量遮蔽 (Shadowing)
-- 类型系统
-
-## [v0.5] - 2026-02-26
-
-### Added
-- 重构语法，采用 `$` 符号化语法
-
-## [v0.1] - 早期版本
-
-### Added
-- 原始版本（`..$` 语法）
+- ...
+```

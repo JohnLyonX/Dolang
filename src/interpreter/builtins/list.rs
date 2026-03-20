@@ -17,7 +17,9 @@ pub fn call(
         "len" | "length" => Ok(DolangValue::Int(items.len() as i64)),
         "contains" => {
             if args.is_empty() {
-                return Err(Error::Interpreter("method 'contains' requires 1 argument".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'contains' requires 1 argument".to_string(),
+                ));
             }
             let contains = items.iter().any(|item| item == &args[0]);
             Ok(DolangValue::Bool(contains))
@@ -28,7 +30,11 @@ pub fn call(
             } else {
                 match &args[0] {
                     DolangValue::Str(s) => s.clone(),
-                    _ => return Err(Error::Interpreter("join requires a String argument".to_string())),
+                    _ => {
+                        return Err(Error::Interpreter(
+                            "join requires a String argument".to_string(),
+                        ));
+                    }
                 }
             };
             let result: String = items
@@ -39,9 +45,10 @@ pub fn call(
             Ok(DolangValue::Str(result))
         }
         "type" => Ok(DolangValue::Str("List".to_string())),
-        _ => {
-            Err(Error::Interpreter(format!("list has no method '{}'", method)))
-        }
+        _ => Err(Error::Interpreter(format!(
+            "list has no method '{}'",
+            method
+        ))),
     }
 }
 
@@ -59,7 +66,9 @@ pub fn call_mut(
     match method {
         "push" => {
             if args.is_empty() {
-                return Err(Error::Interpreter("method 'push' requires 1 argument".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'push' requires 1 argument".to_string(),
+                ));
             }
             items.push(args[0].clone());
             Ok(receiver.clone())
@@ -68,14 +77,17 @@ pub fn call_mut(
             if items.is_empty() {
                 return Err(Error::Interpreter("cannot pop from empty list".to_string()));
             }
-            items.pop().ok_or_else(|| Error::Interpreter("pop failed".to_string()))
+            items
+                .pop()
+                .ok_or_else(|| Error::Interpreter("pop failed".to_string()))
         }
         "reverse" => {
             items.reverse();
             Ok(receiver.clone())
         }
-        _ => {
-            Err(Error::Interpreter(format!("list has no mutable method '{}'", method)))
-        }
+        _ => Err(Error::Interpreter(format!(
+            "list has no mutable method '{}'",
+            method
+        ))),
     }
 }

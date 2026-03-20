@@ -1,26 +1,31 @@
 // HTML 内置方法
 // $HTML().link() 方法实现
 
-use std::path::PathBuf;
 use crate::error::Error;
-use crate::interpreter::{DolangValue, get_current_file};
+use crate::interpreter::DolangValue;
+use crate::runtime::RuntimeContext;
+use std::path::PathBuf;
 
 /// 获取当前文件的基础目录
-fn get_base_dir() -> PathBuf {
-    if let Some(file) = get_current_file() {
-        if let Some(parent) = PathBuf::from(&file).parent() {
-            if !parent.as_os_str().is_empty() {
-                return parent.to_path_buf();
-            }
-        }
+fn get_base_dir(context: &RuntimeContext) -> PathBuf {
+    if let Some(file) = context.current_file()
+        && let Some(parent) = PathBuf::from(&file).parent()
+        && !parent.as_os_str().is_empty()
+    {
+        return parent.to_path_buf();
     }
     PathBuf::from(".")
 }
 
 /// 调用 HTML 类型的内置方法
-pub fn call(receiver: &DolangValue, method: &str, args: &[DolangValue]) -> Result<DolangValue, Error> {
+pub fn call(
+    receiver: &DolangValue,
+    method: &str,
+    args: &[DolangValue],
+    context: &RuntimeContext,
+) -> Result<DolangValue, Error> {
     match method {
-        "link" => html_link(receiver, args),
+        "link" => html_link(receiver, args, context),
         "to_str" => {
             // 将 HTML 转换为字符串
             let content = match receiver {
@@ -41,27 +46,33 @@ pub fn call(receiver: &DolangValue, method: &str, args: &[DolangValue]) -> Resul
 }
 
 /// $HTML().link("module.path") - 链接外部 HTML/CSS/JS/XML 文件
-fn html_link(receiver: &DolangValue, args: &[DolangValue]) -> Result<DolangValue, Error> {
+fn html_link(
+    receiver: &DolangValue,
+    args: &[DolangValue],
+    context: &RuntimeContext,
+) -> Result<DolangValue, Error> {
     // 获取 link 参数
     let module_path = match args.first() {
         Some(DolangValue::Str(s)) => s.clone(),
-        Some(v) => return Err(Error::Interpreter(format!(
-            "$HTML().link() requires string argument, got {}",
-            v.type_name()
-        ))),
-        None => return Err(Error::Interpreter(
-            "$HTML().link() requires a module path argument".to_string()
-        )),
+        Some(v) => {
+            return Err(Error::Interpreter(format!(
+                "$HTML().link() requires string argument, got {}",
+                v.type_name()
+            )));
+        }
+        None => {
+            return Err(Error::Interpreter(
+                "$HTML().link() requires a module path argument".to_string(),
+            ));
+        }
     };
 
     // 检查是否已经有非空内联内容
     let existing_content = match receiver {
-        DolangValue::Html(inner) => {
-            match **inner {
-                DolangValue::Str(ref s) if !s.is_empty() => Some(s.clone()),
-                _ => None,
-            }
-        }
+        DolangValue::Html(inner) => match **inner {
+            DolangValue::Str(ref s) if !s.is_empty() => Some(s.clone()),
+            _ => None,
+        },
         _ => None,
     };
 
@@ -73,7 +84,8 @@ fn html_link(receiver: &DolangValue, args: &[DolangValue]) -> Result<DolangValue
     // 验证 module_path 格式：必须是 "module.name" 格式，不能是路径（除非是通配符）
     if !module_path.contains('*') && (module_path.contains('/') || module_path.contains('\\')) {
         return Err(Error::Interpreter(
-            "$HTML().link() requires module path format (e.g., 'pages.index'), not file path".to_string()
+            "$HTML().link() requires module path format (e.g., 'pages.index'), not file path"
+                .to_string(),
         ));
     }
 
@@ -82,11 +94,11 @@ fn html_link(receiver: &DolangValue, args: &[DolangValue]) -> Result<DolangValue
 
     // 处理通配符 "pages.*"
     if module_path.contains('*') {
-        return handle_wildcard(&module_path, &valid_extensions);
+        return handle_wildcard(&module_path, &valid_extensions, context);
     }
 
     // 普通模式：尝试加载单个文件
-    let base_dir = get_base_dir();
+    let base_dir = get_base_dir(context);
     let module_parts: Vec<&str> = module_path.split('.').collect();
     let mut tried_paths = Vec::new();
 
@@ -100,10 +112,10 @@ fn html_link(receiver: &DolangValue, args: &[DolangValue]) -> Result<DolangValue
         let relative_path = path_parts.join("/");
         let possible_path = base_dir.join(&relative_path);
 
-        if possible_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&possible_path) {
-                return Ok(DolangValue::Html(Box::new(DolangValue::Str(content))));
-            }
+        if possible_path.exists()
+            && let Ok(content) = std::fs::read_to_string(&possible_path)
+        {
+            return Ok(DolangValue::Html(Box::new(DolangValue::Str(content))));
         }
 
         tried_paths.push(possible_path.display().to_string());
@@ -118,7 +130,11 @@ fn html_link(receiver: &DolangValue, args: &[DolangValue]) -> Result<DolangValue
 }
 
 /// 处理通配符匹配 "pages.*"
-fn handle_wildcard(module_path: &str, valid_extensions: &[&str]) -> Result<DolangValue, Error> {
+fn handle_wildcard(
+    module_path: &str,
+    valid_extensions: &[&str],
+    context: &RuntimeContext,
+) -> Result<DolangValue, Error> {
     // 解析通配符路径
     let parts: Vec<&str> = module_path.split('.').collect();
     let mut dir_path = Vec::new();
@@ -130,7 +146,7 @@ fn handle_wildcard(module_path: &str, valid_extensions: &[&str]) -> Result<Dolan
         dir_path.push(*part);
     }
 
-    let base_dir = get_base_dir();
+    let base_dir = get_base_dir(context);
     let dir = if dir_path.is_empty() {
         base_dir.clone()
     } else {
@@ -169,14 +185,21 @@ fn handle_wildcard(module_path: &str, valid_extensions: &[&str]) -> Result<Dolan
             combined_content.push_str(filename);
             combined_content.push_str(" ===== -->\n");
         }
-        combined_content.push_str(&content);
+        combined_content.push_str(content);
     }
 
-    Ok(DolangValue::Html(Box::new(DolangValue::Str(combined_content))))
+    Ok(DolangValue::Html(Box::new(DolangValue::Str(
+        combined_content,
+    ))))
 }
 
 /// 递归收集匹配的文件
-fn collect_matching_files(dir: &PathBuf, prefix: &str, valid_extensions: &[&str], matches: &mut Vec<(String, String)>) {
+fn collect_matching_files(
+    dir: &PathBuf,
+    prefix: &str,
+    valid_extensions: &[&str],
+    matches: &mut Vec<(String, String)>,
+) {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();

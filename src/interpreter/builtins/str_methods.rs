@@ -20,70 +20,117 @@ pub fn call(
         "trim" => Ok(DolangValue::Str(s.trim().to_string())),
         "contains" => {
             if args.is_empty() {
-                return Err(Error::Interpreter("method 'contains' requires 1 argument".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'contains' requires 1 argument".to_string(),
+                ));
             }
             let arg = match &args[0] {
                 DolangValue::Str(a) => a.as_str(),
-                _ => return Err(Error::Interpreter("contains requires a String argument".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "contains requires a String argument".to_string(),
+                    ));
+                }
             };
             Ok(DolangValue::Bool(s.contains(arg)))
         }
         "starts_with" => {
             if args.is_empty() {
-                return Err(Error::Interpreter("method 'starts_with' requires 1 argument".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'starts_with' requires 1 argument".to_string(),
+                ));
             }
             let arg = match &args[0] {
                 DolangValue::Str(a) => a.as_str(),
-                _ => return Err(Error::Interpreter("starts_with requires a String argument".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "starts_with requires a String argument".to_string(),
+                    ));
+                }
             };
             Ok(DolangValue::Bool(s.starts_with(arg)))
         }
         "ends_with" => {
             if args.is_empty() {
-                return Err(Error::Interpreter("method 'ends_with' requires 1 argument".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'ends_with' requires 1 argument".to_string(),
+                ));
             }
             let arg = match &args[0] {
                 DolangValue::Str(a) => a.as_str(),
-                _ => return Err(Error::Interpreter("ends_with requires a String argument".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "ends_with requires a String argument".to_string(),
+                    ));
+                }
             };
             Ok(DolangValue::Bool(s.ends_with(arg)))
         }
         "replace" => {
             if args.len() != 2 {
-                return Err(Error::Interpreter("method 'replace' requires 2 arguments".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'replace' requires 2 arguments".to_string(),
+                ));
             }
             let old = match &args[0] {
                 DolangValue::Str(a) => a.as_str(),
-                _ => return Err(Error::Interpreter("replace requires String arguments".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "replace requires String arguments".to_string(),
+                    ));
+                }
             };
             let new = match &args[1] {
                 DolangValue::Str(a) => a.as_str(),
-                _ => return Err(Error::Interpreter("replace requires String arguments".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "replace requires String arguments".to_string(),
+                    ));
+                }
             };
             Ok(DolangValue::Str(s.replace(old, new)))
         }
         "split" => {
             if args.is_empty() {
-                return Err(Error::Interpreter("method 'split' requires 1 argument".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'split' requires 1 argument".to_string(),
+                ));
             }
             let sep = match &args[0] {
                 DolangValue::Str(a) => a.as_str(),
-                _ => return Err(Error::Interpreter("split requires a String argument".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "split requires a String argument".to_string(),
+                    ));
+                }
             };
-            let parts: Vec<DolangValue> = s.split(sep).map(|p| DolangValue::Str(p.to_string())).collect();
+            let parts: Vec<DolangValue> = s
+                .split(sep)
+                .map(|p| DolangValue::Str(p.to_string()))
+                .collect();
             Ok(DolangValue::List(parts))
         }
         "slice" => {
             if args.len() != 2 {
-                return Err(Error::Interpreter("method 'slice' requires 2 arguments".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'slice' requires 2 arguments".to_string(),
+                ));
             }
             let start = match &args[0] {
                 DolangValue::Int(n) => *n as usize,
-                _ => return Err(Error::Interpreter("slice requires Integer arguments".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "slice requires Integer arguments".to_string(),
+                    ));
+                }
             };
             let end = match &args[1] {
                 DolangValue::Int(n) => *n as usize,
-                _ => return Err(Error::Interpreter("slice requires Integer arguments".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "slice requires Integer arguments".to_string(),
+                    ));
+                }
             };
             let chars: Vec<char> = s.chars().collect();
             if start < chars.len() && end <= chars.len() && start < end {
@@ -99,14 +146,20 @@ pub fn call(
             } else if let Ok(f) = s.parse::<f64>() {
                 Ok(DolangValue::Int(f as i64))
             } else {
-                Err(Error::Interpreter(format!("cannot convert \"{}\" to Int", s)))
+                Err(Error::Interpreter(format!(
+                    "cannot convert \"{}\" to Int",
+                    s
+                )))
             }
         }
         "to_float" => {
             if let Ok(f) = s.parse::<f64>() {
                 Ok(DolangValue::Float(f))
             } else {
-                Err(Error::Interpreter(format!("cannot convert \"{}\" to Float", s)))
+                Err(Error::Interpreter(format!(
+                    "cannot convert \"{}\" to Float",
+                    s
+                )))
             }
         }
         "to_bool" => {
@@ -123,6 +176,9 @@ pub fn call(
         }
         "to_str" => Ok(receiver.clone()),
         "type" => Ok(DolangValue::Str("String".to_string())),
-        _ => Err(Error::Interpreter(format!("string has no method '{}'", method))),
+        _ => Err(Error::Interpreter(format!(
+            "string has no method '{}'",
+            method
+        ))),
     }
 }

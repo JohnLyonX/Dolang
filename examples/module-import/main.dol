@@ -1,0 +1,2 @@
+$mod shared.helper;
+$>> helper.answer();

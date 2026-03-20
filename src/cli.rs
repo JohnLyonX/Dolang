@@ -23,13 +23,19 @@ impl TestConfig {
     }
 }
 
+impl Default for TestConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Run mode for the interpreter
 #[derive(Debug, Clone)]
 pub enum RunMode {
     Repl,
-    Run(String),                    // Run a single .dol file
-    Serve(PathBuf, bool),           // Serve mode: path, show_routertab
-    Test(TestConfig),               // Test mode: configuration
+    Run(String),          // Run a single .dol file
+    Serve(PathBuf, bool), // Serve mode: path, show_routertab
+    Test(TestConfig),     // Test mode: configuration
 }
 
 /// Parse CLI arguments and return the run mode.
@@ -80,11 +86,15 @@ pub fn parse_args() -> RunMode {
                                     config.path = Some(route[space_idx + 1..].to_string());
                                     i += 2;
                                 } else {
-                                    eprintln!("Error: --route requires METHOD and path (e.g., --route GET /hello)");
+                                    eprintln!(
+                                        "Error: --route requires METHOD and path (e.g., --route GET /hello)"
+                                    );
                                     process::exit(1);
                                 }
                             } else {
-                                eprintln!("Error: --route requires METHOD and path (e.g., --route GET /hello)");
+                                eprintln!(
+                                    "Error: --route requires METHOD and path (e.g., --route GET /hello)"
+                                );
                                 process::exit(1);
                             }
                         }

@@ -25,18 +25,25 @@ pub fn call(
         }
         "contains_key" => {
             if args.is_empty() {
-                return Err(Error::Interpreter("method 'contains_key' requires 1 argument".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'contains_key' requires 1 argument".to_string(),
+                ));
             }
             let key = match &args[0] {
                 DolangValue::Str(s) => s,
-                _ => return Err(Error::Interpreter("contains_key requires a String argument".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "contains_key requires a String argument".to_string(),
+                    ));
+                }
             };
             Ok(DolangValue::Bool(map.contains_key(key)))
         }
         "type" => Ok(DolangValue::Str("Map".to_string())),
-        _ => {
-            Err(Error::Interpreter(format!("map has no method '{}'", method)))
-        }
+        _ => Err(Error::Interpreter(format!(
+            "map has no method '{}'",
+            method
+        ))),
     }
 }
 
@@ -54,11 +61,17 @@ pub fn call_mut(
     match method {
         "remove" => {
             if args.is_empty() {
-                return Err(Error::Interpreter("method 'remove' requires 1 argument".to_string()));
+                return Err(Error::Interpreter(
+                    "method 'remove' requires 1 argument".to_string(),
+                ));
             }
             let key = match &args[0] {
                 DolangValue::Str(s) => s.clone(),
-                _ => return Err(Error::Interpreter("remove requires a String argument".to_string())),
+                _ => {
+                    return Err(Error::Interpreter(
+                        "remove requires a String argument".to_string(),
+                    ));
+                }
             };
             if map.swap_remove(&key).is_some() {
                 Ok(receiver.clone())

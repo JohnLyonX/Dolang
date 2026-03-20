@@ -33,7 +33,10 @@ fn call_int(n: i64, method: &str) -> Result<DolangValue, Error> {
             }
         }
         "type" => Ok(DolangValue::Str("Int".to_string())),
-        _ => Err(Error::Interpreter(format!("Int has no method '{}'", method))),
+        _ => Err(Error::Interpreter(format!(
+            "Int has no method '{}'",
+            method
+        ))),
     }
 }
 
@@ -49,8 +52,13 @@ fn call_float(f: f64, method: &str) -> Result<DolangValue, Error> {
         }
         "to_int" => Ok(DolangValue::Int(f as i64)),
         "to_float" => Ok(DolangValue::Float(f)),
-        "to_bool" => Err(Error::Interpreter("type mismatch: Float cannot convert to Bool".to_string())),
+        "to_bool" => Err(Error::Interpreter(
+            "type mismatch: Float cannot convert to Bool".to_string(),
+        )),
         "type" => Ok(DolangValue::Str("Float".to_string())),
-        _ => Err(Error::Interpreter(format!("Float has no method '{}'", method))),
+        _ => Err(Error::Interpreter(format!(
+            "Float has no method '{}'",
+            method
+        ))),
     }
 }

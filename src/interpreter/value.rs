@@ -29,14 +29,15 @@ pub enum DolangValue {
         mode: Option<String>, // "LINES" for line reading
     },
     Json(IndexMap<String, DolangValue>), // JSON object
-    Html(Box<DolangValue>), // HTML content
+    Html(Box<DolangValue>),              // HTML content
     Response {
         status: u16,
         body: Option<Box<DolangValue>>, // response body
     },
     ModuleProxy {
         path: String,
-        fns: super::env::FnEnv, // 模块函数
+        exports: super::env::FnEnv, // 对外可见函数
+        fns: super::env::FnEnv,     // 模块内部完整函数表
     },
     Null,
 }
@@ -125,7 +126,7 @@ impl fmt::Display for DolangValue {
                     first = false;
                     s.push_str(&format!("\"{}\": {}", k, value_to_json(v)));
                 }
-                s.push_str("}");
+                s.push('}');
                 write!(f, "{}", s)
             }
             Self::Html(val) => {
@@ -198,13 +199,15 @@ pub fn value_to_json(value: &DolangValue) -> serde_json::Value {
             json!(arr.iter().map(value_to_json).collect::<Vec<_>>())
         }
         DolangValue::Map(m) => {
-            let obj = m.iter()
+            let obj = m
+                .iter()
                 .map(|(k, v)| (k.clone(), value_to_json(v)))
                 .collect::<serde_json::Map<String, serde_json::Value>>();
             serde_json::Value::Object(obj)
         }
         DolangValue::Json(m) => {
-            let obj = m.iter()
+            let obj = m
+                .iter()
                 .map(|(k, v)| (k.clone(), value_to_json(v)))
                 .collect::<serde_json::Map<String, serde_json::Value>>();
             serde_json::Value::Object(obj)
@@ -212,5 +215,27 @@ pub fn value_to_json(value: &DolangValue) -> serde_json::Value {
         DolangValue::Html(v) => value_to_json(v),
         DolangValue::Null => serde_json::Value::Null,
         _ => serde_json::Value::Null,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DolangValue, value_to_json};
+    use indexmap::IndexMap;
+
+    #[test]
+    fn truthiness_matches_runtime_expectations() {
+        assert!(!DolangValue::Int(0).is_truthy());
+        assert!(DolangValue::Int(1).is_truthy());
+        assert!(!DolangValue::Str(String::new()).is_truthy());
+        assert!(DolangValue::List(vec![DolangValue::Int(1)]).is_truthy());
+    }
+
+    #[test]
+    fn json_conversion_keeps_map_shape() {
+        let mut map = IndexMap::new();
+        map.insert("name".to_string(), DolangValue::Str("dolang".to_string()));
+        let json = value_to_json(&DolangValue::Json(map));
+        assert_eq!(json["name"], "dolang");
     }
 }

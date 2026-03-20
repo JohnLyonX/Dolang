@@ -1,0 +1,4 @@
+// line comment
+$ value = "Dolang";
+/* block comment */
+$>> f"hello {value}";

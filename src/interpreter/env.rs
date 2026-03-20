@@ -1,13 +1,13 @@
 // Environment management - types for variables and functions.
-use crate::ast::FnDeclStmt;
 use super::value::DolangValue;
+use crate::ast::FnDeclStmt;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Represents the type of a value (for type checking)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValueType {
-    Dynamic,  // No type annotation, can change freely
+    Dynamic, // No type annotation, can change freely
     Int,
     Float,
     String,

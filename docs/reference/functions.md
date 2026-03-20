@@ -634,10 +634,32 @@ $mod dao.user;
 
 ```dao
 $mod 模块路径;
+$mod 目录路径.*;
 ```
 
 模块路径支持点分隔符：
 - `$mod dao.user;` 会加载 `dao/user.dol` 文件
+- `$mod services.*;` 会导入 `services/` 目录下的直接子模块
+
+### 访问方式
+
+模块导入后通过文件名命名空间访问，不会平铺到全局函数表：
+
+```dao
+$mod dao.user;
+
+$main() {
+    $ result = user.get_user("123");
+    $>> result;
+};
+```
+
+### 公开与私有
+
+- `$fn` 默认公开
+- `_$fn` 默认私有
+- 私有函数不会被 `$mod` 导入
+- `$mod` 当前只导入函数，不导入变量、常量、HTTP 路由或 `$main`
 
 ### 模块搜索路径
 
@@ -664,8 +686,12 @@ $fn get_user(id) -> String {
     $# "User-" + id;
 };
 
-$fn create_user(name, email) -> String {
+_$fn format_email(name, email) -> String {
     $# "Created: " + name + " (" + email + ")";
+};
+
+$fn create_user(name, email) -> String {
+    $# format_email(name, email);
 };
 ```
 
@@ -675,11 +701,11 @@ $fn create_user(name, email) -> String {
 $mod dao.user;
 
 $main() {
-    $ result = get_user("123");
+    $ result = user.get_user("123");
     $>> result;           // 输出: User-123
 
-    $ user = create_user("Tom", "tom@example.com");
-    $>> user;            // 输出: Created: Tom (tom@example.com)
+    $ created = user.create_user("Tom", "tom@example.com");
+    $>> created;         // 输出: Created: Tom (tom@example.com)
 };
 ```
 
@@ -693,6 +719,15 @@ $mod non.existent.module;
 ```
 [ERROR] runtime error: module not found: 'non.existent.module' (tried: non/existent/module.dol, modules/non/existent/module.dol)
 ```
+
+如果尝试访问私有函数：
+
+```dao
+$mod dao.user;
+$ value = user.format_email("Tom", "tom@example.com");
+```
+
+会报模块函数不存在错误。
 
 ---
 

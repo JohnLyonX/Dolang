@@ -1,115 +1,64 @@
 // HTTP Server - handles dolang serve mode with Axum
-use std::collections::HashMap;
 use std::process;
 
 use axum::response::IntoResponse;
 use indexmap::IndexMap;
 use serde_json::Value as JsonValue;
 
-use dolang::interpreter::env::ValueType;
-use dolang::interpreter::{
-    DolangValue, FnEnv, STATIC_ROUTES, exec_http_handler, get_routes, print_routes, set_current_file,
+use dolang::interpreter::DolangValue;
+use dolang::runtime::{
+    HandlerInput, ProgramState, RuntimeMode, execute_http_route, execute_program_with_writer,
+    load_context_and_program,
 };
-use dolang::parser;
 
 /// Start HTTP server with the given path (main.dol file or directory)
 pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
-    use dolang::config;
-
-    // Determine the serve directory and main file
-    let serve_dir = if path.is_file() {
-        path.parent()
-            .unwrap_or(std::path::Path::new("."))
-            .to_path_buf()
-    } else {
-        path.clone()
+    let (mut context, program) = match load_context_and_program(RuntimeMode::Serve, &path) {
+        Ok(loaded) => loaded,
+        Err(e) => {
+            eprintln!("{}", e);
+            process::exit(1);
+        }
     };
 
-    // Load project config if exists
-    if let Some(loaded_config) = config::ProjectConfig::load_from_dir(&serve_dir) {
+    if let Some(loaded_config) = context.project_config() {
         println!(
             "Loaded project: {} v{}",
             loaded_config.name, loaded_config.version
         );
-        config::set_serve_config(loaded_config);
     }
 
-    // Find main.dol
-    let main_file = if path.is_file() {
-        path
-    } else {
-        path.join("main.dol")
-    };
-
-    let main_path = main_file.to_string_lossy().to_string();
-
-    if !std::path::Path::new(&main_path).exists() {
-        eprintln!("[ERROR] main file not found: {}", main_path);
-        process::exit(1);
-    }
-
-    println!("Running serve mode: {}", main_path);
+    println!("Running serve mode: {}", program.path.display());
     println!("Use $main() {{ ... }} to define server logic");
     println!();
 
-    // Set current file to "main.dol" for $main() scope checking
-    // Use the serve_dir as the base directory for static file resolution
-    let main_dol_path = serve_dir.join("main.dol");
-    set_current_file(Some(main_dol_path.to_string_lossy().to_string()));
-
-    // Read and parse the main file
-    let content = match std::fs::read_to_string(&main_path) {
-        Ok(c) => c,
+    let mut state = ProgramState::new();
+    match execute_program_with_writer(
+        &program.statements,
+        &mut state,
+        &mut context,
+        &mut std::io::stdout(),
+    ) {
+        Ok(true) => {}
+        Ok(false) => process::exit(0),
         Err(e) => {
-            eprintln!("[ERROR] cannot read file '{}': {}", main_path, e);
+            eprintln!("{}", e);
             process::exit(1);
-        }
-    };
-
-    let statements = match parser::parse(&content) {
-        Ok(stmts) => stmts,
-        Err(e) => {
-            eprintln!("[ERROR] {}", e);
-            process::exit(1);
-        }
-    };
-
-    // Execute statements (register routes)
-    let mut env: HashMap<String, DolangValue> = HashMap::new();
-    let mut type_env: HashMap<String, ValueType> = HashMap::new();
-    let mut const_env: HashMap<String, bool> = HashMap::new();
-    let mut fns: FnEnv = HashMap::new();
-
-    for stmt in statements {
-        let (cont, exec_err) =
-            dolang::interpreter::exec(&stmt, &mut env, &mut fns, &mut type_env, &mut const_env);
-        if let Err(e) = exec_err {
-            eprintln!("[ERROR] {}", e);
-            process::exit(1);
-        }
-        if !cont {
-            process::exit(0);
         }
     }
 
     // Start HTTP server if routes are registered
-    let routes = get_routes();
+    let routes = context.routes().to_vec();
 
     if !routes.is_empty() {
-        // Get server config
-        let host = config::get_serve_config()
-            .map(|c| c.server.host.clone())
-            .unwrap_or_else(|| "0.0.0.0".to_string());
-        let port = config::get_serve_config()
-            .map(|c| c.server.port)
-            .unwrap_or(8080);
-
+        let host = context.server_host().to_string();
+        let port = context.server_port();
         let addr = format!("{}:{}", host, port);
 
         // Print routes table if --routertab is enabled
         if show_routertab {
             println!();
-            print_routes();
+            context.print_routes();
             println!();
         }
 
@@ -119,115 +68,46 @@ pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
         let mut router = axum::Router::new();
 
         // Use indexed loop to avoid borrowing issues
-        let routes_count = routes.len();
-        for i in 0..routes_count {
-            let route = &routes[i];
+        for route in &routes {
             if !show_routertab {
                 println!("  {} {} -> {}", route.method, route.path, route.name);
             }
 
             // Create handler closure for each route - clone all data needed
-            let handler_body = route.body.clone();
-            let handler_params = route.params.clone();
             let handler_return_type = route.return_type.clone();
-            let handler_method = route.method.clone();
-            let route_path = route.path.clone();
-            let handler_params_for_closure = handler_params.clone();
-            let handler_method_for_closure = handler_method.clone();
-            let route_path_for_closure = route_path.clone();
+            let route_definition = route.clone();
+            let handler_context = context.clone();
 
             // Use a simpler approach - extract all from request
             let handler = move |req: axum::extract::Request| {
+                let route_definition = route_definition.clone();
+                let handler_context = handler_context.clone();
                 async move {
-                    // Build environment for handler execution
-                    let mut env: HashMap<String, DolangValue> = HashMap::new();
-                    let mut type_env: HashMap<String, ValueType> = HashMap::new();
-                    let mut const_env: HashMap<String, bool> = HashMap::new();
-                    let mut fns: FnEnv = HashMap::new();
-
-                    // Extract path from URL
                     let uri = req.uri();
-                    let url_path = uri.path();
+                    let mut input = HandlerInput::new(uri.path());
+                    input.query = uri.query().map(str::to_string);
 
-                    // Parse route path to extract param definitions (inside closure)
-                    let route_seg_parts: Vec<&str> = route_path_for_closure.split('/').collect();
-                    let url_seg_parts: Vec<&str> = url_path.split('/').collect();
-
-                    // Match path params by position
-                    let route_len = route_seg_parts.len();
-                    let url_len = url_seg_parts.len();
-
-                    if route_len == url_len {
-                        for idx in 0..route_len {
-                            let route_seg = route_seg_parts[idx];
-                            let url_seg = url_seg_parts[idx];
-                            if route_seg.starts_with(':') {
-                                let param_name = &route_seg[1..];
-                                env.insert(
-                                    param_name.to_string(),
-                                    DolangValue::Str(url_seg.to_string()),
-                                );
-                            } else if idx < handler_params_for_closure.len() {
-                                let param_name = &handler_params_for_closure[idx];
-                                env.insert(
-                                    param_name.clone(),
-                                    DolangValue::Str(url_seg.to_string()),
-                                );
-                            }
-                        }
-                    }
-
-                    // Extract query parameters
-                    if let Some(query) = uri.query() {
-                        for pair in query.split('&') {
-                            let parts: Vec<&str> = pair.split('=').collect();
-                            if parts.len() == 2 {
-                                env.insert(
-                                    parts[0].to_string(),
-                                    DolangValue::Str(parts[1].to_string()),
-                                );
-                            }
-                        }
-                    }
-
-                    // Extract body for POST/PUT/PATCH
-                    // Note: we need to get headers before consuming the body
-                    let is_body_method = matches!(
-                        handler_method_for_closure.as_str(),
-                        "POST" | "PUT" | "PATCH"
-                    );
-
-                    // Extract HTTP headers into a Map
-                    let headers = req.headers();
-                    let mut header_map: IndexMap<String, DolangValue> = IndexMap::new();
-                    for (name, value) in headers {
+                    for (name, value) in req.headers() {
                         if let Ok(v) = value.to_str() {
-                            header_map
-                                .insert(name.as_str().to_string(), DolangValue::Str(v.to_string()));
+                            input
+                                .headers
+                                .insert(name.as_str().to_string(), v.to_string());
                         }
                     }
-                    env.insert("__headers__".to_string(), DolangValue::Json(header_map));
 
-                    if is_body_method {
+                    if matches!(route_definition.method.as_str(), "POST" | "PUT" | "PATCH") {
                         let body_bytes = axum::body::to_bytes(req.into_body(), 1024 * 1024)
                             .await
                             .unwrap_or_default();
-                        if !body_bytes.is_empty() {
-                            if let Ok(json) = serde_json::from_slice::<JsonValue>(&body_bytes) {
-                                let dolang_body = json_to_dolang_value(json);
-                                env.insert("body".to_string(), dolang_body);
-                            }
+                        if !body_bytes.is_empty()
+                            && let Ok(json) = serde_json::from_slice::<JsonValue>(&body_bytes)
+                        {
+                            input.body = Some(json_to_dolang_value(json));
                         }
                     }
 
-                    // Execute handler body using exec_http_handler
-                    let (_should_continue, result, error) = exec_http_handler(
-                        &handler_body,
-                        &mut env,
-                        &mut fns,
-                        &mut type_env,
-                        &mut const_env,
-                    );
+                    let (_should_continue, result, error) =
+                        execute_http_route(&route_definition, &input, &handler_context);
 
                     // Handle error
                     if let Some(err_msg) = error {
@@ -251,16 +131,14 @@ pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
 
                     // Build response based on return value and return type
                     let return_type = handler_return_type.as_deref().unwrap_or("JSON");
-                    let response = build_http_response(result, return_type);
-
-                    response
+                    build_http_response(result, return_type)
                 }
             };
 
             // Register route in Axum
             use axum::routing::MethodFilter;
-            let path = format!("/{}", route_path.trim_start_matches('/'));
-            let method = match handler_method.as_str() {
+            let path = format!("/{}", route.path.trim_start_matches('/'));
+            let method = match route.method.as_str() {
                 "GET" => MethodFilter::GET,
                 "POST" => MethodFilter::POST,
                 "PUT" => MethodFilter::PUT,
@@ -275,15 +153,15 @@ pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
         }
 
         // Add static file routes
-        let static_routes = {
-            let routes = STATIC_ROUTES.lock().unwrap();
-            routes.clone()
-        };
+        let static_routes = context.static_routes().to_vec();
 
         if !static_routes.is_empty() {
             for static_route in &static_routes {
                 if !show_routertab {
-                    println!("  STATIC {} -> {}", static_route.url_prefix, static_route.module_path);
+                    println!(
+                        "  STATIC {} -> {}",
+                        static_route.url_prefix, static_route.module_path
+                    );
                 }
 
                 // Create static file handler

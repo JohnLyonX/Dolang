@@ -15,10 +15,17 @@ pub fn call(
 
     match method {
         "to_str" => Ok(DolangValue::Str(b.to_string())),
-        "to_int" => Err(Error::Interpreter("type mismatch: Bool cannot convert to Int".to_string())),
-        "to_float" => Err(Error::Interpreter("type mismatch: Bool cannot convert to Float".to_string())),
+        "to_int" => Err(Error::Interpreter(
+            "type mismatch: Bool cannot convert to Int".to_string(),
+        )),
+        "to_float" => Err(Error::Interpreter(
+            "type mismatch: Bool cannot convert to Float".to_string(),
+        )),
         "to_bool" => Ok(DolangValue::Bool(b)),
         "type" => Ok(DolangValue::Str("Bool".to_string())),
-        _ => Err(Error::Interpreter(format!("Bool has no method '{}'", method))),
+        _ => Err(Error::Interpreter(format!(
+            "Bool has no method '{}'",
+            method
+        ))),
     }
 }

@@ -118,7 +118,7 @@ $HTTP("/v1/api/").link("routers.api");
 
 - `$GET` / `$POST` / `$PUT` / `$DELETE` / `$PATCH` - HTTP 方法
 - `$HTTP { }` / `$HTTP(path) { }` - HTTP 块语法（支持路径前缀）
-- `$HTTP(prefix).link(module)` - 模块挂载
+- `$HTTP(prefix).link(module)` - 路由模块挂载
 - `$HDR("Header")` - 获取请求头
 - `$HTML(...)` / `$JSON(...)` - 响应构造器
 - `$HTML().link()` - 链接外部 HTML/CSS/JS/XML 文件
@@ -126,7 +126,12 @@ $HTTP("/v1/api/").link("routers.api");
 - `-> HTML` / `-> JSON` / `-> String` - 返回类型
 - `$>>` - 日志输出
 - `$main()` - 服务入口点
-- `$mod` - 模块导入
+- `$mod` - 语言模块导入
+
+说明：
+
+- `$mod foo.bar;` 用于导入普通语言模块，导入后通过文件名命名空间访问，例如 `bar.answer()`
+- `$HTTP(...).link("routers.api")` 只负责挂载 HTTP 路由，不导入普通函数
 
 ## 快速开始
 

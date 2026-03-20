@@ -1,50 +1,32 @@
 # 开发者贡献指南
 
-本文档面向希望为 Dolang 项目贡献代码的开发者。
+本文档面向希望参与 Dolang 核心实现、测试和文档维护的开发者。
 
-## 项目结构
+## 当前仓库结构
 
-Dolang 核心实现采用模块化设计，代码结构如下：
-
-```
-src/
-├── main.rs              # 程序入口
-├── cli.rs               # CLI 参数处理
-├── repl.rs              # REPL 交互逻辑
-├── token.rs             # 词法单元定义
-├── lexer.rs             # 词法分析器
-├── parser/              # 语法解析器模块
-│   ├── mod.rs           # 统一导出
-│   ├── expr.rs          # 表达式解析
-│   ├── stmt.rs          # 语句解析
-│   └── literal.rs       # 字面量解析
-├── ast.rs               # 抽象语法树
-├── interpreter/          # 解释执行模块
-│   ├── mod.rs           # 统一导出
-│   ├── env.rs           # 环境类型管理
-│   ├── eval.rs          # 表达式求值
-│   └── exec.rs          # 语句执行
-├── error.rs             # 错误类型定义
-└── syntax.rs            # 语法验证
+```text
+.
+├── crates/
+│   ├── dolang-frontend/     # token / lexer / parser / ast / diagnostics
+│   ├── dolang-runtime/      # runtime / interpreter / module system
+│   ├── dolang-cli/          # cli / repl / serve / test
+│   └── dolang-lsp/          # 基于 frontend 的 LSP crate
+├── stdlib/                  # 标准库预留目录与贡献骨架
+├── examples/                # 示例项目与脚本
+├── src/                     # 根 crate 兼容层（对外保留 dolang API）
+├── docs/                    # 文档
+├── tests/                   # 集成测试与 fixtures
+└── refactor-plan.md         # 当前标准化重构路线图
 ```
 
-## 开发环境搭建
+## 环境要求
 
-### 环境要求
+- Rust stable
+- Cargo
 
-- Rust 1.70+
-- Cargo（Rust 包管理器）
+## 常用命令
 
-### 克隆项目
-
-```bash
-git clone https://github.com/your-repo/daolang.git
-cd daolang
-```
-
-## 编译运行
-
-### 编译项目
+### 编译
 
 ```bash
 cargo build
@@ -56,108 +38,116 @@ cargo build
 cargo run
 ```
 
-### 直接运行二进制
+### 运行脚本
 
 ```bash
-./target/debug/daolang
+cargo run -- run path/to/file.dol
 ```
 
-### 调试模式运行
+### 启动服务
 
 ```bash
-cargo run -- your_script.dol
+cargo run -- serve
+cargo run -- serve path/to/project
+cargo run -- serve --routertab
 ```
 
-## 测试
-
-### 运行所有测试
+### 运行测试入口
 
 ```bash
-cargo test
+cargo run -- test
+cargo run -- test main.dol
 ```
 
-### 运行特定测试
+### 开发基线检查
 
 ```bash
-cargo test test_name
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features
+cargo test --workspace
 ```
 
-### 检查代码格式
+### 运行 benchmark 基线
 
 ```bash
-cargo fmt
+cargo bench --bench phase12_baseline -- --noplot
 ```
 
-### 代码检查
+## 测试约定
 
-```bash
-cargo clippy
-```
+- 集成测试放在 `tests/`
+- 可执行输入样例放在 `tests/fixtures/`
+- 脚本级测试辅助函数放在 `tests/support/`
+- 语义样例放在 `tests/spec/valid/` 与 `tests/spec/invalid/`
+- 多文件或模式级测试优先放在 `tests/integration/`
+- 修改语言行为时，优先补 fixture 和集成测试
+- 修 bug 时必须补对应回归测试
+- 修复 bug 时，新增的回归测试应尽量沉淀为最小 `.dol` fixture
+- 修改语言行为、CLI 或 `std.*` API 时，要同步检查 `docs/spec/*` 和 `docs/CHANGELOG.md`
+- 修改文件、ENV、HTTP、模块加载等副作用能力时，要同步更新 `docs/spec/security-model.md`
+- 新增宿主能力时，必须先进入 runtime intrinsic 层，再决定是否暴露为 `std.*`
 
-## 代码风格
+## 当前模块职责
 
-### 命名规范
+### `dolang-frontend`
 
-- 变量和函数：使用小写下划线命名法（snake_case）
-- 常量：使用大写下划线命名法（SCREAMING_SNAKE_CASE）
-- 文件名：使用小写下划线命名法
+负责词法、语法、AST、诊断等前端能力。
 
-### 提交规范
+### `dolang-runtime`
 
-提交信息应清晰描述所做的更改：
+负责值系统、求值、执行、项目系统和模块解析。
+同时负责 runtime intrinsic 层，用于统一承接文件系统、环境变量、配置等宿主能力。
 
-```
-feat: add for-in iteration syntax
-fix: resolve variable shadowing issue
-docs: update README with installation instructions
-```
+### `dolang-cli`
 
-### 代码审查
+负责命令行入口、REPL、serve/test 模式。
 
-- 确保所有测试通过
-- 遵循现有代码风格
-- 添加必要的注释说明复杂逻辑
+### `dolang-lsp`
 
-## 模块说明
+负责最小语言服务能力，并直接依赖 frontend。
 
-### 词法分析器 (lexer)
+当前最小交付：
 
-负责将源代码字符串转换为 token 序列。
+- 能接收 `initialize`
+- 能处理 `didOpen` / `didChange`
+- 能返回 syntax diagnostics
 
-### 语法解析器 (parser)
+## 贡献建议
 
-负责将 token 序列转换为抽象语法树（AST）。
+### 改语法前先确认三件事
 
-### 解释器 (interpreter)
+1. 是否已有文档对应位置
+2. 是否已有测试覆盖当前行为
+3. 是否会影响现有 CLI、模块、HTTP 或类型语义
 
-负责执行 AST，得到运行结果。
+### 提交代码时建议保持单一主题
 
-### 错误处理 (error)
+例如：
 
-统一定义和处理各类错误。
+- 一个 PR 只做 parser 重构
+- 一个 PR 只补测试
+- 一个 PR 只修某个运行时错误
 
-## 常见任务
+### 修改后至少确认
 
-### 添加新的数据类型
+- 能编译
+- 测试通过
+- 文档同步
+- 如果有兼容性影响，已附 RFC 或兼容说明
 
-1. 在 `lexer.rs` 中添加新的字面量识别
-2. 在 `parser/literal.rs` 中添加解析逻辑
-3. 在 `ast.rs` 中定义新的 AST 节点
-4. 在 `interpreter/eval.rs` 中添加求值逻辑
-5. 在 `docs/reference/types.md` 中添加文档
+## 当前阶段的重点
 
-### 添加新的运算符
+仓库正在按 `refactor-plan.md` 推进标准化。当前优先级最高的是：
 
-1. 在 `lexer.rs` 中添加 token 定义
-2. 在 `parser/expr.rs` 中添加解析
-3. 在 `interpreter/eval.rs` 中添加求值逻辑
-4. 在 `docs/reference/operators.md` 中添加文档
+- 建立工程基线
+- 收敛运行时上下文
+- 统一错误系统
+- 建立测试矩阵
 
-### 添加新的内置方法
+在这些基础稳定之前，不建议把大规模新语法和大规模新标准库功能混在同一个改动里。
 
-1. 在 `interpreter/eval.rs` 中实现方法
-2. 在 `docs/reference/types.md` 中添加文档
+如果要新增文件、ENV、配置、时间、随机数、网络等宿主能力，推荐顺序是：
 
----
-
-感谢你对 Dolang 项目的贡献！
+1. 先设计 intrinsic
+2. 先补 runtime 测试
+3. 再决定是否需要 `std.*` 封装

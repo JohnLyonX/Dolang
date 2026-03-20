@@ -1,0 +1,18 @@
+pub const LEX_UNEXPECTED_CHAR: &str = "DOL-L001";
+pub const LEX_UNTERMINATED_COMMENT: &str = "DOL-L002";
+pub const LEX_UNTERMINATED_STRING: &str = "DOL-L003";
+pub const LEX_INVALID_CHAR: &str = "DOL-L004";
+
+pub const PARSE_GENERIC: &str = "DOL-P001";
+pub const PARSE_EXPECTED_TOKEN: &str = "DOL-P002";
+
+pub const RUNTIME_GENERIC: &str = "DOL-R001";
+pub const RUNTIME_DIVISION_BY_ZERO: &str = "DOL-R002";
+pub const RUNTIME_MODULO_BY_ZERO: &str = "DOL-R003";
+pub const RUNTIME_UNDEFINED_VARIABLE: &str = "DOL-R004";
+pub const RUNTIME_MODULE_LOAD: &str = "DOL-R005";
+pub const RUNTIME_TYPE_MISMATCH: &str = "DOL-R006";
+pub const RUNTIME_INVALID_EXPRESSION: &str = "DOL-R007";
+pub const RUNTIME_INVALID_ASSIGNMENT: &str = "DOL-R008";
+
+pub const PROJECT_LOAD: &str = "DOL-C001";

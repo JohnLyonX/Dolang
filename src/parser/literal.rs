@@ -20,8 +20,11 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
             // Check for variadic parameter: ...identifier
             if parser.tokens[parser.pos].typ == Type::Spread {
                 parser.pos += 1; // consume '...'
-                if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::Ident {
-                    return Err(parser.error_expected("expected variadic parameter name", "identifier"));
+                if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::Ident
+                {
+                    return Err(
+                        parser.error_expected("expected variadic parameter name", "identifier")
+                    );
                 }
                 variadic_param = Some(parser.tokens[parser.pos].literal.clone());
                 parser.pos += 1;
@@ -45,17 +48,18 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
     parser.pos += 1; // consume ')'
 
     // Parse optional return type: -> Type
-    let return_type = if parser.pos < parser.tokens.len() && parser.tokens[parser.pos].typ == Type::Arrow {
-        parser.pos += 1; // consume '->'
-        if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::Ident {
-            return Err(parser.error_expected("expected return type", "type identifier"));
-        }
-        let rt = parser.tokens[parser.pos].literal.clone();
-        parser.pos += 1;
-        Some(rt)
-    } else {
-        None
-    };
+    let return_type =
+        if parser.pos < parser.tokens.len() && parser.tokens[parser.pos].typ == Type::Arrow {
+            parser.pos += 1; // consume '->'
+            if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::Ident {
+                return Err(parser.error_expected("expected return type", "type identifier"));
+            }
+            let rt = parser.tokens[parser.pos].literal.clone();
+            parser.pos += 1;
+            Some(rt)
+        } else {
+            None
+        };
 
     // Parse body: { ... } - collect tokens inside the braces
     if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::LBrace {
@@ -88,7 +92,8 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
         current_stmt_tokens.push(token.clone());
         if token.typ == Type::Semicolon {
             // Parse the statement
-            let stmt_str: String = current_stmt_tokens.iter()
+            let stmt_str: String = current_stmt_tokens
+                .iter()
                 .map(|t| t.literal.clone())
                 .collect::<Vec<_>>()
                 .join(" ");
@@ -108,7 +113,8 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
 
     // Handle any remaining tokens (without semicolon)
     if !current_stmt_tokens.is_empty() {
-        let stmt_str: String = current_stmt_tokens.iter()
+        let stmt_str: String = current_stmt_tokens
+            .iter()
             .map(|t| t.literal.clone())
             .collect::<Vec<_>>()
             .join(" ");
@@ -122,7 +128,9 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
                     Ok(stmts) => body_stmts.extend(stmts),
                     Err(_) => {
                         // Try as expression
-                        if let Ok(expr) = crate::parser::expr::parse_expr_tokens(&current_stmt_tokens) {
+                        if let Ok(expr) =
+                            crate::parser::expr::parse_expr_tokens(&current_stmt_tokens)
+                        {
                             body_stmts.push(Stmt::ExprStmt(expr));
                         }
                     }

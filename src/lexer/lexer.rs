@@ -1,4 +1,6 @@
 // Lexer for Dolang - converts source text into tokens.
+use crate::diagnostics::Diagnostic;
+use crate::diagnostics::codes;
 use crate::token::{Token, Type};
 
 pub struct Lexer {
@@ -14,7 +16,7 @@ impl Lexer {
         }
     }
 
-    pub fn lex_all(&mut self) -> Result<Vec<Token>, String> {
+    pub fn lex_all(&mut self) -> Result<Vec<Token>, Diagnostic> {
         let mut toks = Vec::new();
 
         loop {
@@ -28,7 +30,7 @@ impl Lexer {
         Ok(toks)
     }
 
-    fn next_token(&mut self) -> Result<Token, String> {
+    fn next_token(&mut self) -> Result<Token, Diagnostic> {
         self.skip_whitespace();
 
         if self.pos >= self.input.len() {
@@ -38,6 +40,11 @@ impl Lexer {
         let ch = self.peek();
         let start = self.pos;
 
+        if self.match_seq("_$fn") {
+            self.advance_n(4);
+            return Ok(Token::new(Type::PrivateFn, "_$fn", start));
+        }
+
         match ch {
             ';' => {
                 self.advance();
@@ -46,7 +53,7 @@ impl Lexer {
             '+' => {
                 self.advance();
                 // Check for += (compound assignment)
-                if self.peek() == '=' {
+                if self.pos < self.input.len() && self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::PlusAssign, "+=", start));
                 }
@@ -69,7 +76,7 @@ impl Lexer {
             '*' => {
                 self.advance();
                 // Check for *= (compound assignment)
-                if self.peek() == '=' {
+                if self.pos < self.input.len() && self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::MulAssign, "*=", start));
                 }
@@ -78,19 +85,19 @@ impl Lexer {
             '/' => {
                 self.advance();
                 // Check for single-line comment //
-                if self.peek() == '/' {
+                if self.pos < self.input.len() && self.peek() == '/' {
                     self.advance();
                     self.skip_single_line_comment();
                     return self.next_token();
                 }
                 // Check for multi-line comment /*
-                if self.peek() == '*' {
+                if self.pos < self.input.len() && self.peek() == '*' {
                     self.advance();
                     self.skip_multi_line_comment()?;
                     return self.next_token();
                 }
                 // Check for /= (compound assignment)
-                if self.peek() == '=' {
+                if self.pos < self.input.len() && self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::DivAssign, "/=", start));
                 }
@@ -99,7 +106,7 @@ impl Lexer {
             '%' => {
                 self.advance();
                 // Check for %= (compound assignment)
-                if self.peek() == '=' {
+                if self.pos < self.input.len() && self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::ModAssign, "%=", start));
                 }
@@ -107,7 +114,7 @@ impl Lexer {
             }
             '!' => {
                 self.advance();
-                if self.peek() == '=' {
+                if self.pos < self.input.len() && self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::Ne, "!=", start));
                 }
@@ -116,7 +123,7 @@ impl Lexer {
             '<' => {
                 // Check for <=
                 self.advance();
-                if self.peek() == '=' {
+                if self.pos < self.input.len() && self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::Lte, "<=", start));
                 }
@@ -124,7 +131,7 @@ impl Lexer {
             }
             '>' => {
                 self.advance();
-                if self.peek() == '=' {
+                if self.pos < self.input.len() && self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::Gte, ">=", start));
                 }
@@ -132,7 +139,7 @@ impl Lexer {
             }
             '=' => {
                 self.advance();
-                if self.peek() == '=' {
+                if self.pos < self.input.len() && self.peek() == '=' {
                     self.advance();
                     return Ok(Token::new(Type::Eq, "==", start));
                 }
@@ -141,19 +148,19 @@ impl Lexer {
             }
             '&' => {
                 self.advance();
-                if self.peek() == '&' {
+                if self.pos < self.input.len() && self.peek() == '&' {
                     self.advance();
                     return Ok(Token::new(Type::And, "&&", start));
                 }
-                Err("unexpected '&'".to_string())
+                Err(self.error(codes::LEX_UNEXPECTED_CHAR, "unexpected '&'", start))
             }
             '|' => {
                 self.advance();
-                if self.peek() == '|' {
+                if self.pos < self.input.len() && self.peek() == '|' {
                     self.advance();
                     return Ok(Token::new(Type::Or, "||", start));
                 }
-                Err("unexpected '|'".to_string())
+                Err(self.error(codes::LEX_UNEXPECTED_CHAR, "unexpected '|'", start))
             }
             '{' => {
                 self.advance();
@@ -227,7 +234,7 @@ impl Lexer {
         }
     }
 
-    fn read_dollar(&mut self, start: usize) -> Result<Token, String> {
+    fn read_dollar(&mut self, start: usize) -> Result<Token, Diagnostic> {
         // Order matters: match longer sequences first to avoid prefix collisions
 
         if self.match_seq("$>>FILE") {
@@ -380,7 +387,7 @@ impl Lexer {
         Ok(Token::new(Type::VarDecl, "$", start))
     }
 
-    fn read_string(&mut self, start: usize) -> Result<Token, String> {
+    fn read_string(&mut self, start: usize) -> Result<Token, Diagnostic> {
         self.advance(); // consume opening "
         let mut result = String::new();
 
@@ -393,7 +400,11 @@ impl Lexer {
                 // Escape sequence
                 self.advance(); // consume '\'
                 if self.pos >= self.input.len() {
-                    return Err("unclosed string".to_string());
+                    return Err(self.error(
+                        codes::LEX_UNTERMINATED_STRING,
+                        "unclosed string",
+                        start,
+                    ));
                 }
                 let next = self.peek();
                 let escaped = match next {
@@ -403,7 +414,13 @@ impl Lexer {
                     '0' => '\0',
                     '\\' => '\\',
                     '"' => '"',
-                    _ => return Err(format!("invalid escape sequence \"\\{}\"", next)),
+                    _ => {
+                        return Err(self.error(
+                            codes::LEX_INVALID_CHAR,
+                            format!("invalid escape sequence \"\\{}\"", next),
+                            self.pos,
+                        ));
+                    }
                 };
                 result.push(escaped);
                 self.advance(); // consume escaped char
@@ -413,14 +430,14 @@ impl Lexer {
             }
         }
 
-        Err("unclosed string".to_string())
+        Err(self.error(codes::LEX_UNTERMINATED_STRING, "unclosed string", start))
     }
 
     /// Read an f-string: f"..."
     /// Format: f"Hello {name}, you have {count} items"
     /// - Text outside {} is literal
     /// - Inside {} can be: variable, expression, method call
-    fn read_fstring(&mut self, start: usize) -> Result<Token, String> {
+    fn read_fstring(&mut self, start: usize) -> Result<Token, Diagnostic> {
         // Check if we need to consume 'f' or if we're already at '"'
         if self.pos < self.input.len() && self.input[self.pos] == 'f' {
             // Consume the 'f' character
@@ -442,7 +459,11 @@ impl Lexer {
                 }
                 '}' => {
                     if brace_depth == 0 {
-                        return Err("f-string syntax error: unexpected \"}\"".to_string());
+                        return Err(self.error(
+                            codes::LEX_INVALID_CHAR,
+                            "f-string syntax error: unexpected \"}\"",
+                            self.pos,
+                        ));
                     }
                     brace_depth -= 1;
                     literal.push('}');
@@ -450,7 +471,11 @@ impl Lexer {
                 }
                 '"' => {
                     if brace_depth > 0 {
-                        return Err("f-string syntax error: unclosed \"{\"".to_string());
+                        return Err(self.error(
+                            codes::LEX_INVALID_CHAR,
+                            "f-string syntax error: unclosed \"{\"",
+                            self.pos,
+                        ));
                     }
                     self.advance(); // consume closing "
                     return Ok(Token::new(Type::FString, &literal, start));
@@ -459,7 +484,11 @@ impl Lexer {
                     // Escape sequence
                     self.advance(); // consume '\'
                     if self.pos >= self.input.len() {
-                        return Err("unclosed f-string".to_string());
+                        return Err(self.error(
+                            codes::LEX_UNTERMINATED_STRING,
+                            "unclosed f-string",
+                            start,
+                        ));
                     }
                     let next = self.peek();
                     let escaped = match next {
@@ -472,9 +501,10 @@ impl Lexer {
                         '{' => '{',
                         '}' => '}',
                         _ => {
-                            return Err(format!(
-                                "invalid escape sequence \"\\{}\" in f-string",
-                                next
+                            return Err(self.error(
+                                codes::LEX_INVALID_CHAR,
+                                format!("invalid escape sequence \"\\{}\" in f-string", next),
+                                self.pos,
                             ));
                         }
                     };
@@ -488,30 +518,34 @@ impl Lexer {
             }
         }
 
-        Err("unclosed f-string".to_string())
+        Err(self.error(codes::LEX_UNTERMINATED_STRING, "unclosed f-string", start))
     }
 
-    fn read_char(&mut self, start: usize) -> Result<Token, String> {
+    fn read_char(&mut self, start: usize) -> Result<Token, Diagnostic> {
         self.advance(); // consume opening '
         if self.pos >= self.input.len() {
-            return Err("unclosed char".to_string());
+            return Err(self.error(codes::LEX_INVALID_CHAR, "unclosed char", start));
         }
         let ch = self.peek();
 
         // Check for escape sequences - not supported in char
         if ch == '\\' {
-            return Err("Char type does not support escape sequences".to_string());
+            return Err(self.error(
+                codes::LEX_INVALID_CHAR,
+                "Char type does not support escape sequences",
+                self.pos,
+            ));
         }
 
         self.advance(); // consume the character
         if self.pos >= self.input.len() || self.peek() != '\'' {
-            return Err("unclosed char".to_string());
+            return Err(self.error(codes::LEX_INVALID_CHAR, "unclosed char", start));
         }
         self.advance(); // consume closing '
         Ok(Token::new(Type::Char, &ch.to_string(), start))
     }
 
-    fn read_number(&mut self, start: usize) -> Result<Token, String> {
+    fn read_number(&mut self, start: usize) -> Result<Token, Diagnostic> {
         // Check for negative number
         let mut has_sign = false;
         if self.peek() == '-' {
@@ -551,18 +585,18 @@ impl Lexer {
 
         let literal: String = self.input[start..float_end_pos].iter().collect();
         if literal.is_empty() || (has_sign && literal == "-") {
-            return Err("invalid number literal".to_string());
+            return Err(self.error(codes::LEX_INVALID_CHAR, "invalid number literal", start));
         }
 
         // Validate the number
         if is_float {
             literal
                 .parse::<f64>()
-                .map_err(|_| "invalid float literal".to_string())?;
+                .map_err(|_| self.error(codes::LEX_INVALID_CHAR, "invalid float literal", start))?;
         } else {
-            literal
-                .parse::<i64>()
-                .map_err(|_| "invalid integer literal".to_string())?;
+            literal.parse::<i64>().map_err(|_| {
+                self.error(codes::LEX_INVALID_CHAR, "invalid integer literal", start)
+            })?;
         }
 
         Ok(Token::new(Type::Number, &literal, start))
@@ -610,7 +644,7 @@ impl Lexer {
     }
 
     /// Skip multi-line comment starting with /* and ending with */
-    fn skip_multi_line_comment(&mut self) -> Result<(), String> {
+    fn skip_multi_line_comment(&mut self) -> Result<(), Diagnostic> {
         while self.pos < self.input.len() {
             if self.peek() == '*'
                 && self.pos + 1 < self.input.len()
@@ -621,7 +655,33 @@ impl Lexer {
             }
             self.advance();
         }
-        Err("unterminated multi-line comment".to_string())
+        Err(self.error(
+            codes::LEX_UNTERMINATED_COMMENT,
+            "unterminated multi-line comment",
+            self.pos.saturating_sub(1),
+        ))
+    }
+
+    fn error(&self, code: &'static str, message: impl Into<String>, pos: usize) -> Diagnostic {
+        let (line, column) = self.line_col(pos);
+        Diagnostic::error(code, message).with_location(line, column)
+    }
+
+    fn line_col(&self, pos: usize) -> (usize, usize) {
+        let mut line = 1;
+        let mut column = 1;
+        for (index, ch) in self.input.iter().enumerate() {
+            if index >= pos {
+                break;
+            }
+            if *ch == '\n' {
+                line += 1;
+                column = 1;
+            } else {
+                column += 1;
+            }
+        }
+        (line, column)
     }
 
     fn peek(&self) -> char {
@@ -680,4 +740,26 @@ fn is_delimiter(ch: char) -> bool {
             | '.'
             | ':'
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Lexer;
+    use crate::token::Type;
+
+    #[test]
+    fn lexes_comments_and_compound_assignment() {
+        let mut lexer = Lexer::new("// comment\n$ value = 1;\nvalue += 2;");
+        let tokens = lexer.lex_all().expect("lexing should succeed");
+        let token_types: Vec<Type> = tokens.into_iter().map(|token| token.typ).collect();
+        assert!(token_types.contains(&Type::VarDecl));
+        assert!(token_types.contains(&Type::PlusAssign));
+    }
+
+    #[test]
+    fn lexes_private_function_keyword() {
+        let mut lexer = Lexer::new("_$fn helper() { }");
+        let tokens = lexer.lex_all().expect("lexing should succeed");
+        assert_eq!(tokens[0].typ, Type::PrivateFn);
+    }
 }

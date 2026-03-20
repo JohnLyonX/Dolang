@@ -2,6 +2,10 @@
 
 use std::fmt;
 
+use crate::ast::Span;
+use crate::diagnostics::codes;
+use crate::diagnostics::{Diagnostic, render_diagnostic};
+
 /// Runtime error types
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -14,7 +18,9 @@ pub enum RuntimeError {
     UndefinedVariable(String),
     UndefinedFunction(String),
     ConstReassign(String),
-    FunctionNoReturnType { name: String },
+    FunctionNoReturnType {
+        name: String,
+    },
     DivisionByZero,
     ModuloByZero,
     Custom(String),
@@ -23,9 +29,16 @@ pub enum RuntimeError {
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RuntimeError::TypeMismatch { name, expected, actual } => {
-
-                write!(f, "type mismatch: cannot assign {} to variable '{}' of type {}", actual, name, expected)
+            RuntimeError::TypeMismatch {
+                name,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "type mismatch: cannot assign {} to variable '{}' of type {}",
+                    actual, name, expected
+                )
             }
             RuntimeError::UndefinedVariable(name) => {
                 write!(f, "variable '{}' not found", name)
@@ -37,7 +50,11 @@ impl fmt::Display for RuntimeError {
                 write!(f, "cannot reassign constant '{}'", name)
             }
             RuntimeError::FunctionNoReturnType { name } => {
-                write!(f, "function '{}' has no return type declared but returns a value", name)
+                write!(
+                    f,
+                    "function '{}' has no return type declared but returns a value",
+                    name
+                )
             }
             RuntimeError::DivisionByZero => {
                 write!(f, "division by zero")
@@ -55,10 +72,12 @@ impl fmt::Display for RuntimeError {
 impl std::error::Error for RuntimeError {}
 
 /// Unified error type for Dolang
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error {
     /// Parse error
     Parse(ParseError),
+    /// Structured diagnostic
+    Diagnostic(Diagnostic),
     /// Runtime error
     Runtime(RuntimeError),
     /// Invalid expression
@@ -77,34 +96,7 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::Parse(e) => write!(f, "{}", e),
-            Error::Runtime(e) => write!(f, "runtime error: {}", e),
-            Error::InvalidExpression(detail) => {
-                write!(f, "invalid expression")?;
-                if let Some(d) = detail {
-                    write!(f, ": {}", d)?;
-                }
-                Ok(())
-            }
-            Error::InvalidAssignment(detail) => {
-                write!(f, "invalid assignment")?;
-                if let Some(d) = detail {
-                    write!(f, ": {}", d)?;
-                }
-                Ok(())
-            }
-            Error::InvalidStatement(detail) => {
-                write!(f, "invalid statement")?;
-                if let Some(d) = detail {
-                    write!(f, ": {}", d)?;
-                }
-                Ok(())
-            }
-            Error::TypeMismatch(msg) => write!(f, "{}", msg),
-            Error::Lexer(s) => write!(f, "lexer error: {}", s),
-            Error::Interpreter(s) => write!(f, "runtime error: {}", s),
-        }
+        write!(f, "{}", render_diagnostic(&self.diagnostic()))
     }
 }
 
@@ -116,14 +108,71 @@ impl From<ParseError> for Error {
     }
 }
 
+impl From<Diagnostic> for Error {
+    fn from(err: Diagnostic) -> Self {
+        Error::Diagnostic(err)
+    }
+}
+
 impl From<RuntimeError> for Error {
     fn from(err: RuntimeError) -> Self {
         Error::Runtime(err)
     }
 }
 
+impl Error {
+    pub fn diagnostic(&self) -> Diagnostic {
+        match self {
+            Error::Parse(err) => err.diagnostic(),
+            Error::Diagnostic(err) => err.clone(),
+            Error::Runtime(err) => Diagnostic::error(codes::RUNTIME_GENERIC, err.to_string()),
+            Error::InvalidExpression(detail) => {
+                let mut diagnostic =
+                    Diagnostic::error(codes::RUNTIME_INVALID_EXPRESSION, "invalid expression");
+                if let Some(detail) = detail {
+                    diagnostic = diagnostic.with_note(detail.clone());
+                }
+                diagnostic
+            }
+            Error::InvalidAssignment(detail) => {
+                let mut diagnostic =
+                    Diagnostic::error(codes::RUNTIME_INVALID_ASSIGNMENT, "invalid assignment");
+                if let Some(detail) = detail {
+                    diagnostic = diagnostic.with_note(detail.clone());
+                }
+                diagnostic
+            }
+            Error::InvalidStatement(detail) => {
+                let mut diagnostic =
+                    Diagnostic::error(codes::PARSE_EXPECTED_TOKEN, "invalid statement");
+                if let Some(detail) = detail {
+                    diagnostic = diagnostic.with_note(detail.clone());
+                }
+                diagnostic
+            }
+            Error::TypeMismatch(msg) => {
+                Diagnostic::error(codes::RUNTIME_TYPE_MISMATCH, msg.clone())
+            }
+            Error::Lexer(msg) => Diagnostic::error(codes::LEX_UNEXPECTED_CHAR, msg.clone()),
+            Error::Interpreter(msg) => Diagnostic::error(codes::RUNTIME_GENERIC, msg.clone()),
+        }
+    }
+
+    pub fn with_file(self, file: impl Into<String>) -> Self {
+        Error::Diagnostic(self.diagnostic().with_file(file))
+    }
+
+    pub fn with_span(self, span: Span) -> Self {
+        Error::Diagnostic(self.diagnostic().with_span(span))
+    }
+
+    pub fn with_location(self, line: usize, column: usize) -> Self {
+        Error::Diagnostic(self.diagnostic().with_location(line, column))
+    }
+}
+
 /// Parse error with context information
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ParseError {
     pub message: String,
     pub line: usize,
@@ -166,15 +215,22 @@ impl ParseError {
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Parse error at line {}:{}", self.line, self.column)?;
-        if let Some(found) = &self.found {
-            write!(f, "\n  found: {}", found)?;
-        }
-        if let Some(expected) = &self.expected {
-            write!(f, "\n  expected: {}", expected)?;
-        }
-        write!(f, "\n  {}", self.message)
+        write!(f, "{}", render_diagnostic(&self.diagnostic()))
     }
 }
 
 impl std::error::Error for ParseError {}
+
+impl ParseError {
+    pub fn diagnostic(&self) -> Diagnostic {
+        let mut diagnostic = Diagnostic::error(codes::PARSE_GENERIC, self.message.clone())
+            .with_location(self.line, self.column);
+        if let Some(found) = &self.found {
+            diagnostic = diagnostic.with_note(format!("found: {found}"));
+        }
+        if let Some(expected) = &self.expected {
+            diagnostic = diagnostic.with_note(format!("expected: {expected}"));
+        }
+        diagnostic
+    }
+}

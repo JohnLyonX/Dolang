@@ -305,6 +305,7 @@ pub struct ExitStmt {
 pub struct FnDeclStmt {
     pub span: Span,
     pub name: String,
+    pub is_public: bool,
     pub params: Vec<String>,
     pub variadic_param: Option<String>,
     pub return_type: Option<String>,
@@ -346,6 +347,7 @@ pub struct StaticStmt {
 pub struct ModDeclStmt {
     pub span: Span,
     pub path: String, // e.g., "dao.user"
+    pub wildcard: bool,
 }
 
 /// Main entry point: $main() { body }

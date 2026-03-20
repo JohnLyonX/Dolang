@@ -255,8 +255,6 @@ $GET("/api/test") test_handler() -> JSON {
 
 **main.dol:**
 ```dao
-$mod routers.api;
-
 $main() {
     $HTTP("/v1/api/").link("routers.api");
 }
@@ -277,6 +275,12 @@ $GET("/users/:id") get_user(id) -> JSON {
 - `GET /v1/api/users` → list_users
 - `GET /v1/api/users/:id` → get_user
 
+说明：
+
+- 这里不需要额外写 `$mod routers.api;`
+- `$HTTP(...).link("routers.api")` 只扫描并挂载目标模块中的 HTTP 路由
+- 目标文件里的普通 `$fn` 不会被导入当前语言作用域
+
 ### 路径斜杠处理
 
 系统会自动处理路径斜杠，去除重复的斜杠：
@@ -296,11 +300,13 @@ $GET("/users")                          // 路由开头有斜杠
 ```dao
 $mod dao.user;
 $mod services.auth;
+$mod services.*;
 ```
 
 这会加载对应的 `.dol` 文件：
 - `dao.user` → `dao/user.dol`
 - `services.auth` → `services/auth.dol`
+- `services.*` → 导入 `services/` 目录下的直接子模块
 
 ---
 

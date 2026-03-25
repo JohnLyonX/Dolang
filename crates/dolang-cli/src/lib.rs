@@ -1,10 +1,7 @@
-#[path = "../../../src/cli.rs"]
+pub mod backends;
 pub mod cli;
-#[path = "../../../src/repl.rs"]
 pub mod repl;
-#[path = "../../../src/server.rs"]
 pub mod server;
-#[path = "../../../src/test.rs"]
 pub mod test;
 
 pub fn main_entry() {

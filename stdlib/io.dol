@@ -1,3 +1,0 @@
-$fn type() -> String {
-    $# "std.io";
-}

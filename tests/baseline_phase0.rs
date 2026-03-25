@@ -5,8 +5,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use dolang::interpreter::DolangValue;
 use dolang::parse;
 use dolang::runtime::{
-    IntrinsicId, IntrinsicRegistry, ProgramState, RuntimeContext, RuntimeMode, RuntimePolicy,
-    execute_program_with_writer, execute_source_with_writer, load_context_and_program,
+    IntrinsicRegistry, ProgramState, RuntimeContext, RuntimeMode, RuntimePolicy,
+    execute_program_with_writer, execute_source_with_writer, intrinsics::ids,
+    load_context_and_program,
 };
 
 fn run_program(source: &str) -> (ProgramState, RuntimeContext, String) {
@@ -165,7 +166,7 @@ fn runtime_context_exposes_intrinsic_registry_for_file_io() {
 
     context
         .call_intrinsic(
-            IntrinsicId::FsWriteText,
+            ids::FS_WRITE_TEXT,
             &[
                 DolangValue::Str(path.display().to_string()),
                 DolangValue::Str("hello".to_string()),
@@ -175,7 +176,7 @@ fn runtime_context_exposes_intrinsic_registry_for_file_io() {
 
     let content = context
         .call_intrinsic(
-            IntrinsicId::FsReadText,
+            ids::FS_READ_TEXT,
             &[DolangValue::Str(path.display().to_string())],
         )
         .expect("read intrinsic should succeed");
@@ -188,11 +189,11 @@ fn runtime_context_exposes_intrinsic_registry_for_file_io() {
 fn runtime_policy_can_block_intrinsic_calls() {
     let mut context = RuntimeContext::new(RuntimeMode::Test, PathBuf::from("."));
     let mut policy = RuntimePolicy::allow_all();
-    policy.deny(IntrinsicId::EnvGet);
+    policy.deny(ids::ENV_GET);
     context.set_runtime_policy(policy);
 
     let error = context
-        .call_intrinsic(IntrinsicId::EnvGet, &[DolangValue::Str("HOME".to_string())])
+        .call_intrinsic(ids::ENV_GET, &[DolangValue::Str("HOME".to_string())])
         .expect_err("denied intrinsic should fail");
     assert!(error.to_string().contains("denied by runtime policy"));
 }
@@ -201,14 +202,11 @@ fn runtime_policy_can_block_intrinsic_calls() {
 fn runtime_context_can_surface_unregistered_intrinsic_error() {
     let mut context = RuntimeContext::new(RuntimeMode::Test, PathBuf::from("."));
     let mut registry = IntrinsicRegistry::new();
-    registry.unregister(IntrinsicId::ConfigGet);
+    registry.unregister(ids::CONFIG_GET);
     context.set_intrinsic_registry(registry);
 
     let error = context
-        .call_intrinsic(
-            IntrinsicId::ConfigGet,
-            &[DolangValue::Str("APP_ENV".to_string())],
-        )
+        .call_intrinsic(ids::CONFIG_GET, &[DolangValue::Str("APP_ENV".to_string())])
         .expect_err("missing intrinsic should fail");
     assert!(error.to_string().contains("is not registered"));
 }

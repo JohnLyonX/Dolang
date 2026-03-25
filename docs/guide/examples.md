@@ -2,246 +2,319 @@
 
 本章节提供真实使用场景的示例，帮助你快速上手 Dolang。
 
-## 1. 快速计算
+---
 
-REPL 可以直接作为计算器使用：
+## 1. 基础计算
 
-```dao
->> $>> 1 + 2 * 3;
-7
-
->> $>> (1 + 2) * 3;
-9
-
->> $>> 10 / 3;
-3.3333333333333335
-
->> $>> 10 % 3;
-1
-```
-
-## 2. 字符串处理
-
-```dao
->> $ name = "Dolang";
->> $>> "Hello, " + name + "!";
-Hello, Dolang!
-
->> $ s = "Hello, World";
->> $>> s.upper();
-HELLO, WORLD
-
->> $>> s.lower();
-hello, world
-
->> $>> s.contains("World");
-true
-
->> $>> "  hello  ".trim();
-hello
-
->> $>> "a,b,c".split(",");
-[a, b, c]
-```
-
-## 3. 条件表达式
-
-```dao
->> $ x = 10;
->> $if x > 5 {
->>     $>> "big";
->> } $else {
->>     $>> "small";
->> }
-big
-```
-
-### 多分支条件
-
-```dao
->> $ age = 18;
->> $if age >= 18 {
->>     $>> "adult";
->> } $elif age >= 12 {
->>     $>> "teenager";
->> } $else {
->>     $>> "child";
->> }
-```
-
-## 4. 循环计算
-
-### while 循环
-
-```dao
->> $ sum = 0;
->> $while sum < 100 {
->>     sum = sum + 1;
->> }
->> $>> sum;
-100
-```
-
-### for 循环
-
-```dao
->> $ sum = 0;
->> $for i = 0; i < 100; i = i + 1 {
->>     sum = sum + i;
->> }
->> $>> sum;
-4950
-```
-
-### 无限循环
-
-```dao
->> $ i = 0;
->> $loop {
->>     $>> i;
->>     i = i + 1;
->>     $if i >= 5 {
->>         $break;
->>     }
->> }
-0
-1
-2
-3
-4
-```
-
-## 5. 使用函数封装逻辑
-
-### 基本函数
-
-```dao
->> $fn double(x) {
->>     $# x * 2;
->> }
->> $>> double(5);
-10
-```
-
-### 递归函数
-
-```dao
->> $fn factorial(n) {
->>     $if n <= 1 {
->>         $# 1;
->>     } $else {
->>         $# n * factorial(n - 1);
->>     }
->> }
->> $>> factorial(5);
-120
-```
-
-### 斐波那契数列
-
-```dao
->> $fn fib(n) {
->>     $if n <= 1 {
->>         $# n;
->>     } $else {
->>         $# fib(n - 1) + fib(n - 2);
->>     }
->> }
->> $>> fib(10);
-55
-```
-
-## 6. 列表操作
-
-```dao
->> $ arr = [1, 2, 3];
->> $>> arr.len();
-3
-
->> $>> arr.push(4);
-[1, 2, 3, 4]
-
->> $>> arr.reverse();
-[4, 3, 2, 1]
-
->> $>> arr.pop();
-4
-```
-
-## 7. 字典操作
-
-```dao
->> $ user = {"name": "Tom", "age": 18};
->> $>> user["name"];
-Tom
-
->> $>> user.keys();
-[name, age]
-
->> $>> user.contains_key("name");
-true
-```
-
-## 8. for-in 遍历
-
-### 遍历列表
-
-```dao
->> $ arr = [1, 2, 3];
->> $for item in arr {
->>     $>> item;
->> }
-1
-2
-3
-```
-
-### 遍历字典
-
-```dao
->> $ user = {"name": "Tom", "age": 18};
->> $for key in user {
->>     $>> key;
->> }
-name
-age
-```
-
-### 遍历字符串
-
-```dao
->> $ s = "abc";
->> $for ch in s {
->>     $>> ch;
->> }
-a
-b
-c
-```
-
-## 9. 匿名函数
-
-```dao
->> $ add = $fn(a, b) { $# a + b; };
->> $>> add(1, 2);
-3
-```
-
-## 10. 链式调用
-
-Dolang 支持方法链式调用：
-
-```dao
->> $>> "a,b,c".split(",").len();     // 3
-
->> $>> [1, 2, 3].reverse().len();   // 3
-
->> $>> [1, 2, 3].push(4).len();    // 4
-
->> $ user = {"name": "Tom", "age": 18};
->> $>> user.keys().len();            // 2
+```dolang
+$>> 1 + 2 * 3;       // 7
+$>> (1 + 2) * 3;     // 9
+$>> 10 / 3;          // 3.3333...
+$>> 10 % 3;          // 1
 ```
 
 ---
 
-这些示例涵盖了 Dolang 的主要用法，你可以根据自己的需求组合使用。
+## 2. 字符串处理
+
+```dolang
+$ name = "Dolang";
+$>> "Hello, " + name + "!";    // Hello, Dolang!
+
+$>> "hello world".upper();     // HELLO WORLD
+$>> "  hello  ".trim();        // hello
+$>> "a,b,c".split(",");        // [a, b, c]
+$>> "hello".contains("ell");   // true
+$>> "hello".slice(1, 3);       // el
+```
+
+**f-string 插值**
+
+```dolang
+$ user = "Alice";
+$ score = 100;
+$>> f"Player {user} scored {score} points.";
+// Player Alice scored 100 points.
+```
+
+---
+
+## 3. 条件判断
+
+```dolang
+$ age = 20;
+$if age >= 18 {
+    $>> "adult";
+} $else {
+    $>> "minor";
+}
+```
+
+**多分支**
+
+```dolang
+$ score = 75;
+$if score >= 90 {
+    $>> "A";
+} $else $if score >= 80 {
+    $>> "B";
+} $else $if score >= 70 {
+    $>> "C";
+} $else {
+    $>> "F";
+}
+```
+
+---
+
+## 4. 循环
+
+**for-in 遍历**
+
+```dolang
+$for item in [1, 2, 3, 4, 5] {
+    $>> item;
+}
+
+$ fruits = ["apple", "banana", "cherry"];
+$for fruit in fruits {
+    $>> fruit;
+}
+```
+
+**while 循环**
+
+```dolang
+$ sum = 0;
+$ i = 1;
+$while i <= 100 {
+    sum += i;
+    i += 1;
+}
+$>> sum;    // 5050
+```
+
+**无限循环与 break**
+
+```dolang
+$ i = 0;
+$loop {
+    $>> i;
+    i += 1;
+    $if i >= 5 {
+        $break;
+    }
+}
+```
+
+**C 风格 for（传统写法）**
+
+```dolang
+$for i = 0; i < 5; i = i + 1 {
+    $>> i;
+}
+```
+
+---
+
+## 5. 函数
+
+```dolang
+$fn greet(name) -> String {
+    $# f"Hello, {name}!";
+}
+
+$>> greet("World");    // Hello, World!
+```
+
+**递归**
+
+```dolang
+$fn factorial(n) {
+    $if n <= 1 {
+        $# 1;
+    } $else {
+        $# n * factorial(n - 1);
+    }
+}
+
+$>> factorial(5);    // 120
+```
+
+**可变参数**
+
+```dolang
+$fn sum(...nums) {
+    $ total = 0;
+    $for n in nums {
+        total += n;
+    }
+    $# total;
+}
+
+$>> sum(1, 2, 3, 4, 5);    // 15
+```
+
+**私有函数**
+
+```dolang
+_$fn helper(x) {
+    $# x * 2;
+}
+
+$fn compute(n) {
+    $# helper(n) + 1;
+}
+```
+
+---
+
+## 6. 列表操作
+
+```dolang
+$ nums = [3, 1, 4, 1, 5, 9, 2, 6];
+
+$>> nums.len();           // 8
+$>> nums.contains(5);     // true
+$>> nums.index_of(4);     // 2
+$>> nums.slice(2, 5);     // [4, 1, 5]
+$>> nums.unique();        // [3, 1, 4, 5, 9, 2, 6]
+
+nums.sort();
+$>> nums;                 // [1, 1, 2, 3, 4, 5, 6, 9]
+
+nums.push(10);
+$>> nums.last();          // 10
+
+$>> nums.first();         // 1
+$>> nums.is_empty();      // false
+```
+
+---
+
+## 7. Map 操作
+
+```dolang
+$ user = {"name": "Tom", "age": 25};
+
+$>> user["name"];              // Tom
+$>> user.keys();               // [name, age]
+$>> user.contains_key("age");  // true
+$>> user.len();                // 2
+
+$for key in user {
+    $>> key;
+}
+```
+
+---
+
+## 8. 异常处理
+
+```dolang
+$try {
+    $ result = 10 / 0;
+    $>> result;
+} $catch err {
+    $>> f"Error: {err}";
+}
+```
+
+**主动抛出异常**
+
+```dolang
+$fn divide(a, b) {
+    $if b == 0 {
+        $throw "division by zero";
+    }
+    $# a / b;
+}
+
+$try {
+    $>> divide(10, 0);
+} $catch err {
+    $>> err;    // division by zero
+}
+```
+
+---
+
+## 9. 读写文件
+
+**读取文件**
+
+```dolang
+$ content = $<<FILE("data.txt");
+$>> content;
+
+// 按行读取
+$ lines = $<<FILE("data.txt", "lines");
+$for line in lines {
+    $>> line;
+}
+```
+
+**写入文件**
+
+```dolang
+$>>FILE("output.txt", "Hello, Dolang!");           // 覆盖写入
+$>>FILE("log.txt", "new entry\n", "A");            // 追加写入
+```
+
+---
+
+## 10. 读取用户输入
+
+```dolang
+$ name = $<<LINE("Enter your name: ");
+$>> f"Hello, {name}!";
+```
+
+---
+
+## 11. 使用标准库
+
+```dolang
+$mod std.math;
+
+$>> math.sqrt(16.0);        // 4.0
+$>> math.floor(3.7);        // 3
+$>> math.random_int(1, 6);  // 骰子：1~6
+```
+
+```dolang
+$mod std.fs;
+
+fs.mkdir_all("/tmp/dolang/test");
+fs.write_text("/tmp/dolang/test/hello.txt", "hi");
+$ content = fs.read_text("/tmp/dolang/test/hello.txt");
+$>> content;    // hi
+```
+
+```dolang
+$mod std.json;
+
+$ data = json.parse("{\"name\": \"Dolang\", \"version\": 2026}");
+$>> json.get(data, "name");      // Dolang
+$>> json.has(data, "version");   // true
+$>> json.pretty(data);
+```
+
+---
+
+## 12. 匿名函数
+
+```dolang
+$ double = $fn(x) { $# x * 2; };
+$>> double(5);    // 10
+```
+
+---
+
+## 13. 链式调用
+
+```dolang
+$>> "a,b,c".split(",").len();          // 3
+$>> [3, 1, 2].sort().first();          // 1
+$>> "  hello  ".trim().upper();        // HELLO
+```

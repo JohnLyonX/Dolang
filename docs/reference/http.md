@@ -11,6 +11,7 @@ Dolang 提供了完整的 HTTP 超函数支持，用于快速构建 Web API 服�
 - [响应返回](#响应返回)
 - [模块挂载](#模块挂载)
 - [测试模式](#测试模式)
+- [HTTP 错误处理](#http-错误处理)
 
 ---
 
@@ -236,6 +237,34 @@ $DELETE("/users/:id") delete_user(id) -> JSON {
 }
 ```
 
+### $RES - 指定 HTTP 状态码
+
+默认情况下 handler 返回 HTTP 200。需要返回其他状态码时，用 `$RES(status, body)`：
+
+**语法**：`$RES(状态码整数, JSON体)`
+
+```dolang
+// 404 Not Found
+$GET("/users/:id") get_user(id) -> JSON {
+    $if !user_exists(id) {
+        $# $RES(404, {"msg": "用户不存在"});
+    }
+    $# $RES(200, {"id": id});
+}
+
+// 201 Created
+$POST("/users") create_user() -> JSON {
+    $# $RES(201, {"msg": "创建成功", "data": body});
+}
+```
+
+两种响应方式的区别：
+
+| 写法 | HTTP 状态码 | 适用场景 |
+|------|------------|---------|
+| `$# {...}` | 始终 200 | 业务自定义 code，前端按 JSON 判断 |
+| `$# $RES(404, {...})` | 指定状态码 | 需要 HTTP 语义（REST API、网关鉴权） |
+
 ### $>> - 输出日志
 
 ```dao
@@ -410,6 +439,60 @@ $main() {
 | `dolang serve [path]` | 启动 HTTP 服务器 |
 | `dolang serve --routertab` | 启动并显示路由表 |
 | `dolang test [file]` | 运行测试 |
+
+---
+
+## HTTP 错误处理
+
+### $throw 在 handler 中的行为
+
+`$throw` 用于代码级错误传播（通常在工具函数 / 模块中）。在 HTTP handler 里：
+
+**未捕获 → HTTP 500 + 终端打印：**
+
+```dolang
+$GET("/boom") boom() -> JSON {
+    $throw "something went wrong";
+    // 终端: [ERROR] uncaught throw: something went wrong
+    // 客户端: HTTP 500 + {"error": "uncaught throw: something went wrong"}
+}
+```
+
+**用 `$try/$catch` 捕获，主动控制响应：**
+
+```dolang
+$fn check_token(token) {
+    $if token == "" { $throw "token 为空"; }
+}
+
+$GET("/api/data") api_data() -> JSON {
+    $try {
+        check_token($HDR("Authorization"));
+        $# $RES(200, {"data": "ok"});
+    } $catch err {
+        $# $RES(401, {"msg": err});
+    }
+}
+```
+
+### $>>ERR — 终端日志（不影响响应）
+
+```dolang
+$GET("/debug") debug() -> JSON {
+    $>>ERR("debug: handler called");   // 仅打印到开发终端
+    $# {"ok": true};                   // HTTP 响应不受影响
+}
+```
+
+### 行为速查
+
+| 写法 | 终端输出 | HTTP 响应 |
+|------|---------|-----------|
+| `$# $RES(404, {...})` | 无 | HTTP 404 + body |
+| `$# {...}` | 无 | HTTP 200 + body |
+| `$throw "err"` 未捕获 | `[ERROR] uncaught throw: err` | HTTP 500 |
+| `$throw "err"` + `$catch` | 无 | 取决于 catch 块的 `$#` |
+| `$>>ERR("log")` | 打印到终端 | 无影响 |
 
 ---
 

@@ -14,10 +14,12 @@
 
 - 建立 `docs/spec/` 正式语言规范目录
 - 增加 Phase 9 的版本、兼容性、弃用规则文档
+- 增加 `std.str`、`std.math`、`std.json` 原生模块，可通过 `$mod std.*;` 使用常见字符串、数学与 JSON 能力
 
 ### Changed
 
 - 规范化语言行为文档与 `tests/spec` 的映射关系
+- 将 stdlib native module 注册从 `intrinsics.rs` 拆分到 `src/runtime/stdlib/`，为后续标准库扩展提供结构化入口
 
 ### Deprecated
 
@@ -30,6 +32,15 @@
 ### Fixed
 
 - 对齐 spec 样例与当前 parser/runtime 真实行为
+- `$RES(status, body)` HTTP 状态码修复：之前 status 参数被忽略，响应始终为 HTTP 200；
+  现已正确返回指定状态码（如 404、201、500 等）
+
+### Changed（P0）
+
+- `$throw` 未捕获时终端行为：HTTP handler 中未被 `$try/$catch` 捕获的 `$throw`
+  现在会在终端打印 `[ERROR] uncaught throw: <value>`，便于开发调试；客户端仍收到 HTTP 500
+- HTTP 服务器内部架构：引入 `HttpBackend` trait，Axum 实现封装至 `AxumBackend`，
+  `server.rs` 降为纯协调层（对用户无感知，不影响任何 .dol 语法）
 
 ## Release Template
 

@@ -11,6 +11,7 @@ stdlib/
 ├── _template/
 ├── core/
 ├── io/
+├── math/
 ├── str/
 ├── json/
 └── http/

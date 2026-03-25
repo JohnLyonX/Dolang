@@ -28,14 +28,11 @@ pub mod token {
     pub use dolang_frontend::token::*;
 }
 
-#[path = "../../../src/config.rs"]
 pub mod config;
-#[path = "../../../src/interpreter/mod.rs"]
 pub mod interpreter;
-#[path = "../../../src/module/mod.rs"]
 pub mod module;
-#[path = "../../../src/runtime/mod.rs"]
 pub mod runtime;
+pub mod stdlib_native;
 
 pub use config::{ProjectConfig, ServerConfig};
 pub use interpreter::{DolangValue, FnEnv, exec};

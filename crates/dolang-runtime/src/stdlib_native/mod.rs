@@ -3,6 +3,7 @@ mod fs;
 mod json;
 mod math;
 mod str;
+mod time;
 
 use super::RuntimeContext;
 
@@ -12,4 +13,5 @@ pub fn register_stdlib_native_modules(context: &mut RuntimeContext) {
     str::register(context);
     math::register(context);
     json::register(context);
+    time::register(context);
 }

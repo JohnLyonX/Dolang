@@ -200,6 +200,9 @@ docs/guide/
   - `std.json`
   - `std.fs`
   - `std.env`
+  - `std.time`
+  - `std.uuid`
+  - `std.http`
   - `std.core.iter`
   - `std.core.check`
   - `std.str.check`
@@ -225,6 +228,7 @@ docs/guide/
 - `$HDR(...)`
 - `-> String`、`-> JSON`、`-> HTML`
 - `$JSON { ... }`、`$HTML(...)`、`$RES(status, body)`
+- `std.http` 的同步客户端调用
 
 #### 16. HTTP 组织方式
 

@@ -1,6 +1,7 @@
 # 15. HTTP 基础
 
 Dolang 当前内置了 HTTP 路由定义能力，可以直接和 `dolang serve` 配合使用。
+除此之外，也已经有 `std.http` 原生模块，可以在脚本或 handler 内主动发出同步 HTTP 请求。
 
 ## 定义路由
 
@@ -31,6 +32,64 @@ dolang serve .
 - `$PUT`
 - `$DEL`
 - `$PATCH`
+
+## `std.http` 客户端
+
+如果你不是在“接收请求”，而是要“调用别的服务”，用 `std.http`：
+
+```dol
+$mod std.http;
+
+$ res = http.get("https://example.com");
+$>> res["status"];
+$>> res["body"];
+```
+
+返回值统一是一个 `Map`：
+
+```text
+{
+  "status": Int,
+  "body": String,
+  "headers": Map
+}
+```
+
+也可以传请求头：
+
+```dol
+$mod std.http;
+
+$ res = http.get("https://example.com", {
+    "Authorization": "Bearer demo-token"
+});
+$>> res["status"];
+```
+
+POST / PUT 请求用于发送 JSON 风格的 `Map`：
+
+```dol
+$mod std.http;
+
+$ created = http.post("https://example.com/users", {
+    "name": "Alice",
+    "role": "admin"
+});
+$>> created["status"];
+```
+
+如果 URL 不合法、连接失败或超时，错误会作为普通运行时错误抛出，可以配合 `$try / $catch`：
+
+```dol
+$mod std.http;
+
+$try {
+    $ res = http.get("not-a-url");
+    $>> res["status"];
+} $catch err {
+    $>> "request failed";
+}
+```
 
 ## handler 长什么样
 

@@ -16,6 +16,9 @@ native 模块：
 - `std.str`
 - `std.math`
 - `std.json`
+- `std.time`
+- `std.uuid`
+- `std.http`
 
 纯 `.dol` 模块：
 
@@ -84,6 +87,21 @@ $>> env.get_or("APP_ENV", "dev");
 $>> fs.exists("README.md");
 ```
 
+### 时间、唯一 ID 与服务调用
+
+- `std.time`
+- `std.uuid`
+- `std.http`
+
+```dol
+$mod std.time;
+$mod std.uuid;
+$mod std.http;
+
+$>> time.format(0, "%Y-%m-%d");
+$>> uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
+```
+
 ### 基础工具
 
 - `std.core.iter`
@@ -107,6 +125,9 @@ $>> check.type_of(42);
 - 路径处理：`std.path`
 - 文件和目录：`std.fs`
 - 环境变量：`std.env`
+- 时间处理：`std.time`
+- 唯一 ID：`std.uuid`
+- HTTP 客户端：`std.http`
 - 通用工具：`std.core.iter`、`std.core.check`
 
 例如 `std.path` 里除了 `basename`，还可以继续留意：
@@ -140,7 +161,7 @@ $>> str.trim("  hello  ");
 
 建议把标准库理解成三层用途：
 
-- 基础字符串、数学、JSON、文件、环境变量
+- 基础字符串、数学、JSON、文件、环境变量、时间、UUID、HTTP
 - 一些以 `.dol` 编写的组合工具
 - 未来继续扩展的公共模块入口
 
@@ -156,6 +177,9 @@ $>> str.trim("  hello  ");
 
 然后再补：
 
+- `std.time`
+- `std.uuid`
+- `std.http`
 - `std.core.iter`
 - `std.core.check`
 - `std.str.fmt`
@@ -167,10 +191,14 @@ $>> str.trim("  hello  ");
 $mod std.fs;
 $mod std.json;
 $mod std.path;
+$mod std.time;
+$mod std.uuid;
 
 $ raw = fs.read_text("tests/fixtures/stdlib/hello.txt");
 $>> raw;
 $>> path.basename("/usr/local/bin");
+$>> time.year(0);
+$>> uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
 $>> json.stringify({"ok": true});
 ```
 

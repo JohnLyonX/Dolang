@@ -54,8 +54,9 @@ pub fn register(context: &mut RuntimeContext) {
             let url = string_arg("http.request", args, 1)?;
             let body = json_body_arg("http.request", args, 2)?;
             let headers = headers_arg("http.request", args, 3)?;
-            let method = Method::from_bytes(method.as_bytes())
-                .map_err(|err| Error::Interpreter(format!("http.request: invalid method: {err}")))?;
+            let method = Method::from_bytes(method.as_bytes()).map_err(|err| {
+                Error::Interpreter(format!("http.request: invalid method: {err}"))
+            })?;
             execute_request(method, url, Some(body), Some(headers))
         }),
     );
@@ -114,7 +115,9 @@ fn headers_to_map(headers: &HeaderMap) -> Result<DolangValue, Error> {
             .iter()
             .map(|value| {
                 value.to_str().map(|s| s.to_string()).map_err(|err| {
-                    Error::Interpreter(format!("http.request: invalid response header value: {err}"))
+                    Error::Interpreter(format!(
+                        "http.request: invalid response header value: {err}"
+                    ))
                 })
             })
             .collect::<Result<Vec<_>, _>>()?
@@ -141,9 +144,9 @@ fn string_arg<'a>(id: &str, args: &'a [DolangValue], index: usize) -> Result<&'a
 
 fn json_body_arg(id: &str, args: &[DolangValue], index: usize) -> Result<serde_json::Value, Error> {
     match args.get(index) {
-        Some(DolangValue::Map(_)) | Some(DolangValue::Json(_)) => Ok(value_to_json(
-            args.get(index).expect("argument exists"),
-        )),
+        Some(DolangValue::Map(_)) | Some(DolangValue::Json(_)) => {
+            Ok(value_to_json(args.get(index).expect("argument exists")))
+        }
         Some(other) => Err(Error::Interpreter(format!(
             "{id}: argument {} must be Map or Json, got {}",
             index + 1,
@@ -177,13 +180,19 @@ fn headers_arg(id: &str, args: &[DolangValue], index: usize) -> Result<HeaderMap
                 other.type_name()
             )));
         }
-        None => return Err(Error::Interpreter(format!("{id}: missing argument {}", index + 1))),
+        None => {
+            return Err(Error::Interpreter(format!(
+                "{id}: missing argument {}",
+                index + 1
+            )));
+        }
     };
 
     let mut headers = HeaderMap::new();
     for (key, value) in map {
-        let name = HeaderName::from_bytes(key.as_bytes())
-            .map_err(|err| Error::Interpreter(format!("{id}: invalid header name '{key}': {err}")))?;
+        let name = HeaderName::from_bytes(key.as_bytes()).map_err(|err| {
+            Error::Interpreter(format!("{id}: invalid header name '{key}': {err}"))
+        })?;
         let value = match value {
             DolangValue::Str(s) => HeaderValue::from_str(s).map_err(|err| {
                 Error::Interpreter(format!("{id}: invalid header value for '{key}': {err}"))
@@ -254,7 +263,10 @@ mod tests {
         match result {
             DolangValue::Map(map) => {
                 assert_eq!(map.get("status"), Some(&DolangValue::Int(200)));
-                assert_eq!(map.get("body"), Some(&DolangValue::Str("hello".to_string())));
+                assert_eq!(
+                    map.get("body"),
+                    Some(&DolangValue::Str("hello".to_string()))
+                );
                 match map.get("headers") {
                     Some(DolangValue::Map(headers)) => {
                         assert_eq!(

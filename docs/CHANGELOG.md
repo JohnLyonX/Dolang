@@ -15,6 +15,9 @@
 - 建立 `docs/spec/` 正式语言规范目录
 - 增加 Phase 9 的版本、兼容性、弃用规则文档
 - 增加 `std.str`、`std.math`、`std.json` 原生模块，可通过 `$mod std.*;` 使用常见字符串、数学与 JSON 能力
+- 增加 `std.time` 原生模块，提供 Unix 时间戳、UTC 格式化/解析、日期偏移与日期字段读取能力
+- 增加 `std.uuid` 原生模块，提供 UUID v4 生成与格式校验能力
+- 增加 `std.http` 原生模块，提供同步 HTTP 客户端能力并统一返回 `{ status, body, headers }` 结构
 
 ### Changed
 

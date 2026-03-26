@@ -25,7 +25,9 @@ pub fn register(context: &mut RuntimeContext) {
         Arc::new(|args: &[DolangValue], _ctx: &RuntimeContext| {
             let ts = int_arg("time.format", args, 0)?;
             let fmt = string_arg("time.format", args, 1)?;
-            Ok(DolangValue::Str(seconds_to_utc(ts)?.format(fmt).to_string()))
+            Ok(DolangValue::Str(
+                seconds_to_utc(ts)?.format(fmt).to_string(),
+            ))
         }),
     );
     exports.insert(
@@ -39,7 +41,9 @@ pub fn register(context: &mut RuntimeContext) {
     exports.insert(
         "year".into(),
         Arc::new(|args: &[DolangValue], _ctx: &RuntimeContext| {
-            Ok(DolangValue::Int(seconds_to_utc(int_arg("time.year", args, 0)?)?.year() as i64))
+            Ok(DolangValue::Int(
+                seconds_to_utc(int_arg("time.year", args, 0)?)?.year() as i64,
+            ))
         }),
     );
     exports.insert(
@@ -53,13 +57,17 @@ pub fn register(context: &mut RuntimeContext) {
     exports.insert(
         "day".into(),
         Arc::new(|args: &[DolangValue], _ctx: &RuntimeContext| {
-            Ok(DolangValue::Int(seconds_to_utc(int_arg("time.day", args, 0)?)?.day() as i64))
+            Ok(DolangValue::Int(
+                seconds_to_utc(int_arg("time.day", args, 0)?)?.day() as i64,
+            ))
         }),
     );
     exports.insert(
         "hour".into(),
         Arc::new(|args: &[DolangValue], _ctx: &RuntimeContext| {
-            Ok(DolangValue::Int(seconds_to_utc(int_arg("time.hour", args, 0)?)?.hour() as i64))
+            Ok(DolangValue::Int(
+                seconds_to_utc(int_arg("time.hour", args, 0)?)?.hour() as i64,
+            ))
         }),
     );
     exports.insert(

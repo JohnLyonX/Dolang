@@ -23,7 +23,11 @@ pub fn register(context: &mut RuntimeContext) {
                         other.type_name()
                     )));
                 }
-                None => return Err(Error::Interpreter("uuid.is_valid: missing first arg".into())),
+                None => {
+                    return Err(Error::Interpreter(
+                        "uuid.is_valid: missing first arg".into(),
+                    ));
+                }
             };
             Ok(DolangValue::Bool(uuid::Uuid::parse_str(input).is_ok()))
         }),

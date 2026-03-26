@@ -32,6 +32,11 @@ pub fn execute_http_route(
     let mut runtime_context = context.clone();
     let mut state = ProgramState::new();
 
+    // Seed module-level imports ($mod) and functions ($fn) captured when
+    // the route's source file was loaded via $HTTP.link().
+    state.env.extend(route.module_env.clone());
+    state.fns.extend(route.module_fns.clone());
+
     let route_seg_parts: Vec<&str> = route.path.split('/').collect();
     let url_seg_parts: Vec<&str> = input.request_path.split('/').collect();
 

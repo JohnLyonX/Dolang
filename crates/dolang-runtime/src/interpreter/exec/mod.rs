@@ -4,6 +4,7 @@ mod functions;
 mod http;
 mod io;
 mod modules;
+mod types;
 mod variables;
 
 use crate::ast::Stmt;
@@ -84,6 +85,7 @@ pub(super) fn exec_inner(
         Stmt::Try(stmt) => error_handling::handle_try_stmt(stmt, state, context, w),
         Stmt::Throw(stmt) => error_handling::handle_throw_stmt(stmt, state, context, w),
         Stmt::ExprStmt(expr) => variables::handle_expr_stmt(expr, state, context, w),
+        Stmt::TypeDecl(stmt) => types::handle_type_decl(stmt, context),
     }
 }
 

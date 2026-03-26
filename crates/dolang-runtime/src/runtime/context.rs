@@ -5,6 +5,21 @@ use crate::interpreter::{HttpRoute, StaticRoute};
 
 use std::collections::HashMap;
 
+/// A single field in a registered type shape.
+#[derive(Debug, Clone)]
+pub struct TypeField {
+    pub name: String,
+    pub type_name: String,
+    pub optional: bool,
+}
+
+/// Shape descriptor registered by `$Type` declarations.
+#[derive(Debug, Clone)]
+pub struct TypeShape {
+    pub name: String,
+    pub fields: Vec<TypeField>,
+}
+
 use super::intrinsics::{
     IntrinsicRegistry, NativeFn, NativeFnMap, NativeModuleRegistry, RuntimePolicy,
 };
@@ -31,6 +46,8 @@ pub struct RuntimeContext {
     native_fn_registry: HashMap<String, NativeFn>,
     /// Native modules importable via `$mod path;`.
     native_module_registry: NativeModuleRegistry,
+    /// Type shapes registered by `$Type` declarations.
+    type_registry: HashMap<String, TypeShape>,
 }
 
 impl RuntimeContext {
@@ -46,6 +63,7 @@ impl RuntimeContext {
             static_routes: Vec::new(),
             native_fn_registry: HashMap::new(),
             native_module_registry: NativeModuleRegistry::new(),
+            type_registry: HashMap::new(),
         }
     }
 
@@ -112,6 +130,16 @@ impl RuntimeContext {
     /// Look up a registered native module by path.
     pub fn native_module(&self, path: &str) -> Option<&NativeFnMap> {
         self.native_module_registry.get(path)
+    }
+
+    /// Register a type shape from a `$Type` declaration.
+    pub fn register_type(&mut self, name: impl Into<String>, shape: TypeShape) {
+        self.type_registry.insert(name.into(), shape);
+    }
+
+    /// Look up a registered type shape by name.
+    pub fn get_type(&self, name: &str) -> Option<&TypeShape> {
+        self.type_registry.get(name)
     }
 
     pub fn clear_routes(&mut self) {

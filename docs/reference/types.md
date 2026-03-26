@@ -542,6 +542,110 @@ $>> {"a":1}.type();    // 输出: Map
 
 ---
 
+---
+
+## 自定义类型 `$Type`
+
+使用 `$Type` 定义数据形状，描述 JSON 结构。类型只是**形状描述**，不创建新的运行时类型，底层仍然是 JSON Map。
+
+```dolang
+$Type User {
+    id: Int
+    name: Str
+    email: Str?    // ? 表示可选字段
+    age: Int?
+}
+```
+
+**字段规则**：
+
+| 写法 | 说明 |
+|------|------|
+| `id: Int` | 必填字段，类型为 Int |
+| `email: Str?` | 可选字段，类型为 Str，加 `?` |
+| 字段类型 | `Int` `Str` `Bool` `Float`，首字母大写 |
+
+**无 getter / setter**，无私有字段，无方法。
+
+---
+
+### 返回类型注解 `-> JSON<User>`
+
+```dolang
+$fn getUser(id) -> JSON<User> {
+    $# {"id": id, "name": "Alice"};
+}
+
+$GET("/users/:id") get_user(id) -> JSON<User> {
+    $# service_user.getById(id);
+}
+```
+
+`JSON<User>` 分离了两个关注点：
+
+| 部分 | 含义 |
+|------|------|
+| `JSON` | 运行时渲染格式（解释器） |
+| `User` | 数据形状约束（开发者 / LSP） |
+
+函数最终返回的都是 JSON，运行时不做强制校验。
+
+---
+
+### 行为说明
+
+| 阶段 | 行为 |
+|------|------|
+| 定义 `$Type` | 注册类型形状，无运行时开销 |
+| 函数执行 | 返回普通 JSON，不强制校验字段 |
+| 边界验证（可选） | 主动调用 `$validate(body, User)` 时才校验 |
+| LSP 工具 | 根据 `-> JSON<User>` 提示字段补全 |
+
+---
+
+### 完整示例
+
+```dolang
+// models/user.dol
+$Type User {
+    id: Int
+    name: Str
+    email: Str?
+}
+
+// service/user.dol
+$mod models.user;
+
+$fn getById(id) -> JSON<User> {
+    $if id == "" { $throw "id required"; }
+    $# {"id": id, "name": "Alice"};
+}
+
+// routers/user.dol
+$mod service.user;
+
+$GET("/users/:id") get_user(id) -> JSON<User> {
+    $# service_user.getById(id);
+}
+```
+
+---
+
+### 推荐项目结构
+
+```
+project/
+├── main.dol
+├── models/          ← $Type 定义集中存放
+│   ├── user.dol
+│   └── order.dol
+├── routers/         ← 薄层：收参数 → 调 service → 返回响应
+├── service/         ← 业务逻辑：校验、组装、调 data
+└── data/            ← 数据操作：DB 查询、外部 API
+```
+
+---
+
 ## 方法调用必须使用括号
 
 Dolang 中所有方法调用**必须使用括号**：

@@ -1,6 +1,6 @@
 use crate::ast::{
     BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, MainDeclStmt, ModDeclStmt, ReturnStmt, Span,
-    Stmt, VarDeclStmt,
+    Stmt, TypeDeclStmt, TypeField, VarDeclStmt,
 };
 use crate::error::Error;
 use crate::token::Type;
@@ -219,6 +219,111 @@ impl<'a> StmtParser<'a> {
             name,
             type_annotation,
             value: expr,
+        }))
+    }
+
+    pub fn parse_type_decl(&mut self) -> Result<Stmt, Error> {
+        let start = self.peek().pos;
+        self.advance(); // consume $Type
+
+        if self.at_end() || self.peek().typ != Type::Ident {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "expected type name after $Type".to_string(),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: Some("identifier".to_string()),
+            }));
+        }
+        let name = self.advance().literal.clone();
+
+        if self.at_end() || self.peek().typ != Type::LBrace {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: format!("expected '{{' after $Type {}", name),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: Some("{".to_string()),
+            }));
+        }
+        self.advance(); // consume {
+
+        let mut fields = Vec::new();
+
+        // skip leading newlines / semicolons
+        self.skip_semis();
+
+        while !self.at_end() && self.peek().typ != Type::RBrace {
+            // field name
+            if self.peek().typ != Type::Ident {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected field name in $Type body".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("identifier".to_string()),
+                }));
+            }
+            let field_name = self.advance().literal.clone();
+
+            // colon
+            if self.at_end() || self.peek().typ != Type::Colon {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: format!("expected ':' after field name '{}'", field_name),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some(":".to_string()),
+                }));
+            }
+            self.advance(); // consume :
+
+            // type name
+            if self.at_end() || self.peek().typ != Type::Ident {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: format!("expected type name for field '{}'", field_name),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("type name".to_string()),
+                }));
+            }
+            let type_name = self.advance().literal.clone();
+
+            // optional ?
+            let optional = if !self.at_end() && self.peek().typ == Type::Question {
+                self.advance();
+                true
+            } else {
+                false
+            };
+
+            fields.push(TypeField { name: field_name, type_name, optional });
+
+            // allow comma or semicolon between fields (optional)
+            while !self.at_end()
+                && (self.peek().typ == Type::Comma || self.peek().typ == Type::Semicolon)
+            {
+                self.advance();
+            }
+        }
+
+        if self.at_end() || self.peek().typ != Type::RBrace {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "expected '}' to close $Type body".to_string(),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: Some("}".to_string()),
+            }));
+        }
+        self.advance(); // consume }
+        self.skip_semis();
+
+        Ok(Stmt::TypeDecl(TypeDeclStmt {
+            span: Span::from_token(start),
+            name,
+            fields,
         }))
     }
 

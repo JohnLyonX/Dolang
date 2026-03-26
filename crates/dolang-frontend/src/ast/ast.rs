@@ -81,6 +81,7 @@ pub enum Stmt {
     Throw(ThrowStmt),         // $throw expression;
     ModDecl(ModDeclStmt),     // $mod path;
     MainDecl(MainDeclStmt),   // $main() { body }
+    TypeDecl(TypeDeclStmt),   // $Type Name { fields }
     ExprStmt(Box<Expr>),      // expression statement (for function calls as statements)
 }
 
@@ -363,6 +364,22 @@ pub struct ModDeclStmt {
 pub struct MainDeclStmt {
     pub span: Span,
     pub body: Vec<Stmt>,
+}
+
+/// A single field in a $Type declaration: `name: TypeName?`
+#[derive(Debug, Clone)]
+pub struct TypeField {
+    pub name: String,
+    pub type_name: String, // "Int" | "Str" | "Bool" | "Float"
+    pub optional: bool,    // true if field has `?` suffix
+}
+
+/// Type declaration: $Type User { id: Int, name: Str, email: Str? }
+#[derive(Debug, Clone)]
+pub struct TypeDeclStmt {
+    pub span: Span,
+    pub name: String,
+    pub fields: Vec<TypeField>,
 }
 
 #[derive(Debug, Clone)]
@@ -808,6 +825,7 @@ impl Stmt {
             Stmt::Throw(s) => s.span,
             Stmt::ModDecl(s) => s.span(),
             Stmt::MainDecl(s) => s.span(),
+            Stmt::TypeDecl(s) => s.span(),
             Stmt::Read(s) => s.span(),
             Stmt::FileWrite(s) => s.span(),
             Stmt::FileRead(s) => s.span(),
@@ -817,6 +835,12 @@ impl Stmt {
 }
 
 impl Spanned for TryStmt {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl Spanned for TypeDeclStmt {
     fn span(&self) -> Span {
         self.span
     }

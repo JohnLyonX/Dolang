@@ -184,6 +184,19 @@ impl<'a> ExprParser<'a> {
                 self.pos += 1;
 
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
+                    // Allow `obj.field.method()` chaining: if the next token is '.',
+                    // this is a property access (e.g. `services.auth.login()`).
+                    if self.pos < self.tokens.len()
+                        && self.tokens[self.pos].typ == Type::Dot
+                    {
+                        expr = Box::new(Expr::MethodCall(MethodCall {
+                            span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
+                            object: expr,
+                            method,
+                            args: vec![],
+                        }));
+                        continue;
+                    }
                     return Err(self.error_expected(
                         &format!(
                             "method '{}' requires parentheses, use '{}(...)' instead",

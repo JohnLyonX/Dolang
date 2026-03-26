@@ -48,6 +48,8 @@ pub enum Type {
     Return,     // $#
     ModDecl,    // $mod - module declaration
     MainDecl,   // $main - main entry point
+    TypeDecl,   // $Type - type declaration
+    Question,   // ?
     ConfigRead, // $<<CONFIG - read from package.toml
     HdrRead,    // $HDR - read HTTP header
     Json,       // $JSON - JSON constructor
@@ -135,6 +137,8 @@ impl fmt::Display for Type {
             Type::Return => write!(f, "$#"),
             Type::ModDecl => write!(f, "$mod"),
             Type::MainDecl => write!(f, "$main"),
+            Type::TypeDecl => write!(f, "$Type"),
+            Type::Question => write!(f, "?"),
             Type::ConfigRead => write!(f, "$<<CONFIG"),
             Type::HdrRead => write!(f, "$HDR"),
             Type::Json => write!(f, "$JSON"),

@@ -34,7 +34,7 @@ pub(super) fn handle_var_decl(
                     Some(t) => t,
                     None => {
                         return Flow::Err(Error::TypeMismatch(format!(
-                            "unknown type '{}', supported types are: Int, Float, String, Bool",
+                            "unknown type '{}', supported types are: Int, Float, String, Bool, List, Map",
                             type_str
                         )));
                     }
@@ -83,7 +83,7 @@ pub(super) fn handle_const_decl(
                     Some(t) => t,
                     None => {
                         return Flow::Err(Error::TypeMismatch(format!(
-                            "unknown type '{}', supported types are: Int, Float, String, Bool",
+                            "unknown type '{}', supported types are: Int, Float, String, Bool, List, Map",
                             type_str
                         )));
                     }

@@ -4,7 +4,7 @@ pub mod eval;
 pub mod exec;
 pub mod value;
 
-pub use env::{FnEnv, parse_type_annotation, type_name};
+pub use env::{Env, FnEnv, parse_type_annotation, type_name};
 pub use exec::exec;
 pub use value::DolangValue;
 
@@ -18,6 +18,12 @@ pub struct HttpRoute {
     pub variadic_param: Option<String>,
     pub return_type: Option<String>,
     pub body: Vec<crate::ast::Stmt>,
+    /// Module-level variables (e.g. imported modules via $mod) captured
+    /// when this route's file was loaded. Seeded into handler state at
+    /// request time so that `hello.selectUser(...)` etc. resolve correctly.
+    pub module_env: Env,
+    /// Module-level functions ($fn) captured from the route's source file.
+    pub module_fns: FnEnv,
 }
 
 /// Static file serving entry

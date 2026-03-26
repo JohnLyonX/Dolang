@@ -146,6 +146,24 @@ fn validate_return_type(fn_def: &FnDeclStmt, value: Option<&DolangValue>) -> Res
         return Ok(());
     };
 
+    // Extract the base type: "JSON<User>" → "JSON", "User" → "User"
+    let base_type = if expected_type.contains('<') {
+        expected_type
+            .split('<')
+            .next()
+            .unwrap_or(expected_type.as_str())
+    } else {
+        expected_type.as_str()
+    };
+
+    // Built-in type names that we validate against
+    let builtin_types = ["int", "integer", "float", "string", "bool", "boolean", "json", "str"];
+
+    // If the base type is not a known built-in, it's a user-defined $Type — skip enforcement
+    if !builtin_types.contains(&base_type.to_lowercase().as_str()) {
+        return Ok(());
+    }
+
     let Some(value) = value else {
         return Err(Error::Interpreter(format!(
             "function '{}' expects return type '{}' but returned nothing",
@@ -169,18 +187,19 @@ fn validate_return_type(fn_def: &FnDeclStmt, value: Option<&DolangValue>) -> Res
         DolangValue::Null => ValueType::Dynamic,
     };
 
-    let (expected, expected_str) = match expected_type.to_lowercase().as_str() {
+    let (expected, expected_str) = match base_type.to_lowercase().as_str() {
         "int" | "integer" => (ValueType::Int, "Int"),
         "float" => (ValueType::Float, "Float"),
-        "string" => (ValueType::String, "String"),
+        "string" | "str" => (ValueType::String, "String"),
         "bool" | "boolean" => (ValueType::Bool, "Bool"),
-        "json" => (ValueType::Json, "Json"),
-        _ => {
-            return Err(Error::Interpreter(format!(
-                "unknown return type '{}' for function '{}'",
-                expected_type, fn_def.name
-            )));
+        // JSON<X>: validate that the value is Json or Map (JSON-compatible)
+        "json" => {
+            if matches!(actual_type, ValueType::Json | ValueType::Map | ValueType::Dynamic) {
+                return Ok(());
+            }
+            (ValueType::Json, "Json")
         }
+        _ => return Ok(()), // unknown / user-defined — skip
     };
 
     if actual_type != expected {

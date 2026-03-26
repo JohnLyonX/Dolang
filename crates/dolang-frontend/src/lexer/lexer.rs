@@ -206,6 +206,10 @@ impl Lexer {
                 }
                 Ok(Token::new(Type::Dot, ".", start))
             }
+            '?' => {
+                self.advance();
+                Ok(Token::new(Type::Question, "?", start))
+            }
             '$' => self.read_dollar(start),
             '"' => self.read_string(start),
             '\'' => self.read_char(start),
@@ -353,6 +357,11 @@ impl Lexer {
         if self.match_seq("$main") {
             self.advance_n(5);
             return Ok(Token::new(Type::MainDecl, "$main", start));
+        }
+
+        if self.match_seq("$Type") {
+            self.advance_n(5);
+            return Ok(Token::new(Type::TypeDecl, "$Type", start));
         }
 
         if self.match_seq("$JSON") {
@@ -757,6 +766,7 @@ fn is_delimiter(ch: char) -> bool {
             | ','
             | '.'
             | ':'
+            | '?'
     )
 }
 

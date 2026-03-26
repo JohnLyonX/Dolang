@@ -171,6 +171,29 @@ $GET("/pages/home") home() -> HTML {
 }
 ```
 
+### `JSON<TypeName>` — 带形状约束的返回类型
+
+当函数返回符合 `$Type` 定义形状的 JSON 时，使用 `JSON<TypeName>` 注解：
+
+```dolang
+$Type User {
+    id: Int
+    name: Str
+    email: Str?
+}
+
+$fn getUser(id) -> JSON<User> {
+    $# {"id": id, "name": "Alice"};
+}
+```
+
+- `JSON` 是运行时格式（解释器理解）
+- `<User>` 是形状约束（给开发者和 LSP 工具看）
+- 运行时不强制校验字段，类型是文档层
+- HTTP handler 同样支持：`$GET("/users/:id") get_user(id) -> JSON<User>`
+
+---
+
 **返回类型不匹配时报错**：
 
 ```dao

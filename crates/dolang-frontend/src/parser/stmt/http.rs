@@ -74,7 +74,19 @@ impl<'a> StmtParser<'a> {
             if self.at_end() || self.peek().typ != Type::Ident {
                 return Err(Error::InvalidStatement(None));
             }
-            Some(self.advance().literal.clone())
+            let base = self.advance().literal.clone();
+            // Support JSON<User> compound return type annotation
+            if !self.at_end() && self.peek().typ == Type::Lt {
+                self.advance(); // consume <
+                if self.at_end() || self.peek().typ != Type::Ident {
+                    return Err(Error::InvalidStatement(None));
+                }
+                let param = self.advance().literal.clone();
+                self.expect(Type::Gt)?; // consume >
+                Some(format!("{}<{}>", base, param))
+            } else {
+                Some(base)
+            }
         } else {
             None
         };

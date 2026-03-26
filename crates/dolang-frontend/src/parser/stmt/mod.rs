@@ -181,6 +181,9 @@ impl<'a> StmtParser<'a> {
         if typ == Type::MainDecl {
             return self.parse_main_decl().map(Some);
         }
+        if typ == Type::TypeDecl {
+            return self.parse_type_decl().map(Some);
+        }
         if typ == Type::Break {
             return Ok(Some(self.parse_break_stmt()));
         }

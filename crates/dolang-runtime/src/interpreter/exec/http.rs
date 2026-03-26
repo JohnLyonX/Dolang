@@ -2,8 +2,9 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use crate::ast::{HttpBlockStmt, HttpFnStmt, Stmt};
+use crate::ast::{HttpBlockStmt, HttpFnStmt};
 use crate::error::Error;
+use crate::interpreter::env::{Env, FnEnv};
 use crate::module::ModuleResolver;
 use crate::runtime::RuntimeContext;
 
@@ -23,6 +24,8 @@ pub(super) fn handle_http_fn(
         variadic_param: stmt.variadic_param.clone(),
         return_type: stmt.return_type.clone(),
         body: stmt.body.clone(),
+        module_env: Env::new(),
+        module_fns: FnEnv::new(),
     };
 
     context.register_http_route(route);
@@ -57,13 +60,8 @@ pub(super) fn handle_http_block(
                 format!("/{}/{}", prefix_trimmed, path_trimmed)
             };
             context.register_http_route(HttpRoute {
-                method: route.method.clone(),
                 path: full_path,
-                name: route.name.clone(),
-                params: route.params.clone(),
-                variadic_param: route.variadic_param.clone(),
-                return_type: route.return_type.clone(),
-                body: route.body.clone(),
+                ..route
             });
         }
 
@@ -97,6 +95,8 @@ pub(super) fn handle_http_block(
             variadic_param: route_stmt.variadic_param.clone(),
             return_type: route_stmt.return_type.clone(),
             body: route_stmt.body.clone(),
+            module_env: Env::new(),
+            module_fns: FnEnv::new(),
         });
     }
 
@@ -109,11 +109,16 @@ pub(super) fn handle_http_block(
     Flow::Normal
 }
 
+/// Load routes from a linked module by fully executing the file so that
+/// `$mod` imports, `$fn` declarations, and nested `$HTTP` blocks are all
+/// honoured.  The resulting routes carry `module_env`/`module_fns` so that
+/// handler bodies can resolve module-namespaced calls (e.g. `hello.selectUser`).
 fn load_module_routes(
     module_path: &str,
     context: &RuntimeContext,
 ) -> Result<Vec<HttpRoute>, Error> {
     use crate::parser;
+    use crate::runtime::{ProgramState, execute_program_with_writer};
 
     let resolver = ModuleResolver::new(context.project_root().to_path_buf())
         .with_current_file(context.current_file().map(Path::new).map(Path::to_path_buf))
@@ -151,8 +156,40 @@ fn load_module_routes(
         }
     };
 
-    let mut routes = Vec::new();
-    collect_http_routes(&statements, "", context, &mut routes)?;
+    // Execute the module fully in an isolated clone of the context.
+    // This processes $mod, $fn, and $GET/$POST/... declarations.
+    let mut module_context = context.clone();
+    module_context
+        .set_current_file(Some(resolved.file_path.to_string_lossy().to_string()));
+
+    // Track how many routes existed before execution so we can isolate
+    // only the routes this module adds.
+    let routes_before = module_context.routes().len();
+
+    let mut module_state = ProgramState::new();
+    execute_program_with_writer(
+        &statements,
+        &mut module_state,
+        &mut module_context,
+        &mut std::io::sink(),
+    )
+    .map_err(|err| {
+        Error::Interpreter(format!(
+            "error loading module '{}': {}",
+            module_path, err
+        ))
+    })?;
+
+    // Routes registered by this module, with module-level env/fns attached
+    // so that handler bodies can resolve $mod-imported namespaces.
+    let routes: Vec<HttpRoute> = module_context.routes()[routes_before..]
+        .iter()
+        .map(|route| HttpRoute {
+            module_env: module_state.env.clone(),
+            module_fns: module_state.fns.clone(),
+            ..route.clone()
+        })
+        .collect();
 
     if routes.is_empty() {
         return Err(Error::Interpreter(format!(
@@ -162,81 +199,4 @@ fn load_module_routes(
     }
 
     Ok(routes)
-}
-
-fn collect_http_routes(
-    statements: &[Stmt],
-    base_prefix: &str,
-    context: &RuntimeContext,
-    routes: &mut Vec<HttpRoute>,
-) -> Result<(), Error> {
-    for stmt in statements {
-        match stmt {
-            Stmt::HttpFn(http_fn) => routes.push(http_route_with_prefix(http_fn, base_prefix)),
-            Stmt::HttpBlock(http_block) => {
-                let next_prefix = match &http_block.prefix {
-                    Some(prefix) => join_route_paths(base_prefix, prefix),
-                    None => normalize_prefix(base_prefix),
-                };
-
-                for route in &http_block.routes {
-                    routes.push(http_route_with_prefix(route, &next_prefix));
-                }
-
-                if let Some(link_module) = &http_block.link {
-                    let linked_routes = load_module_routes(link_module, context)?;
-                    for route in linked_routes {
-                        routes.push(HttpRoute {
-                            path: join_route_paths(&next_prefix, &route.path),
-                            ..route
-                        });
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    Ok(())
-}
-
-fn http_route_with_prefix(route: &HttpFnStmt, prefix: &str) -> HttpRoute {
-    HttpRoute {
-        method: route.method.clone(),
-        path: join_route_paths(prefix, &route.path),
-        name: route.name.clone(),
-        params: route.params.clone(),
-        variadic_param: route.variadic_param.clone(),
-        return_type: route.return_type.clone(),
-        body: route.body.clone(),
-    }
-}
-
-fn join_route_paths(prefix: &str, path: &str) -> String {
-    let normalized_prefix = normalize_prefix(prefix);
-    let path_trimmed = path.trim();
-    if normalized_prefix.is_empty() {
-        if path_trimmed.is_empty() || path_trimmed == "/" {
-            "/".to_string()
-        } else {
-            format!("/{}", path_trimmed.trim_start_matches('/'))
-        }
-    } else if path_trimmed.is_empty() || path_trimmed == "/" {
-        normalized_prefix
-    } else {
-        format!(
-            "{}/{}",
-            normalized_prefix.trim_end_matches('/'),
-            path_trimmed.trim_start_matches('/')
-        )
-    }
-}
-
-fn normalize_prefix(prefix: &str) -> String {
-    let trimmed = prefix.trim();
-    if trimmed.is_empty() || trimmed == "/" {
-        String::new()
-    } else {
-        format!("/{}", trimmed.trim_matches('/'))
-    }
 }

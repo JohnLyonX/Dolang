@@ -51,6 +51,17 @@ pub fn eval_method_call(
         } else if let Some(native_fn) = native_exports.get(method_name).cloned() {
             return native_fn(&arg_vals, context)
                 .map_err(|err| super::runtime_error(e, codes::RUNTIME_GENERIC, err.to_string()));
+        } else if call.args.is_empty() {
+            // Sub-module property access: services.auth returns the auth ModuleProxy
+            // so that chained calls like services.auth.login() work correctly.
+            if let Some(sub_module) = module_env.get(method_name) {
+                return Ok(sub_module.clone());
+            }
+            return Err(super::runtime_error(
+                e,
+                codes::RUNTIME_MODULE_LOAD,
+                format!("module function or sub-module '{method_name}' not found"),
+            ));
         } else {
             return Err(super::runtime_error(
                 e,

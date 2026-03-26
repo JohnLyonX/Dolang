@@ -70,6 +70,8 @@ pub fn parse_type_annotation(type_str: &str) -> Option<ValueType> {
         "Float" => Some(ValueType::Float),
         "String" | "Str" => Some(ValueType::String),
         "Bool" | "Boolean" => Some(ValueType::Bool),
+        "List" => Some(ValueType::List),
+        "Map" => Some(ValueType::Map),
         _ => None,
     }
 }

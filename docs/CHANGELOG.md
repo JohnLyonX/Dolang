@@ -15,6 +15,8 @@
 - 建立 `docs/spec/` 正式语言规范目录
 - 增加 Phase 9 的版本、兼容性、弃用规则文档
 - 增加 `std.str`、`std.math`、`std.json` 原生模块，可通过 `$mod std.*;` 使用常见字符串、数学与 JSON 能力
+- 新增 `$Type` 自定义类型声明，支持描述 JSON 数据形状（字段名、类型、可选标记 `?`）
+- 函数与 HTTP handler 返回类型注解支持 `JSON<TypeName>` 形式（如 `-> JSON<User>`）
 
 ### Changed
 

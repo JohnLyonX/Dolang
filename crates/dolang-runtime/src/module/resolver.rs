@@ -55,6 +55,7 @@ impl ModuleResolver {
         }
 
         let relative_module = module_path.replace('.', "/") + ".dol";
+        let package_mod = module_path.replace('.', "/") + "/mod.dol";
         let mut candidates = Vec::new();
 
         if let Some(current_file) = &self.current_file
@@ -65,11 +66,23 @@ impl ModuleResolver {
                 file_path: parent.join(&relative_module),
                 namespace: ModuleNamespace::Relative,
             });
+            // package entry: services/mod.dol (relative)
+            candidates.push(ResolvedModule {
+                module_path: module_path.to_string(),
+                file_path: parent.join(&package_mod),
+                namespace: ModuleNamespace::Relative,
+            });
         }
 
         candidates.push(ResolvedModule {
             module_path: module_path.to_string(),
             file_path: self.project_root.join(&relative_module),
+            namespace: ModuleNamespace::Project,
+        });
+        // package entry: project_root/services/mod.dol
+        candidates.push(ResolvedModule {
+            module_path: module_path.to_string(),
+            file_path: self.project_root.join(&package_mod),
             namespace: ModuleNamespace::Project,
         });
         candidates.push(ResolvedModule {

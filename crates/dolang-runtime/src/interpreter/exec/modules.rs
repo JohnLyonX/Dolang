@@ -66,12 +66,25 @@ pub(super) fn handle_mod_decl(
     };
 
     for resolved in modules {
-        let namespace_name = resolved
-            .file_path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .unwrap_or_default()
-            .to_string();
+        let namespace_name = {
+            let stem = resolved
+                .file_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            // services/mod.dol → namespace "services" (parent dir name)
+            if stem == "mod" {
+                resolved
+                    .file_path
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(stem)
+                    .to_string()
+            } else {
+                stem.to_string()
+            }
+        };
         if namespace_name.is_empty() {
             return Flow::Err(module_error(
                 stmt.span(),

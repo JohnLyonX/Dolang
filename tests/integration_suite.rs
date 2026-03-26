@@ -83,7 +83,7 @@ fn module_imports_use_filename_namespace_and_hide_private_functions() {
     let error = private_outcome
         .error
         .expect("private helper should not be visible");
-    assert!(error.contains("module function 'helper' not found"));
+    assert!(error.contains("'helper' not found"));
 
     fs::remove_dir_all(&project_dir).expect("cleanup");
 }

@@ -20,6 +20,7 @@
 - `break` / `continue`
 - 模块声明：`$mod package.path;`
 - 主入口：`$main() { ... }`
+- 类型声明：`$Type Name { field: Type, field2: Type? }`
 - HTTP 相关语句：`$HTTP`、`$GET`、`$POST` 等
 
 语句一般以 `;` 结束；块语句使用 `{ ... }`。

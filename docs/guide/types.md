@@ -2,6 +2,11 @@
 
 Dolang 支持**渐进类型注解**：注解完全可选，不影响程序运行，但能提升代码可读性。
 
+> 迁移说明
+>
+> 本页属于旧 guide 页面。
+> `List` / `Map` 显式声明现在已经可用，但主线说明以 [09-gradual-typing.md](09-gradual-typing.md) 为准。
+
 ---
 
 ## 变量类型注解
@@ -60,12 +65,49 @@ $fn log(msg) {
 |--------|------|
 | `Int` | 整数 |
 | `Float` | 浮点数 |
-| `String` | 字符串 |
+| `String` / `Str` | 字符串 |
 | `Bool` | 布尔值 |
 | `List` | 列表 |
-| `Map` | 映射 |
-| `Null` | 空值 |
-| `Any` | 任意类型（不限制） |
+| `Map` | 字典 |
+
+---
+
+## 自定义类型 `$Type`
+
+使用 `$Type` 定义 JSON 数据形状（文档性质，不创建运行时类型）：
+
+```dolang
+$Type User {
+    id: Int
+    name: Str
+    email: Str?    // ? 表示可选字段
+    age: Int?
+}
+```
+
+- 字段类型：`Int` `Str` `Bool` `Float`，首字母大写
+- 可选字段：在类型后加 `?`
+- 无 getter / setter，无私有字段，无方法
+
+### 与函数返回类型结合
+
+```dolang
+$fn getUser(id) -> JSON<User> {
+    $# {"id": id, "name": "Alice"};
+}
+```
+
+`JSON<User>` 表示"返回符合 User 形状的 JSON"，运行时不做强制校验。
+
+HTTP handler 同样支持：
+
+```dolang
+$GET("/users/:id") get_user(id) -> JSON<User> {
+    $# {"id": id, "name": "Alice"};
+}
+```
+
+建议把 `$Type` 定义集中放在 `models/` 目录，函数和路由引用。
 
 ---
 

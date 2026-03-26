@@ -21,10 +21,10 @@ Dolang 目前只能**接收** HTTP 请求（作为 Web 服务器），但无法*
 ## TODO 清单
 
 **依赖准备**
-- [ ] 在 `crates/dolang-runtime/Cargo.toml` 添加 `reqwest = { version = "0.12", features = ["blocking", "json"] }`
+* 在 `crates/dolang-runtime/Cargo.toml` 添加 `reqwest = { version = "0.12", features = ["blocking", "json"] }`
 
 **核心实现**
-- [ ] 新建 `crates/dolang-runtime/src/stdlib_native/http_client.rs`，实现：
+* 新建 `crates/dolang-runtime/src/stdlib_native/http_client.rs`，实现：
   - `http.get(url: String)` → Map
   - `http.get(url: String, headers: Map)` → Map（带请求头，重载）
   - `http.post(url: String, body: Map)` → Map
@@ -45,7 +45,7 @@ Dolang 目前只能**接收** HTTP 请求（作为 Web 服务器），但无法*
   网络错误、超时等抛出 Dolang 运行时错误，可被 `$try/$catch` 捕获。
 
 **注册**
-- [ ] 在 `crates/dolang-runtime/src/stdlib_native/mod.rs` 中：
+* 在 `crates/dolang-runtime/src/stdlib_native/mod.rs` 中：
   - `mod http_client;`
   - `register_http_client` 注册到 `"std.http"` 模块
   - 注意：模块名 `std.http` 与 HTTP 服务端语法不冲突（服务端是关键字，客户端是模块）
@@ -55,20 +55,20 @@ Dolang 目前只能**接收** HTTP 请求（作为 Web 服务器），但无法*
   - 基本结构测试：返回值包含 `status`、`body`、`headers` 三个键
   - `http.get()` 返回 status 为 Int
   - 错误 URL 时 `$try/$catch` 可捕获错误
-- [ ] 考虑网络不可用时的测试隔离方案（可跳过网络测试或用条件编译）
+* 考虑网络不可用时的测试隔离方案（可跳过网络测试或用条件编译）
 
 **文档**
-- [ ] 更新 `docs/CHANGELOG.md` Unreleased/Added 区域
+* 更新 `docs/CHANGELOG.md` Unreleased/Added 区域
 
 ---
 
 ## 验收标准
 
-- [ ] `cargo build` 编译通过
-- [ ] `cargo test` 全部通过（网络相关测试可标记为 `#[ignore]` 待 CI 环境确定）
+* `cargo build` 编译通过
+* `cargo test` 全部通过（网络相关测试可标记为 `#[ignore]` 待 CI 环境确定）
 - [ ] `http.get("https://httpbin.org/get")` 返回 Map，`res["status"]` 为 `200`
 - [ ] `http.post("https://httpbin.org/post", {"key": "val"})` 返回 Map，`res["status"]` 为 `200`
-- [ ] 请求无效 URL 时，`$try { http.get("not-a-url") } $catch e { ... }` 可捕获错误
+* 请求无效 URL 时，`$try { http.get("not-a-url") } $catch e { ... }` 可捕获错误
 - [ ] `http.get` 和 `http.post` 可在 HTTP handler 内部调用
 
 ---

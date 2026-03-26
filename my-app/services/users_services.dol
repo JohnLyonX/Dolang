@@ -1,0 +1,20 @@
+$Type User {
+    id: Int
+    name: String
+    email: String?
+}
+
+
+$fn find_user(id) -> JSON<User> {
+    $ result = $JSON{
+        id: 1
+        name: "John"
+        email: "liangzhanbo@gmail.com"
+    };
+
+    $if id == '1' {
+        $# result;
+    }
+
+    $# $JSON{"Null": "No data"};
+}

@@ -2,7 +2,7 @@
 
 **Epic**: [EPIC-01](EPIC-01-stdlib-enhancement.md)
 **优先级**: P2
-**状态**: Open
+**状态**: Done
 
 ---
 
@@ -18,20 +18,20 @@
 ## TODO 清单
 
 **依赖准备**
-- [ ] 在 `crates/dolang-runtime/Cargo.toml` 添加 `uuid = { version = "1", features = ["v4"] }`
+* 在 `crates/dolang-runtime/Cargo.toml` 添加 `uuid = { version = "1", features = ["v4"] }`
 
 **核心实现**
-- [ ] 新建 `crates/dolang-runtime/src/stdlib_native/uuid.rs`，实现：
+* 新建 `crates/dolang-runtime/src/stdlib_native/uuid.rs`，实现：
   - `uuid.v4()` → String（生成随机 UUID v4，如 `"550e8400-e29b-41d4-a716-446655440000"`）
   - `uuid.is_valid(s: String)` → Bool（校验字符串是否符合 UUID 格式）
 
 **注册**
-- [ ] 在 `crates/dolang-runtime/src/stdlib_native/mod.rs` 中：
+* 在 `crates/dolang-runtime/src/stdlib_native/mod.rs` 中：
   - `mod uuid;`
   - `register_uuid` 函数注册到 `"std.uuid"` 模块
 
 **测试**
-- [ ] 新建 `tests/spec/valid/stdlib/uuid_functions.dol`，覆盖：
+* 新建 `tests/spec/valid/stdlib/uuid_functions.dol`，覆盖：
   - `uuid.v4()` 返回长度为 36 的字符串
   - `uuid.is_valid(uuid.v4())` 返回 `true`
   - `uuid.is_valid("not-a-uuid")` 返回 `false`
@@ -39,19 +39,19 @@
   - 连续调用 `uuid.v4()` 两次结果不相同
 
 **文档**
-- [ ] 更新 `docs/CHANGELOG.md` Unreleased/Added 区域
+* 更新 `docs/CHANGELOG.md` Unreleased/Added 区域
 
 ---
 
 ## 验收标准
 
-- [ ] `cargo build` 编译通过
-- [ ] `cargo test` 全部通过
-- [ ] `uuid.v4()` 返回格式为 `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx` 的字符串（v4 特征）
-- [ ] 连续两次调用 `uuid.v4()` 结果不同
-- [ ] `uuid.is_valid("550e8400-e29b-41d4-a716-446655440000")` 返回 `true`
-- [ ] `uuid.is_valid("invalid")` 返回 `false`
-- [ ] 参数类型错误时报运行时错误，可被 `$try/$catch` 捕获
+* `cargo build` 编译通过
+* `cargo test` 全部通过
+* `uuid.v4()` 返回格式为 `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx` 的字符串（v4 特征）
+* 连续两次调用 `uuid.v4()` 结果不同
+* `uuid.is_valid("550e8400-e29b-41d4-a716-446655440000")` 返回 `true`
+* `uuid.is_valid("invalid")` 返回 `false`
+* 参数类型错误时报运行时错误，可被 `$try/$catch` 捕获
 
 ---
 

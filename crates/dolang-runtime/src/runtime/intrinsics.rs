@@ -254,13 +254,16 @@ fn fs_list(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValu
                         e.file_name().to_string_lossy().to_string(),
                     )),
                     Err(err) => {
-                        return Err(Error::Interpreter(format!("cannot read entry: {}", err)))
+                        return Err(Error::Interpreter(format!("cannot read entry: {}", err)));
                     }
                 }
             }
             Ok(DolangValue::List(names))
         }
-        Err(err) => Err(Error::Interpreter(format!("cannot list directory: {}", err))),
+        Err(err) => Err(Error::Interpreter(format!(
+            "cannot list directory: {}",
+            err
+        ))),
     }
 }
 
@@ -268,7 +271,10 @@ fn fs_mkdir(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangVal
     let path = intrinsic_path_buf_arg(ids::FS_MKDIR, args, 0)?;
     match fs::create_dir(&path) {
         Ok(_) => Ok(DolangValue::Null),
-        Err(err) => Err(Error::Interpreter(format!("cannot create directory: {}", err))),
+        Err(err) => Err(Error::Interpreter(format!(
+            "cannot create directory: {}",
+            err
+        ))),
     }
 }
 
@@ -276,7 +282,10 @@ fn fs_mkdir_all(args: &[DolangValue], _context: &RuntimeContext) -> Result<Dolan
     let path = intrinsic_path_buf_arg(ids::FS_MKDIR_ALL, args, 0)?;
     match fs::create_dir_all(&path) {
         Ok(_) => Ok(DolangValue::Null),
-        Err(err) => Err(Error::Interpreter(format!("cannot create directories: {}", err))),
+        Err(err) => Err(Error::Interpreter(format!(
+            "cannot create directories: {}",
+            err
+        ))),
     }
 }
 
@@ -284,7 +293,10 @@ fn fs_rmdir(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangVal
     let path = intrinsic_path_buf_arg(ids::FS_RMDIR, args, 0)?;
     match fs::remove_dir(&path) {
         Ok(_) => Ok(DolangValue::Null),
-        Err(err) => Err(Error::Interpreter(format!("cannot remove directory: {}", err))),
+        Err(err) => Err(Error::Interpreter(format!(
+            "cannot remove directory: {}",
+            err
+        ))),
     }
 }
 
@@ -498,7 +510,10 @@ mod tests {
 
         let entries = fs_list(&[DolangValue::Str(dir.display().to_string())], &context)
             .expect("list should succeed");
-        assert_eq!(entries, DolangValue::List(vec![DolangValue::Str("hello.txt".to_string())]));
+        assert_eq!(
+            entries,
+            DolangValue::List(vec![DolangValue::Str("hello.txt".to_string())])
+        );
 
         // copy file
         let copy_path = dir.join("copy.txt");
@@ -526,10 +541,16 @@ mod tests {
         assert!(!copy_path.exists());
 
         // cleanup: delete files then rmdir
-        fs_delete(&[DolangValue::Str(file_path.display().to_string())], &context)
-            .expect("delete file should succeed");
-        fs_delete(&[DolangValue::Str(renamed_path.display().to_string())], &context)
-            .expect("delete renamed should succeed");
+        fs_delete(
+            &[DolangValue::Str(file_path.display().to_string())],
+            &context,
+        )
+        .expect("delete file should succeed");
+        fs_delete(
+            &[DolangValue::Str(renamed_path.display().to_string())],
+            &context,
+        )
+        .expect("delete renamed should succeed");
         fs_rmdir(&[DolangValue::Str(dir.display().to_string())], &context)
             .expect("rmdir should succeed");
         assert!(!dir.exists());

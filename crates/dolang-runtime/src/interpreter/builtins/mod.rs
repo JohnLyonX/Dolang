@@ -18,8 +18,15 @@ use crate::runtime::RuntimeContext;
 fn is_mutating(method: &str) -> bool {
     matches!(
         method,
-        "push" | "pop" | "reverse" | "remove"
-            | "sort" | "sort_desc" | "remove_at" | "insert" | "clear"
+        "push"
+            | "pop"
+            | "reverse"
+            | "remove"
+            | "sort"
+            | "sort_desc"
+            | "remove_at"
+            | "insert"
+            | "clear"
     )
 }
 

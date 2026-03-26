@@ -41,7 +41,7 @@ pub fn eval_index_access(
             }
             Ok(list[idx].clone())
         }
-        DolangValue::Map(map) => {
+        DolangValue::Map(map) | DolangValue::Json(map) => {
             let key = idx_val.to_string();
             match map.get(&key) {
                 Some(val) => Ok(val.clone()),
@@ -55,7 +55,7 @@ pub fn eval_index_access(
         _ => Err(super::runtime_error(
             e,
             codes::RUNTIME_INVALID_EXPRESSION,
-            "index access is only supported on List and Map values",
+            "index access is only supported on List, Map, and Json values",
         )),
     }
 }

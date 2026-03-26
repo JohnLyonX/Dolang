@@ -1,0 +1,5 @@
+$mod services.users_services;
+
+$GET("/getUser") getUserRouter(id)  -> JSON<User>{
+    $# find_user(id);
+}

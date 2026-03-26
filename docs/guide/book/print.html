@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b66b23c7.js";
+            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -367,6 +367,9 @@
 <li><code>std.json</code></li>
 <li><code>std.fs</code></li>
 <li><code>std.env</code></li>
+<li><code>std.time</code></li>
+<li><code>std.uuid</code></li>
+<li><code>std.http</code></li>
 <li><code>std.core.iter</code></li>
 <li><code>std.core.check</code></li>
 <li><code>std.str.check</code></li>
@@ -393,6 +396,7 @@
 <li><code>$HDR(...)</code></li>
 <li><code>-&gt; String</code>、<code>-&gt; JSON</code>、<code>-&gt; HTML</code></li>
 <li><code>$JSON { ... }</code>、<code>$HTML(...)</code>、<code>$RES(status, body)</code></li>
+<li><code>std.http</code> 的同步客户端调用</li>
 </ul>
 <h4 id="16-http-组织方式"><a class="header" href="#16-http-组织方式">16. HTTP 组织方式</a></h4>
 <ul>
@@ -1972,6 +1976,9 @@ port = 8080
 <li><code>std.str</code></li>
 <li><code>std.math</code></li>
 <li><code>std.json</code></li>
+<li><code>std.time</code></li>
+<li><code>std.uuid</code></li>
+<li><code>std.http</code></li>
 </ul>
 <p>纯 <code>.dol</code> 模块：</p>
 <ul>
@@ -2031,6 +2038,19 @@ $mod std.fs;
 $&gt;&gt; env.get_or("APP_ENV", "dev");
 $&gt;&gt; fs.exists("README.md");
 </code></pre>
+<h3 id="时间唯一-id-与服务调用"><a class="header" href="#时间唯一-id-与服务调用">时间、唯一 ID 与服务调用</a></h3>
+<ul>
+<li><code>std.time</code></li>
+<li><code>std.uuid</code></li>
+<li><code>std.http</code></li>
+</ul>
+<pre><code class="language-dol">$mod std.time;
+$mod std.uuid;
+$mod std.http;
+
+$&gt;&gt; time.format(0, "%Y-%m-%d");
+$&gt;&gt; uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
+</code></pre>
 <h3 id="基础工具"><a class="header" href="#基础工具">基础工具</a></h3>
 <ul>
 <li><code>std.core.iter</code></li>
@@ -2051,6 +2071,9 @@ $&gt;&gt; check.type_of(42);
 <li>路径处理：<code>std.path</code></li>
 <li>文件和目录：<code>std.fs</code></li>
 <li>环境变量：<code>std.env</code></li>
+<li>时间处理：<code>std.time</code></li>
+<li>唯一 ID：<code>std.uuid</code></li>
+<li>HTTP 客户端：<code>std.http</code></li>
 <li>通用工具：<code>std.core.iter</code>、<code>std.core.check</code></li>
 </ul>
 <p>例如 <code>std.path</code> 里除了 <code>basename</code>，还可以继续留意：</p>
@@ -2080,7 +2103,7 @@ $&gt;&gt; str.trim("  hello  ");
 <h2 id="什么时候用标准库"><a class="header" href="#什么时候用标准库">什么时候用标准库</a></h2>
 <p>建议把标准库理解成三层用途：</p>
 <ul>
-<li>基础字符串、数学、JSON、文件、环境变量</li>
+<li>基础字符串、数学、JSON、文件、环境变量、时间、UUID、HTTP</li>
 <li>一些以 <code>.dol</code> 编写的组合工具</li>
 <li>未来继续扩展的公共模块入口</li>
 </ul>
@@ -2095,6 +2118,9 @@ $&gt;&gt; str.trim("  hello  ");
 </ol>
 <p>然后再补：</p>
 <ul>
+<li><code>std.time</code></li>
+<li><code>std.uuid</code></li>
+<li><code>std.http</code></li>
 <li><code>std.core.iter</code></li>
 <li><code>std.core.check</code></li>
 <li><code>std.str.fmt</code></li>
@@ -2104,10 +2130,14 @@ $&gt;&gt; str.trim("  hello  ");
 <pre><code class="language-dol">$mod std.fs;
 $mod std.json;
 $mod std.path;
+$mod std.time;
+$mod std.uuid;
 
 $ raw = fs.read_text("tests/fixtures/stdlib/hello.txt");
 $&gt;&gt; raw;
 $&gt;&gt; path.basename("/usr/local/bin");
+$&gt;&gt; time.year(0);
+$&gt;&gt; uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
 $&gt;&gt; json.stringify({"ok": true});
 </code></pre>
 <h2 id="迁移期参考-7"><a class="header" href="#迁移期参考-7">迁移期参考</a></h2>
@@ -2221,7 +2251,8 @@ fs.delete("/tmp/dolang-demo.txt");
 <p>继续看 <a href="#15-http-基础-1">15-http-basics.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="15-http-基础-1"><a class="header" href="#15-http-基础-1">15. HTTP 基础</a></h1>
-<p>Dolang 当前内置了 HTTP 路由定义能力，可以直接和 <code>dolang serve</code> 配合使用。</p>
+<p>Dolang 当前内置了 HTTP 路由定义能力，可以直接和 <code>dolang serve</code> 配合使用。
+除此之外，也已经有 <code>std.http</code> 原生模块，可以在脚本或 handler 内主动发出同步 HTTP 请求。</p>
 <h2 id="定义路由"><a class="header" href="#定义路由">定义路由</a></h2>
 <pre><code class="language-dol">$GET("/hello") hello() -&gt; String {
     $# "world";
@@ -2242,6 +2273,48 @@ fs.delete("/tmp/dolang-demo.txt");
 <li><code>$DEL</code></li>
 <li><code>$PATCH</code></li>
 </ul>
+<h2 id="stdhttp-客户端"><a class="header" href="#stdhttp-客户端"><code>std.http</code> 客户端</a></h2>
+<p>如果你不是在“接收请求”，而是要“调用别的服务”，用 <code>std.http</code>：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$ res = http.get("https://example.com");
+$&gt;&gt; res["status"];
+$&gt;&gt; res["body"];
+</code></pre>
+<p>返回值统一是一个 <code>Map</code>：</p>
+<pre><code class="language-text">{
+  "status": Int,
+  "body": String,
+  "headers": Map
+}
+</code></pre>
+<p>也可以传请求头：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$ res = http.get("https://example.com", {
+    "Authorization": "Bearer demo-token"
+});
+$&gt;&gt; res["status"];
+</code></pre>
+<p>POST / PUT 请求用于发送 JSON 风格的 <code>Map</code>：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$ created = http.post("https://example.com/users", {
+    "name": "Alice",
+    "role": "admin"
+});
+$&gt;&gt; created["status"];
+</code></pre>
+<p>如果 URL 不合法、连接失败或超时，错误会作为普通运行时错误抛出，可以配合 <code>$try / $catch</code>：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$try {
+    $ res = http.get("not-a-url");
+    $&gt;&gt; res["status"];
+} $catch err {
+    $&gt;&gt; "request failed";
+}
+</code></pre>
 <h2 id="handler-长什么样"><a class="header" href="#handler-长什么样">handler 长什么样</a></h2>
 <p>一个 handler 一般包含四部分：</p>
 <ol>
@@ -2328,6 +2401,56 @@ $GET("/users/:id") get_user(id) -&gt; JSON&lt;User&gt; {
 <li><code>Content-Type</code></li>
 <li>自定义请求头</li>
 </ul>
+<h2 id="set_hdr-响应头注解"><a class="header" href="#set_hdr-响应头注解"><code>@SET_HDR(...)</code> 响应头注解</a></h2>
+<p>如果你要给响应统一附加静态 header，用 <code>@SET_HDR(...)</code>，而不是在 handler 里手工拼接。</p>
+<pre><code class="language-dol">@SET_HDR({
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "max-age=3600"
+})
+$GET("/health") health() -&gt; String {
+    $# "ok";
+}
+</code></pre>
+<p>要点：</p>
+<ul>
+<li><code>@SET_HDR(...)</code> 只接受一个对象字面量</li>
+<li>key 必须是字符串 header 名</li>
+<li>value 也必须是字符串字面量</li>
+<li>一个注解里可以声明多个 header</li>
+</ul>
+<p>不符合这个形态会直接报解析错误，例如：</p>
+<pre><code class="language-dol">@SET_HDR("X-Frame-Options", "DENY")     // 非法
+@SET_HDR({ name: "X-Frame-Options" })   // 非法
+</code></pre>
+<p>如果没有写 <code>@SET_HDR(...)</code>，响应不会额外注入这些自定义 header。</p>
+<h2 id="cors"><a class="header" href="#cors"><code>@CORS(...)</code></a></h2>
+<p>如果服务需要浏览器跨域访问，可以直接在路由前或 HTTP 组织节点前写 <code>@CORS(...)</code>。</p>
+<p>最简单的写法是允许所有来源：</p>
+<pre><code class="language-dol">@CORS("*")
+$GET("/public") public_data() -&gt; JSON {
+    $# $JSON { "ok": true };
+}
+</code></pre>
+<p>需要更细的配置时，用单个对象字面量：</p>
+<pre><code class="language-dol">@CORS({
+    origins: ["https://app.example.com"],
+    methods: ["GET", "POST"],
+    headers: ["Authorization", "Content-Type"],
+    max_age: 600,
+    credentials: true
+})
+$GET("/profile") profile() -&gt; JSON {
+    $# $JSON { "ok": true };
+}
+</code></pre>
+<p>要点：</p>
+<ul>
+<li><code>@CORS("*")</code> 适合公开接口</li>
+<li><code>@CORS({ ... })</code> 适合白名单接口</li>
+<li>对象字段当前支持 <code>origins</code>、<code>methods</code>、<code>headers</code>、<code>max_age</code>、<code>credentials</code></li>
+<li>这些参数都必须是静态字面量，不能传变量或运行时表达式</li>
+</ul>
+<p>如果没有写 <code>@CORS(...)</code>，服务不会额外返回 <code>Access-Control-Allow-*</code> 响应头。</p>
 <h2 id="body"><a class="header" href="#body">body</a></h2>
 <p>当前 runtime 会把请求体放进 <code>body</code> 变量。</p>
 <p>在真实服务模式下，JSON body 会被解析后注入；在 <code>dolang test --body ...</code> 里，body 的输入路径和服务模式略有差异，因此写文档时最好先用“读取 body 并回显”的最小例子说明：</p>
@@ -2439,6 +2562,57 @@ $GET("/users/:id") get_user(id) -&gt; JSON&lt;User&gt; {
 }
 </code></pre>
 <p>这样可以少写重复前缀，适合按版本或按业务域组织路由。</p>
+<h2 id="在块上挂-set_hdr"><a class="header" href="#在块上挂-set_hdr">在块上挂 <code>@SET_HDR(...)</code></a></h2>
+<p>块级 <code>@SET_HDR(...)</code> 适合写整个路由组都要带上的静态响应头：</p>
+<pre><code class="language-dol">@SET_HDR({
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "no-cache"
+})
+$HTTP("/api") {
+    $GET("/ping") ping() -&gt; String {
+        $# "pong";
+    }
+}
+</code></pre>
+<p>路由级也可以继续声明：</p>
+<pre><code class="language-dol">@SET_HDR({ "Cache-Control": "no-store" })
+$GET("/admin") admin() -&gt; String {
+    $# "ok";
+}
+</code></pre>
+<p>合并规则：</p>
+<ul>
+<li>块级 header 会传给块内路由</li>
+<li>同名 header 由更靠近路由的声明覆盖</li>
+<li>不同名 header 会一起保留</li>
+</ul>
+<h2 id="组织-cors"><a class="header" href="#组织-cors">组织 <code>@CORS(...)</code></a></h2>
+<p><code>@CORS(...)</code> 可以放在三个层级：</p>
+<ul>
+<li><code>$main() {}</code> 前，表示全局默认策略</li>
+<li><code>$HTTP(...)</code> 前，表示某个路由组的策略</li>
+<li>具体路由前，表示单条路由策略</li>
+</ul>
+<p>例如：</p>
+<pre><code class="language-dol">@CORS("*")
+$main() {}
+
+@CORS({
+    origins: ["https://api.example.com"],
+    methods: ["GET", "POST"]
+})
+$HTTP("/api") {
+    $GET("/users") users() -&gt; JSON {
+        $# $JSON { "ok": true };
+    }
+}
+</code></pre>
+<p>优先级是：</p>
+<ul>
+<li>路由级 <code>@CORS</code> 覆盖块级</li>
+<li>块级 <code>@CORS</code> 覆盖全局</li>
+<li>这里是整份配置替换，不做字段级合并</li>
+</ul>
 <h2 id="链接外部路由模块"><a class="header" href="#链接外部路由模块">链接外部路由模块</a></h2>
 <pre><code class="language-dol">$HTTP("/v1/api").link("routers.api");
 </code></pre>
@@ -2484,7 +2658,11 @@ $GET("/users/:id") get_user(id) -&gt; JSON&lt;User&gt; {
 <li>静态资源单独交给 <code>$STATIC(...)</code></li>
 </ol>
 <h2 id="一个完整例子-7"><a class="header" href="#一个完整例子-7">一个完整例子</a></h2>
-<pre><code class="language-dol">$HTTP("/api") {
+<pre><code class="language-dol">@CORS("*")
+$main() {}
+
+@SET_HDR({ "X-Frame-Options": "DENY" })
+$HTTP("/api") {
     $GET("/ping") ping() -&gt; JSON {
         $# $JSON { "ok": true };
     }
@@ -3944,6 +4122,52 @@ $POST("/users") create_user() -&gt; JSON {
 }
 </code></pre>
 <hr>
+<h2 id="响应头注解"><a class="header" href="#响应头注解">响应头注解</a></h2>
+<p>如果你要给响应统一附加静态 header，用 <code>@SET_HDR(...)</code>：</p>
+<pre><code class="language-dolang">@SET_HDR({
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "max-age=3600"
+})
+$GET("/health") health() -&gt; String {
+    $# "ok";
+}
+</code></pre>
+<p>规则很简单：</p>
+<ul>
+<li><code>@SET_HDR(...)</code> 只接受一个对象字面量</li>
+<li>key 必须是字符串 header 名</li>
+<li>value 必须是字符串字面量</li>
+<li>一个注解里可以声明多个 header</li>
+</ul>
+<p>如果没有写 <code>@SET_HDR(...)</code>，响应不会额外附加这些 header。</p>
+<hr>
+<h2 id="cors-注解"><a class="header" href="#cors-注解">CORS 注解</a></h2>
+<p>公开接口可以直接写：</p>
+<pre><code class="language-dolang">@CORS("*")
+$GET("/public") public_data() -&gt; JSON {
+    $# {"ok": true};
+}
+</code></pre>
+<p>需要白名单时，用对象写法：</p>
+<pre><code class="language-dolang">@CORS({
+    origins: ["https://app.example.com"],
+    methods: ["GET", "POST"],
+    headers: ["Authorization"],
+    max_age: 600,
+    credentials: true
+})
+$GET("/profile") profile() -&gt; JSON {
+    $# {"ok": true};
+}
+</code></pre>
+<p><code>@CORS(...)</code> 可以放在：</p>
+<ul>
+<li><code>$main()</code> 前，作为全局默认策略</li>
+<li><code>$HTTP(...)</code> 前，作为块级策略</li>
+<li>路由前，作为路由级策略</li>
+</ul>
+<p>优先级是路由级覆盖块级，块级覆盖全局；没有写时，就不会额外返回 CORS 响应头。</p>
+<hr>
 <h2 id="路由分组http-块"><a class="header" href="#路由分组http-块">路由分组（$HTTP 块）</a></h2>
 <p>使用 <code>$HTTP("/prefix") { ... }</code> 为一组路由添加统一前缀：</p>
 <pre><code class="language-dolang">$HTTP("/api/v1") {
@@ -3970,12 +4194,12 @@ $GET("/status") status() -&gt; String {
 }
 </code></pre>
 <pre><code class="language-dolang">// main.dol
-$HTTP.link(routers.api);
+$HTTP().link("routers.api");
 </code></pre>
 <p>多个模块链接：</p>
-<pre><code class="language-dolang">$HTTP.link(routers.users);
-$HTTP.link(routers.orders);
-$HTTP.link(routers.admin);
+<pre><code class="language-dolang">$HTTP().link("routers.users");
+$HTTP().link("routers.orders");
+$HTTP().link("routers.admin");
 </code></pre>
 <hr>
 <h2 id="静态文件"><a class="header" href="#静态文件">静态文件</a></h2>

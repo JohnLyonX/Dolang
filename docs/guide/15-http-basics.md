@@ -212,6 +212,73 @@ $GET("/whoami") whoami() -> JSON {
 - `Content-Type`
 - 自定义请求头
 
+## `@SET_HDR(...)` 响应头注解
+
+如果你要给响应统一附加静态 header，用 `@SET_HDR(...)`，而不是在 handler 里手工拼接。
+
+```dol
+@SET_HDR({
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "max-age=3600"
+})
+$GET("/health") health() -> String {
+    $# "ok";
+}
+```
+
+要点：
+
+- `@SET_HDR(...)` 只接受一个对象字面量
+- key 必须是字符串 header 名
+- value 也必须是字符串字面量
+- 一个注解里可以声明多个 header
+
+不符合这个形态会直接报解析错误，例如：
+
+```dol
+@SET_HDR("X-Frame-Options", "DENY")     // 非法
+@SET_HDR({ name: "X-Frame-Options" })   // 非法
+```
+
+如果没有写 `@SET_HDR(...)`，响应不会额外注入这些自定义 header。
+
+## `@CORS(...)`
+
+如果服务需要浏览器跨域访问，可以直接在路由前或 HTTP 组织节点前写 `@CORS(...)`。
+
+最简单的写法是允许所有来源：
+
+```dol
+@CORS("*")
+$GET("/public") public_data() -> JSON {
+    $# $JSON { "ok": true };
+}
+```
+
+需要更细的配置时，用单个对象字面量：
+
+```dol
+@CORS({
+    origins: ["https://app.example.com"],
+    methods: ["GET", "POST"],
+    headers: ["Authorization", "Content-Type"],
+    max_age: 600,
+    credentials: true
+})
+$GET("/profile") profile() -> JSON {
+    $# $JSON { "ok": true };
+}
+```
+
+要点：
+
+- `@CORS("*")` 适合公开接口
+- `@CORS({ ... })` 适合白名单接口
+- 对象字段当前支持 `origins`、`methods`、`headers`、`max_age`、`credentials`
+- 这些参数都必须是静态字面量，不能传变量或运行时表达式
+
+如果没有写 `@CORS(...)`，服务不会额外返回 `Access-Control-Allow-*` 响应头。
+
 ## body
 
 当前 runtime 会把请求体放进 `body` 变量。

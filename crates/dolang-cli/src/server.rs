@@ -6,7 +6,7 @@ use dolang::runtime::{
     load_context_and_program,
 };
 
-use crate::backends::axum_backend::AxumBackend;
+use crate::backends::axum_backend::{AxumBackend, validate_runtime_context};
 
 /// Start HTTP server with the given path (main.dol file or directory)
 pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
@@ -47,6 +47,11 @@ pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
     if routes.is_empty() {
         println!("No HTTP routes registered.");
         return;
+    }
+
+    if let Err(err) = validate_runtime_context(&context) {
+        eprintln!("{err}");
+        process::exit(1);
     }
 
     let host = context.server_host().to_string();

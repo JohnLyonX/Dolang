@@ -148,6 +148,67 @@ $GET("/whoami") whoami() -> JSON {
 
 ---
 
+## 响应头注解
+
+如果你要给响应统一附加静态 header，用 `@SET_HDR(...)`：
+
+```dolang
+@SET_HDR({
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "max-age=3600"
+})
+$GET("/health") health() -> String {
+    $# "ok";
+}
+```
+
+规则很简单：
+
+- `@SET_HDR(...)` 只接受一个对象字面量
+- key 必须是字符串 header 名
+- value 必须是字符串字面量
+- 一个注解里可以声明多个 header
+
+如果没有写 `@SET_HDR(...)`，响应不会额外附加这些 header。
+
+---
+
+## CORS 注解
+
+公开接口可以直接写：
+
+```dolang
+@CORS("*")
+$GET("/public") public_data() -> JSON {
+    $# {"ok": true};
+}
+```
+
+需要白名单时，用对象写法：
+
+```dolang
+@CORS({
+    origins: ["https://app.example.com"],
+    methods: ["GET", "POST"],
+    headers: ["Authorization"],
+    max_age: 600,
+    credentials: true
+})
+$GET("/profile") profile() -> JSON {
+    $# {"ok": true};
+}
+```
+
+`@CORS(...)` 可以放在：
+
+- `$main()` 前，作为全局默认策略
+- `$HTTP(...)` 前，作为块级策略
+- 路由前，作为路由级策略
+
+优先级是路由级覆盖块级，块级覆盖全局；没有写时，就不会额外返回 CORS 响应头。
+
+---
+
 ## 路由分组（$HTTP 块）
 
 使用 `$HTTP("/prefix") { ... }` 为一组路由添加统一前缀：
@@ -185,15 +246,15 @@ $GET("/status") status() -> String {
 
 ```dolang
 // main.dol
-$HTTP.link(routers.api);
+$HTTP().link("routers.api");
 ```
 
 多个模块链接：
 
 ```dolang
-$HTTP.link(routers.users);
-$HTTP.link(routers.orders);
-$HTTP.link(routers.admin);
+$HTTP().link("routers.users");
+$HTTP().link("routers.orders");
+$HTTP().link("routers.admin");
 ```
 
 ---

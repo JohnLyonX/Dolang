@@ -28,6 +28,13 @@ pub fn execute_program_with_writer(
     context: &mut RuntimeContext,
     writer: &mut dyn Write,
 ) -> Result<bool, Error> {
+    if let Some(global_cors) = statements.iter().find_map(|stmt| match stmt {
+        Stmt::MainDecl(main) => Some(main.global_cors.clone()),
+        _ => None,
+    }) {
+        context.set_global_cors(global_cors);
+    }
+
     for stmt in statements {
         let (should_continue, result) = exec_with_writer(stmt, state, context, writer);
         result?;

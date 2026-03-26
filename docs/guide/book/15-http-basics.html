@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b66b23c7.js";
+            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -175,7 +175,8 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="15-http-基础"><a class="header" href="#15-http-基础">15. HTTP 基础</a></h1>
-<p>Dolang 当前内置了 HTTP 路由定义能力，可以直接和 <code>dolang serve</code> 配合使用。</p>
+<p>Dolang 当前内置了 HTTP 路由定义能力，可以直接和 <code>dolang serve</code> 配合使用。
+除此之外，也已经有 <code>std.http</code> 原生模块，可以在脚本或 handler 内主动发出同步 HTTP 请求。</p>
 <h2 id="定义路由"><a class="header" href="#定义路由">定义路由</a></h2>
 <pre><code class="language-dol">$GET("/hello") hello() -&gt; String {
     $# "world";
@@ -196,6 +197,48 @@
 <li><code>$DEL</code></li>
 <li><code>$PATCH</code></li>
 </ul>
+<h2 id="stdhttp-客户端"><a class="header" href="#stdhttp-客户端"><code>std.http</code> 客户端</a></h2>
+<p>如果你不是在“接收请求”，而是要“调用别的服务”，用 <code>std.http</code>：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$ res = http.get("https://example.com");
+$&gt;&gt; res["status"];
+$&gt;&gt; res["body"];
+</code></pre>
+<p>返回值统一是一个 <code>Map</code>：</p>
+<pre><code class="language-text">{
+  "status": Int,
+  "body": String,
+  "headers": Map
+}
+</code></pre>
+<p>也可以传请求头：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$ res = http.get("https://example.com", {
+    "Authorization": "Bearer demo-token"
+});
+$&gt;&gt; res["status"];
+</code></pre>
+<p>POST / PUT 请求用于发送 JSON 风格的 <code>Map</code>：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$ created = http.post("https://example.com/users", {
+    "name": "Alice",
+    "role": "admin"
+});
+$&gt;&gt; created["status"];
+</code></pre>
+<p>如果 URL 不合法、连接失败或超时，错误会作为普通运行时错误抛出，可以配合 <code>$try / $catch</code>：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$try {
+    $ res = http.get("not-a-url");
+    $&gt;&gt; res["status"];
+} $catch err {
+    $&gt;&gt; "request failed";
+}
+</code></pre>
 <h2 id="handler-长什么样"><a class="header" href="#handler-长什么样">handler 长什么样</a></h2>
 <p>一个 handler 一般包含四部分：</p>
 <ol>
@@ -282,6 +325,56 @@ $GET("/users/:id") get_user(id) -&gt; JSON&lt;User&gt; {
 <li><code>Content-Type</code></li>
 <li>自定义请求头</li>
 </ul>
+<h2 id="set_hdr-响应头注解"><a class="header" href="#set_hdr-响应头注解"><code>@SET_HDR(...)</code> 响应头注解</a></h2>
+<p>如果你要给响应统一附加静态 header，用 <code>@SET_HDR(...)</code>，而不是在 handler 里手工拼接。</p>
+<pre><code class="language-dol">@SET_HDR({
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "max-age=3600"
+})
+$GET("/health") health() -&gt; String {
+    $# "ok";
+}
+</code></pre>
+<p>要点：</p>
+<ul>
+<li><code>@SET_HDR(...)</code> 只接受一个对象字面量</li>
+<li>key 必须是字符串 header 名</li>
+<li>value 也必须是字符串字面量</li>
+<li>一个注解里可以声明多个 header</li>
+</ul>
+<p>不符合这个形态会直接报解析错误，例如：</p>
+<pre><code class="language-dol">@SET_HDR("X-Frame-Options", "DENY")     // 非法
+@SET_HDR({ name: "X-Frame-Options" })   // 非法
+</code></pre>
+<p>如果没有写 <code>@SET_HDR(...)</code>，响应不会额外注入这些自定义 header。</p>
+<h2 id="cors"><a class="header" href="#cors"><code>@CORS(...)</code></a></h2>
+<p>如果服务需要浏览器跨域访问，可以直接在路由前或 HTTP 组织节点前写 <code>@CORS(...)</code>。</p>
+<p>最简单的写法是允许所有来源：</p>
+<pre><code class="language-dol">@CORS("*")
+$GET("/public") public_data() -&gt; JSON {
+    $# $JSON { "ok": true };
+}
+</code></pre>
+<p>需要更细的配置时，用单个对象字面量：</p>
+<pre><code class="language-dol">@CORS({
+    origins: ["https://app.example.com"],
+    methods: ["GET", "POST"],
+    headers: ["Authorization", "Content-Type"],
+    max_age: 600,
+    credentials: true
+})
+$GET("/profile") profile() -&gt; JSON {
+    $# $JSON { "ok": true };
+}
+</code></pre>
+<p>要点：</p>
+<ul>
+<li><code>@CORS("*")</code> 适合公开接口</li>
+<li><code>@CORS({ ... })</code> 适合白名单接口</li>
+<li>对象字段当前支持 <code>origins</code>、<code>methods</code>、<code>headers</code>、<code>max_age</code>、<code>credentials</code></li>
+<li>这些参数都必须是静态字面量，不能传变量或运行时表达式</li>
+</ul>
+<p>如果没有写 <code>@CORS(...)</code>，服务不会额外返回 <code>Access-Control-Allow-*</code> 响应头。</p>
 <h2 id="body"><a class="header" href="#body">body</a></h2>
 <p>当前 runtime 会把请求体放进 <code>body</code> 变量。</p>
 <p>在真实服务模式下，JSON body 会被解析后注入；在 <code>dolang test --body ...</code> 里，body 的输入路径和服务模式略有差异，因此写文档时最好先用“读取 body 并回显”的最小例子说明：</p>

@@ -56,6 +56,9 @@ pub enum Type {
     Html,       // $HTML - HTML constructor
     Res,        // $RES - HTTP response constructor
     Static,     // $STATIC - static file serving
+    At,         // @ - annotation entrypoint
+    AtCors,     // @CORS - CORS annotation
+    AtSetHdr,   // @SET_HDR - response header annotation
 
     // HTTP method keywords
     HttpGet,   // $GET
@@ -145,6 +148,9 @@ impl fmt::Display for Type {
             Type::Html => write!(f, "$HTML"),
             Type::Res => write!(f, "$RES"),
             Type::Static => write!(f, "$STATIC"),
+            Type::At => write!(f, "@"),
+            Type::AtCors => write!(f, "@CORS"),
+            Type::AtSetHdr => write!(f, "@SET_HDR"),
             Type::HttpGet => write!(f, "$GET"),
             Type::HttpPost => write!(f, "$POST"),
             Type::HttpPut => write!(f, "$PUT"),

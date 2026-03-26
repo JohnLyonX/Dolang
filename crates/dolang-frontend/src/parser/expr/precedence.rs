@@ -186,9 +186,7 @@ impl<'a> ExprParser<'a> {
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
                     // Allow `obj.field.method()` chaining: if the next token is '.',
                     // this is a property access (e.g. `services.auth.login()`).
-                    if self.pos < self.tokens.len()
-                        && self.tokens[self.pos].typ == Type::Dot
-                    {
+                    if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Dot {
                         expr = Box::new(Expr::MethodCall(MethodCall {
                             span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
                             object: expr,

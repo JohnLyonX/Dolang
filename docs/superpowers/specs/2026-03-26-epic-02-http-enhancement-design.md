@@ -4,7 +4,7 @@
 
 EPIC-02 extends Dolang's HTTP server with two new declarative annotation capabilities:
 
-- `@SET_HDR("name", "value")` for static response headers on HTTP blocks and routes
+- `@SET_HDR({ "Header-Name": "value", ... })` for static response headers on HTTP blocks and routes
 - `@CORS(...)` for static CORS policy on global, block, and route scopes
 
 The implementation keeps annotations separate from ordinary `$` language statements. Annotations are parsed only as prefix metadata for `$main()`, `$HTTP {}`, and HTTP route declarations, then resolved into runtime route configuration during HTTP registration.
@@ -105,7 +105,7 @@ pub struct CorsConfig {
     pub origins: Vec<String>,
     pub methods: Vec<String>,
     pub headers: Vec<String>,
-    pub max_age: Option<u64>,
+    pub max_age: Option<i64>,
     pub credentials: bool,
 }
 ```

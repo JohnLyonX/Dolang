@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b66b23c7.js";
+            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -189,6 +189,9 @@
 <li><code>std.str</code></li>
 <li><code>std.math</code></li>
 <li><code>std.json</code></li>
+<li><code>std.time</code></li>
+<li><code>std.uuid</code></li>
+<li><code>std.http</code></li>
 </ul>
 <p>纯 <code>.dol</code> 模块：</p>
 <ul>
@@ -248,6 +251,19 @@ $mod std.fs;
 $&gt;&gt; env.get_or("APP_ENV", "dev");
 $&gt;&gt; fs.exists("README.md");
 </code></pre>
+<h3 id="时间唯一-id-与服务调用"><a class="header" href="#时间唯一-id-与服务调用">时间、唯一 ID 与服务调用</a></h3>
+<ul>
+<li><code>std.time</code></li>
+<li><code>std.uuid</code></li>
+<li><code>std.http</code></li>
+</ul>
+<pre><code class="language-dol">$mod std.time;
+$mod std.uuid;
+$mod std.http;
+
+$&gt;&gt; time.format(0, "%Y-%m-%d");
+$&gt;&gt; uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
+</code></pre>
 <h3 id="基础工具"><a class="header" href="#基础工具">基础工具</a></h3>
 <ul>
 <li><code>std.core.iter</code></li>
@@ -268,6 +284,9 @@ $&gt;&gt; check.type_of(42);
 <li>路径处理：<code>std.path</code></li>
 <li>文件和目录：<code>std.fs</code></li>
 <li>环境变量：<code>std.env</code></li>
+<li>时间处理：<code>std.time</code></li>
+<li>唯一 ID：<code>std.uuid</code></li>
+<li>HTTP 客户端：<code>std.http</code></li>
 <li>通用工具：<code>std.core.iter</code>、<code>std.core.check</code></li>
 </ul>
 <p>例如 <code>std.path</code> 里除了 <code>basename</code>，还可以继续留意：</p>
@@ -297,7 +316,7 @@ $&gt;&gt; str.trim("  hello  ");
 <h2 id="什么时候用标准库"><a class="header" href="#什么时候用标准库">什么时候用标准库</a></h2>
 <p>建议把标准库理解成三层用途：</p>
 <ul>
-<li>基础字符串、数学、JSON、文件、环境变量</li>
+<li>基础字符串、数学、JSON、文件、环境变量、时间、UUID、HTTP</li>
 <li>一些以 <code>.dol</code> 编写的组合工具</li>
 <li>未来继续扩展的公共模块入口</li>
 </ul>
@@ -312,6 +331,9 @@ $&gt;&gt; str.trim("  hello  ");
 </ol>
 <p>然后再补：</p>
 <ul>
+<li><code>std.time</code></li>
+<li><code>std.uuid</code></li>
+<li><code>std.http</code></li>
 <li><code>std.core.iter</code></li>
 <li><code>std.core.check</code></li>
 <li><code>std.str.fmt</code></li>
@@ -321,10 +343,14 @@ $&gt;&gt; str.trim("  hello  ");
 <pre><code class="language-dol">$mod std.fs;
 $mod std.json;
 $mod std.path;
+$mod std.time;
+$mod std.uuid;
 
 $ raw = fs.read_text("tests/fixtures/stdlib/hello.txt");
 $&gt;&gt; raw;
 $&gt;&gt; path.basename("/usr/local/bin");
+$&gt;&gt; time.year(0);
+$&gt;&gt; uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
 $&gt;&gt; json.stringify({"ok": true});
 </code></pre>
 <h2 id="迁移期参考"><a class="header" href="#迁移期参考">迁移期参考</a></h2>

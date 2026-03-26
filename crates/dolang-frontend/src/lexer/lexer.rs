@@ -194,6 +194,18 @@ impl Lexer {
                 self.advance();
                 Ok(Token::new(Type::Colon, ":", start))
             }
+            '@' => {
+                if self.match_seq("@CORS") && self.annotation_boundary_after(5) {
+                    self.advance_n(5);
+                    return Ok(Token::new(Type::AtCors, "@CORS", start));
+                }
+                if self.match_seq("@SET_HDR") && self.annotation_boundary_after(8) {
+                    self.advance_n(8);
+                    return Ok(Token::new(Type::AtSetHdr, "@SET_HDR", start));
+                }
+                self.advance();
+                Ok(Token::new(Type::At, "@", start))
+            }
             '.' => {
                 self.advance();
                 // Check for ... (spread)
@@ -734,6 +746,11 @@ impl Lexer {
         }
         true
     }
+
+    fn annotation_boundary_after(&self, len: usize) -> bool {
+        let next_pos = self.pos + len;
+        next_pos >= self.input.len() || is_delimiter(self.input[next_pos])
+    }
 }
 
 fn is_delimiter(ch: char) -> bool {
@@ -755,6 +772,7 @@ fn is_delimiter(ch: char) -> bool {
             | '&'
             | '|'
             | '$'
+            | '@'
             | '"'
             | '\''
             | '{'
@@ -789,5 +807,15 @@ mod tests {
         let mut lexer = Lexer::new("_$fn helper() { }");
         let tokens = lexer.lex_all().expect("lexing should succeed");
         assert_eq!(tokens[0].typ, Type::PrivateFn);
+    }
+
+    #[test]
+    fn lexes_set_hdr_only_on_annotation_boundary() {
+        let mut lexer = Lexer::new("@SET_HDRX");
+        let tokens = lexer.lex_all().expect("lexing should succeed");
+
+        assert_eq!(tokens[0].typ, Type::At);
+        assert_eq!(tokens[1].typ, Type::Ident);
+        assert_eq!(tokens[1].literal, "SET_HDRX");
     }
 }

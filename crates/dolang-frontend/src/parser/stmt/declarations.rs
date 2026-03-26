@@ -91,6 +91,13 @@ impl<'a> StmtParser<'a> {
     }
 
     pub fn parse_main_decl(&mut self) -> Result<Stmt, Error> {
+        self.parse_main_decl_with_global_cors(None)
+    }
+
+    pub fn parse_main_decl_with_global_cors(
+        &mut self,
+        global_cors: Option<crate::ast::CorsConfig>,
+    ) -> Result<Stmt, Error> {
         let start = self.peek().pos;
         self.advance();
         if self.at_end() || self.peek().typ != Type::LParen {
@@ -125,6 +132,7 @@ impl<'a> StmtParser<'a> {
         let body = self.parse_block()?;
         Ok(Stmt::MainDecl(MainDeclStmt {
             span: Span::from_token(start),
+            global_cors,
             body,
         }))
     }
@@ -298,7 +306,11 @@ impl<'a> StmtParser<'a> {
                 false
             };
 
-            fields.push(TypeField { name: field_name, type_name, optional });
+            fields.push(TypeField {
+                name: field_name,
+                type_name,
+                optional,
+            });
 
             // allow comma or semicolon between fields (optional)
             while !self.at_end()

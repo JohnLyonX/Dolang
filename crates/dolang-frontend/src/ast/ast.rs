@@ -321,6 +321,22 @@ pub struct FnDeclStmt {
     pub body: Vec<Stmt>,
 }
 
+#[derive(Debug, Clone)]
+pub struct SetHdrEntry {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CorsConfig {
+    pub allow_all: bool,
+    pub origins: Vec<String>,
+    pub methods: Vec<String>,
+    pub headers: Vec<String>,
+    pub max_age: Option<i64>,
+    pub credentials: bool,
+}
+
 /// HTTP function: $GET("/path") name(params) -> type { body }
 #[derive(Debug, Clone)]
 pub struct HttpFnStmt {
@@ -331,6 +347,8 @@ pub struct HttpFnStmt {
     pub params: Vec<String>,
     pub variadic_param: Option<String>,
     pub return_type: Option<String>,
+    pub cors: Option<CorsConfig>,
+    pub headers: Vec<SetHdrEntry>,
     pub body: Vec<Stmt>,
 }
 
@@ -338,8 +356,10 @@ pub struct HttpFnStmt {
 #[derive(Debug, Clone)]
 pub struct HttpBlockStmt {
     pub span: Span,
-    pub prefix: Option<String>,  // 路径前缀，如 "/v1/api/"
-    pub link: Option<String>,    // 要链接的模块，如 "api"
+    pub prefix: Option<String>, // 路径前缀，如 "/v1/api/"
+    pub link: Option<String>,   // 要链接的模块，如 "api"
+    pub cors: Option<CorsConfig>,
+    pub headers: Vec<SetHdrEntry>,
     pub routes: Vec<HttpFnStmt>, // 内嵌的 HTTP 路由
 }
 
@@ -363,6 +383,7 @@ pub struct ModDeclStmt {
 #[derive(Debug, Clone)]
 pub struct MainDeclStmt {
     pub span: Span,
+    pub global_cors: Option<CorsConfig>,
     pub body: Vec<Stmt>,
 }
 

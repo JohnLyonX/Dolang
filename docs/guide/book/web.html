@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b66b23c7.js";
+            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -279,6 +279,52 @@ $POST("/users") create_user() -&gt; JSON {
 }
 </code></pre>
 <hr>
+<h2 id="响应头注解"><a class="header" href="#响应头注解">响应头注解</a></h2>
+<p>如果你要给响应统一附加静态 header，用 <code>@SET_HDR(...)</code>：</p>
+<pre><code class="language-dolang">@SET_HDR({
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "max-age=3600"
+})
+$GET("/health") health() -&gt; String {
+    $# "ok";
+}
+</code></pre>
+<p>规则很简单：</p>
+<ul>
+<li><code>@SET_HDR(...)</code> 只接受一个对象字面量</li>
+<li>key 必须是字符串 header 名</li>
+<li>value 必须是字符串字面量</li>
+<li>一个注解里可以声明多个 header</li>
+</ul>
+<p>如果没有写 <code>@SET_HDR(...)</code>，响应不会额外附加这些 header。</p>
+<hr>
+<h2 id="cors-注解"><a class="header" href="#cors-注解">CORS 注解</a></h2>
+<p>公开接口可以直接写：</p>
+<pre><code class="language-dolang">@CORS("*")
+$GET("/public") public_data() -&gt; JSON {
+    $# {"ok": true};
+}
+</code></pre>
+<p>需要白名单时，用对象写法：</p>
+<pre><code class="language-dolang">@CORS({
+    origins: ["https://app.example.com"],
+    methods: ["GET", "POST"],
+    headers: ["Authorization"],
+    max_age: 600,
+    credentials: true
+})
+$GET("/profile") profile() -&gt; JSON {
+    $# {"ok": true};
+}
+</code></pre>
+<p><code>@CORS(...)</code> 可以放在：</p>
+<ul>
+<li><code>$main()</code> 前，作为全局默认策略</li>
+<li><code>$HTTP(...)</code> 前，作为块级策略</li>
+<li>路由前，作为路由级策略</li>
+</ul>
+<p>优先级是路由级覆盖块级，块级覆盖全局；没有写时，就不会额外返回 CORS 响应头。</p>
+<hr>
 <h2 id="路由分组http-块"><a class="header" href="#路由分组http-块">路由分组（$HTTP 块）</a></h2>
 <p>使用 <code>$HTTP("/prefix") { ... }</code> 为一组路由添加统一前缀：</p>
 <pre><code class="language-dolang">$HTTP("/api/v1") {
@@ -305,12 +351,12 @@ $GET("/status") status() -&gt; String {
 }
 </code></pre>
 <pre><code class="language-dolang">// main.dol
-$HTTP.link(routers.api);
+$HTTP().link("routers.api");
 </code></pre>
 <p>多个模块链接：</p>
-<pre><code class="language-dolang">$HTTP.link(routers.users);
-$HTTP.link(routers.orders);
-$HTTP.link(routers.admin);
+<pre><code class="language-dolang">$HTTP().link("routers.users");
+$HTTP().link("routers.orders");
+$HTTP().link("routers.admin");
 </code></pre>
 <hr>
 <h2 id="静态文件"><a class="header" href="#静态文件">静态文件</a></h2>

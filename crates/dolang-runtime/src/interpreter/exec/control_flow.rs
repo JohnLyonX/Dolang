@@ -28,6 +28,8 @@ pub(super) fn handle_main_decl(
         ));
     }
 
+    context.set_global_cors(stmt.global_cors.clone());
+
     for main_stmt in &stmt.body {
         let (cont, err) = exec(main_stmt, state, context);
         if let Err(err) = err {

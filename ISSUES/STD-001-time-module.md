@@ -2,7 +2,7 @@
 
 **Epic**: [EPIC-01](EPIC-01-stdlib-enhancement.md)
 **优先级**: P1
-**状态**: Open
+**状态**: Done
 
 ---
 
@@ -20,10 +20,10 @@ Dolang 目前完全没有时间 / 日期 API。任何 Web 服务都需要：
 ## TODO 清单
 
 **依赖准备**
-- [ ] 检查 `crates/dolang-runtime/Cargo.toml` 是否已有 `chrono`，若无则添加 `chrono = { version = "0.4", features = ["clock"] }`
+* 检查 `crates/dolang-runtime/Cargo.toml` 是否已有 `chrono`，若无则添加 `chrono = { version = "0.4", features = ["clock"] }`
 
 **核心实现**
-- [ ] 新建 `crates/dolang-runtime/src/stdlib_native/time.rs`，实现以下函数：
+* 新建 `crates/dolang-runtime/src/stdlib_native/time.rs`，实现以下函数：
   - `time.now()` → Int（当前 Unix 秒级时间戳）
   - `time.now_ms()` → Int（当前 Unix 毫秒级时间戳）
   - `time.format(ts: Int, fmt: String)` → String（strftime 格式，如 `"%Y-%m-%d"`）
@@ -39,12 +39,12 @@ Dolang 目前完全没有时间 / 日期 API。任何 Web 服务都需要：
   - `time.diff_days(ts1: Int, ts2: Int)` → Int（两个时间戳相差天数，可负）
 
 **注册**
-- [ ] 在 `crates/dolang-runtime/src/stdlib_native/mod.rs` 中：
+* 在 `crates/dolang-runtime/src/stdlib_native/mod.rs` 中：
   - `mod time;`
   - `register_time` 函数注册到 `"std.time"` 模块
 
 **测试**
-- [ ] 新建 `tests/spec/valid/stdlib/time_functions.dol`，覆盖：
+* 新建 `tests/spec/valid/stdlib/time_functions.dol`，覆盖：
   - `time.now()` 返回正整数
   - `time.format(0, "%Y-%m-%d")` 返回 `"1970-01-01"`
   - `time.year(0)` 返回 `1970`
@@ -52,20 +52,20 @@ Dolang 目前完全没有时间 / 日期 API。任何 Web 服务都需要：
   - `time.diff_days(86400, 0)` 返回 `1`
 
 **文档**
-- [ ] 更新 `docs/CHANGELOG.md` Unreleased/Added 区域
+* 更新 `docs/CHANGELOG.md` Unreleased/Added 区域
 
 ---
 
 ## 验收标准
 
-- [ ] `cargo build` 编译通过，无警告
-- [ ] `cargo test` 全部通过
-- [ ] `time.now()` 返回当前 Unix 时间戳（Int，正整数）
-- [ ] `time.format(0, "%Y-%m-%d")` 返回字符串 `"1970-01-01"`
-- [ ] `time.parse("1970-01-01", "%Y-%m-%d")` 返回 `0`（UTC）
-- [ ] `time.add_days(ts, 1)` 等于 `ts + 86400`
-- [ ] `time.diff_days(ts + 86400, ts)` 返回 `1`
-- [ ] 传入非 Int 时间戳应报运行时错误，可被 `$try/$catch` 捕获
+* `cargo build` 编译通过，无警告
+* `cargo test` 全部通过
+* `time.now()` 返回当前 Unix 时间戳（Int，正整数）
+* `time.format(0, "%Y-%m-%d")` 返回字符串 `"1970-01-01"`
+* `time.parse("1970-01-01", "%Y-%m-%d")` 返回 `0`（UTC）
+* `time.add_days(ts, 1)` 等于 `ts + 86400`
+* `time.diff_days(ts + 86400, ts)` 返回 `1`
+* 传入非 Int 时间戳应报运行时错误，可被 `$try/$catch` 捕获
 
 ---
 

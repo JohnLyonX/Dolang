@@ -19,8 +19,8 @@ Dolang 当前已有 5 个原生标准库模块：`std.fs`、`std.env`、`std.jso
 
 | Issue | 模块 | 优先级 | 状态 |
 |-------|------|--------|------|
-| [STD-001](STD-001-time-module.md) | `std.time` — 日期时间 | P1 | Open |
-| [STD-002](STD-002-uuid-module.md) | `std.uuid` — UUID 生成 | P2 | Open |
+| [STD-001](STD-001-time-module.md) | `std.time` — 日期时间 | P1 | Done |
+| [STD-002](STD-002-uuid-module.md) | `std.uuid` — UUID 生成 | P2 | Done |
 | [STD-003](STD-003-http-client.md) | `std.http` — HTTP 客户端 | P2 | Open |
 
 ---

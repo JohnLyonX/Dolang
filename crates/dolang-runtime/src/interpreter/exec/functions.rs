@@ -157,7 +157,9 @@ fn validate_return_type(fn_def: &FnDeclStmt, value: Option<&DolangValue>) -> Res
     };
 
     // Built-in type names that we validate against
-    let builtin_types = ["int", "integer", "float", "string", "bool", "boolean", "json", "str"];
+    let builtin_types = [
+        "int", "integer", "float", "string", "bool", "boolean", "json", "str",
+    ];
 
     // If the base type is not a known built-in, it's a user-defined $Type — skip enforcement
     if !builtin_types.contains(&base_type.to_lowercase().as_str()) {
@@ -194,7 +196,10 @@ fn validate_return_type(fn_def: &FnDeclStmt, value: Option<&DolangValue>) -> Res
         "bool" | "boolean" => (ValueType::Bool, "Bool"),
         // JSON<X>: validate that the value is Json or Map (JSON-compatible)
         "json" => {
-            if matches!(actual_type, ValueType::Json | ValueType::Map | ValueType::Dynamic) {
+            if matches!(
+                actual_type,
+                ValueType::Json | ValueType::Map | ValueType::Dynamic
+            ) {
                 return Ok(());
             }
             (ValueType::Json, "Json")

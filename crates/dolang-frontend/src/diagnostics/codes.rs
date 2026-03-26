@@ -5,6 +5,11 @@ pub const LEX_INVALID_CHAR: &str = "DOL-L004";
 
 pub const PARSE_GENERIC: &str = "DOL-P001";
 pub const PARSE_EXPECTED_TOKEN: &str = "DOL-P002";
+pub const PARSE_CORS_INVALID_POSITION: &str = "DOL-P003";
+pub const PARSE_CORS_DUPLICATE: &str = "DOL-P004";
+pub const PARSE_CORS_INVALID_SYNTAX: &str = "DOL-P005";
+pub const PARSE_SET_HDR_INVALID_POSITION: &str = "DOL-P006";
+pub const PARSE_SET_HDR_INVALID_SYNTAX: &str = "DOL-P007";
 
 pub const RUNTIME_GENERIC: &str = "DOL-R001";
 pub const RUNTIME_DIVISION_BY_ZERO: &str = "DOL-R002";
@@ -16,3 +21,5 @@ pub const RUNTIME_INVALID_EXPRESSION: &str = "DOL-R007";
 pub const RUNTIME_INVALID_ASSIGNMENT: &str = "DOL-R008";
 
 pub const PROJECT_LOAD: &str = "DOL-C001";
+pub const CONFIG_CORS_INVALID: &str = "DOL-C002";
+pub const CONFIG_HDR_INVALID: &str = "DOL-C003";

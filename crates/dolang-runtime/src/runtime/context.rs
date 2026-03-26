@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::ProjectConfig;
-use crate::interpreter::{HttpRoute, StaticRoute};
+use crate::interpreter::{CorsConfig, HttpRoute, StaticRoute};
 
 use std::collections::HashMap;
 
@@ -40,6 +40,7 @@ pub struct RuntimeContext {
     project_config: Option<ProjectConfig>,
     intrinsic_registry: IntrinsicRegistry,
     runtime_policy: RuntimePolicy,
+    global_cors: Option<CorsConfig>,
     http_routes: Vec<HttpRoute>,
     static_routes: Vec<StaticRoute>,
     /// Callable native functions accessible directly by name from Dolang code.
@@ -59,6 +60,7 @@ impl RuntimeContext {
             project_config: None,
             intrinsic_registry: IntrinsicRegistry::with_defaults(),
             runtime_policy: RuntimePolicy::allow_all(),
+            global_cors: None,
             http_routes: Vec::new(),
             static_routes: Vec::new(),
             native_fn_registry: HashMap::new(),
@@ -145,6 +147,14 @@ impl RuntimeContext {
     pub fn clear_routes(&mut self) {
         self.http_routes.clear();
         self.static_routes.clear();
+    }
+
+    pub fn set_global_cors(&mut self, cors: Option<CorsConfig>) {
+        self.global_cors = cors;
+    }
+
+    pub fn global_cors(&self) -> Option<&CorsConfig> {
+        self.global_cors.as_ref()
     }
 
     pub fn register_http_route(&mut self, route: HttpRoute) {

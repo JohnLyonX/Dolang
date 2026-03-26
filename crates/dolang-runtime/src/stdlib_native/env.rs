@@ -36,9 +36,7 @@ pub fn register(context: &mut RuntimeContext) {
         "all".into(),
         Arc::new(|args: &[DolangValue], _ctx: &RuntimeContext| {
             if !args.is_empty() {
-                return Err(Error::Interpreter(
-                    "env.all: takes no arguments".into(),
-                ));
+                return Err(Error::Interpreter("env.all: takes no arguments".into()));
             }
             let map: IndexMap<String, DolangValue> = std::env::vars()
                 .map(|(k, v)| (k, DolangValue::Str(v)))

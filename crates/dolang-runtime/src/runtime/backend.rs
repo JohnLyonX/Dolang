@@ -8,5 +8,10 @@ use crate::runtime::RuntimeContext;
 pub trait HttpBackend {
     fn register_route(&mut self, route: HttpRoute);
     fn register_static(&mut self, route: StaticRoute);
-    fn serve(self, context: RuntimeContext, host: &str, port: u16) -> impl std::future::Future<Output = ()> + Send;
+    fn serve(
+        self,
+        context: RuntimeContext,
+        host: &str,
+        port: u16,
+    ) -> impl std::future::Future<Output = ()> + Send;
 }

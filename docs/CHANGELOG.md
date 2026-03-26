@@ -20,6 +20,7 @@
 - 增加 `std.time` 原生模块，提供 Unix 时间戳、UTC 格式化/解析、日期偏移与日期字段读取能力
 - 增加 `std.uuid` 原生模块，提供 UUID v4 生成与格式校验能力
 - 增加 `std.http` 原生模块，提供同步 HTTP 客户端能力并统一返回 `{ status, body, headers }` 结构
+- `serve` 模式新增 `@SET_HDR(...)` 与 `@CORS(...)` 配置能力，可按全局 / HTTP 块 / 路由控制响应头与 CORS 策略
 
 ### Changed
 
@@ -37,8 +38,10 @@
 ### Fixed
 
 - 对齐 spec 样例与当前 parser/runtime 真实行为
+- HTTP handler 在真实 `serve` 请求链路中的路径参数、query 参数与 `$HDR(...)` 请求头读取行为已补齐并覆盖集成测试
 - `$RES(status, body)` HTTP 状态码修复：之前 status 参数被忽略，响应始终为 HTTP 200；
   现已正确返回指定状态码（如 404、201、500 等）
+- HTTP handler 中未捕获的 `$throw` 在客户端侧稳定返回 HTTP 500 错误响应
 
 ### Changed（P0）
 

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b66b23c7.js";
+            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -202,6 +202,57 @@
 }
 </code></pre>
 <p>这样可以少写重复前缀，适合按版本或按业务域组织路由。</p>
+<h2 id="在块上挂-set_hdr"><a class="header" href="#在块上挂-set_hdr">在块上挂 <code>@SET_HDR(...)</code></a></h2>
+<p>块级 <code>@SET_HDR(...)</code> 适合写整个路由组都要带上的静态响应头：</p>
+<pre><code class="language-dol">@SET_HDR({
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "no-cache"
+})
+$HTTP("/api") {
+    $GET("/ping") ping() -&gt; String {
+        $# "pong";
+    }
+}
+</code></pre>
+<p>路由级也可以继续声明：</p>
+<pre><code class="language-dol">@SET_HDR({ "Cache-Control": "no-store" })
+$GET("/admin") admin() -&gt; String {
+    $# "ok";
+}
+</code></pre>
+<p>合并规则：</p>
+<ul>
+<li>块级 header 会传给块内路由</li>
+<li>同名 header 由更靠近路由的声明覆盖</li>
+<li>不同名 header 会一起保留</li>
+</ul>
+<h2 id="组织-cors"><a class="header" href="#组织-cors">组织 <code>@CORS(...)</code></a></h2>
+<p><code>@CORS(...)</code> 可以放在三个层级：</p>
+<ul>
+<li><code>$main() {}</code> 前，表示全局默认策略</li>
+<li><code>$HTTP(...)</code> 前，表示某个路由组的策略</li>
+<li>具体路由前，表示单条路由策略</li>
+</ul>
+<p>例如：</p>
+<pre><code class="language-dol">@CORS("*")
+$main() {}
+
+@CORS({
+    origins: ["https://api.example.com"],
+    methods: ["GET", "POST"]
+})
+$HTTP("/api") {
+    $GET("/users") users() -&gt; JSON {
+        $# $JSON { "ok": true };
+    }
+}
+</code></pre>
+<p>优先级是：</p>
+<ul>
+<li>路由级 <code>@CORS</code> 覆盖块级</li>
+<li>块级 <code>@CORS</code> 覆盖全局</li>
+<li>这里是整份配置替换，不做字段级合并</li>
+</ul>
 <h2 id="链接外部路由模块"><a class="header" href="#链接外部路由模块">链接外部路由模块</a></h2>
 <pre><code class="language-dol">$HTTP("/v1/api").link("routers.api");
 </code></pre>
@@ -247,7 +298,11 @@
 <li>静态资源单独交给 <code>$STATIC(...)</code></li>
 </ol>
 <h2 id="一个完整例子"><a class="header" href="#一个完整例子">一个完整例子</a></h2>
-<pre><code class="language-dol">$HTTP("/api") {
+<pre><code class="language-dol">@CORS("*")
+$main() {}
+
+@SET_HDR({ "X-Frame-Options": "DENY" })
+$HTTP("/api") {
     $GET("/ping") ping() -&gt; JSON {
         $# $JSON { "ok": true };
     }

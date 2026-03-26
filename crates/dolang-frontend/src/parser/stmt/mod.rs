@@ -10,6 +10,7 @@ use crate::diagnostics::{Diagnostic, codes};
 use crate::error::Error;
 use crate::parser::{calc_line_col, parse_expr_tokens, parse_expr_tokens_with_src};
 use crate::token::{Token, Type};
+use http::HttpAnnotations;
 
 /// Top-level statement parser — token-stream based, supports blocks.
 pub struct StmtParser<'a> {
@@ -62,6 +63,29 @@ impl<'a> StmtParser<'a> {
             return Err(self.error_expected(format!("expected token '{typ}'"), typ.to_string()));
         }
         Ok(self.advance())
+    }
+
+    pub(crate) fn error_at_current(&self, code: &'static str, message: impl Into<String>) -> Error {
+        let pos = if self.at_end() {
+            self.tokens.last().map(|token| token.pos).unwrap_or(0)
+        } else {
+            self.peek().pos
+        };
+        self.error_at_pos(pos, code, message)
+    }
+
+    pub(crate) fn error_at_pos(
+        &self,
+        pos: usize,
+        code: &'static str,
+        message: impl Into<String>,
+    ) -> Error {
+        let (line, column) = calc_line_col(self.src, pos);
+        Error::Diagnostic(
+            Diagnostic::error(code, message)
+                .with_location(line, column)
+                .with_span(crate::ast::Span::from_token(pos)),
+        )
     }
 
     pub(crate) fn parse_expr_tokens(&self, toks: &[Token]) -> Result<Box<Expr>, Error> {
@@ -160,6 +184,35 @@ impl<'a> StmtParser<'a> {
         ) {
             return self.parse_http_fn().map(Some);
         }
+        if matches!(typ, Type::AtSetHdr | Type::AtCors) {
+            let annotations = self.parse_http_annotations()?;
+            if self.at_end() {
+                return Err(self.error_for_annotation_position(&annotations));
+            }
+
+            return match self.peek().typ {
+                Type::HttpGet
+                | Type::HttpPost
+                | Type::HttpPut
+                | Type::HttpDel
+                | Type::HttpPatch => self.parse_http_fn_with_annotations(annotations).map(Some),
+                Type::HttpBlock => self
+                    .parse_http_block_with_annotations(annotations)
+                    .map(Some),
+                Type::MainDecl if annotations.headers.is_empty() => self
+                    .parse_main_decl_with_global_cors(annotations.cors)
+                    .map(Some),
+                _ => Err(self.error_for_annotation_position(&annotations)),
+            };
+        }
+        if typ == Type::At {
+            return Err(self.parse_unknown_annotation_error(
+                self.peek().pos,
+                self.peek_next()
+                    .filter(|token| token.typ == Type::Ident)
+                    .map(|token| token.literal.as_str()),
+            ));
+        }
         if typ == Type::HttpBlock {
             return self.parse_http_block().map(Some);
         }
@@ -208,6 +261,35 @@ impl<'a> StmtParser<'a> {
         }
 
         self.parse_expr_or_assignment_stmt()
+    }
+
+    pub(crate) fn parse_unknown_annotation_error(
+        &self,
+        at_pos: usize,
+        annotation_name: Option<&str>,
+    ) -> Error {
+        let annotation_name = annotation_name
+            .map(|name| format!("@{name}"))
+            .unwrap_or_else(|| "@".to_string());
+        self.error_at_pos(
+            at_pos,
+            codes::PARSE_SET_HDR_INVALID_SYNTAX,
+            format!("unknown annotation '{annotation_name}'"),
+        )
+    }
+
+    pub(crate) fn error_for_annotation_position(&self, annotations: &HttpAnnotations) -> Error {
+        if !annotations.headers.is_empty() {
+            self.error_at_current(
+                codes::PARSE_SET_HDR_INVALID_POSITION,
+                "@SET_HDR annotation must appear immediately before an HTTP route or HTTP block",
+            )
+        } else {
+            self.error_at_current(
+                codes::PARSE_CORS_INVALID_POSITION,
+                "@CORS annotation is only allowed before $main(), $HTTP blocks, or HTTP routes",
+            )
+        }
     }
 }
 

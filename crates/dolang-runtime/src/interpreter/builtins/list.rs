@@ -89,7 +89,7 @@ pub fn call(
                     return Err(Error::Interpreter(format!(
                         "slice: start must be Int, got {}",
                         other.type_name()
-                    )))
+                    )));
                 }
             };
             let end = match &args[1] {
@@ -98,7 +98,7 @@ pub fn call(
                     return Err(Error::Interpreter(format!(
                         "slice: end must be Int, got {}",
                         other.type_name()
-                    )))
+                    )));
                 }
             };
             let end = end.max(start);
@@ -196,7 +196,7 @@ pub fn call_mut(
                     return Err(Error::Interpreter(format!(
                         "remove_at: index must be Int, got {}",
                         other.type_name()
-                    )))
+                    )));
                 }
             };
             if idx < 0 || idx as usize >= items.len() {
@@ -221,7 +221,7 @@ pub fn call_mut(
                     return Err(Error::Interpreter(format!(
                         "insert: index must be Int, got {}",
                         other.type_name()
-                    )))
+                    )));
                 }
             };
             if idx < 0 || idx as usize > items.len() {

@@ -38,6 +38,68 @@ $HTTP("/api/v1") {
 
 这样可以少写重复前缀，适合按版本或按业务域组织路由。
 
+## 在块上挂 `@SET_HDR(...)`
+
+块级 `@SET_HDR(...)` 适合写整个路由组都要带上的静态响应头：
+
+```dol
+@SET_HDR({
+    "X-Frame-Options": "DENY",
+    "Cache-Control": "no-cache"
+})
+$HTTP("/api") {
+    $GET("/ping") ping() -> String {
+        $# "pong";
+    }
+}
+```
+
+路由级也可以继续声明：
+
+```dol
+@SET_HDR({ "Cache-Control": "no-store" })
+$GET("/admin") admin() -> String {
+    $# "ok";
+}
+```
+
+合并规则：
+
+- 块级 header 会传给块内路由
+- 同名 header 由更靠近路由的声明覆盖
+- 不同名 header 会一起保留
+
+## 组织 `@CORS(...)`
+
+`@CORS(...)` 可以放在三个层级：
+
+- `$main() {}` 前，表示全局默认策略
+- `$HTTP(...)` 前，表示某个路由组的策略
+- 具体路由前，表示单条路由策略
+
+例如：
+
+```dol
+@CORS("*")
+$main() {}
+
+@CORS({
+    origins: ["https://api.example.com"],
+    methods: ["GET", "POST"]
+})
+$HTTP("/api") {
+    $GET("/users") users() -> JSON {
+        $# $JSON { "ok": true };
+    }
+}
+```
+
+优先级是：
+
+- 路由级 `@CORS` 覆盖块级
+- 块级 `@CORS` 覆盖全局
+- 这里是整份配置替换，不做字段级合并
+
 ## 链接外部路由模块
 
 ```dol
@@ -107,6 +169,10 @@ $GET("/") index() -> HTML {
 ## 一个完整例子
 
 ```dol
+@CORS("*")
+$main() {}
+
+@SET_HDR({ "X-Frame-Options": "DENY" })
 $HTTP("/api") {
     $GET("/ping") ping() -> JSON {
         $# $JSON { "ok": true };

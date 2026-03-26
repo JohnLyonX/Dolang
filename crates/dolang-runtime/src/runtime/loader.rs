@@ -73,5 +73,10 @@ pub fn load_context_and_program(
     context.set_current_file(Some(main_file.to_string_lossy().to_string()));
 
     let program = load_program_from_path(&main_file)?;
+    let global_cors = program.statements.iter().find_map(|stmt| match stmt {
+        Stmt::MainDecl(main) => main.global_cors.clone(),
+        _ => None,
+    });
+    context.set_global_cors(global_cors);
     Ok((context, program))
 }

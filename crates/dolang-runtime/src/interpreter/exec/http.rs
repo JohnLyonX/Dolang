@@ -23,6 +23,9 @@ pub(super) fn handle_http_fn(
         params: stmt.params.clone(),
         variadic_param: stmt.variadic_param.clone(),
         return_type: stmt.return_type.clone(),
+        cors: stmt.cors.clone(),
+        parent_cors: None,
+        response_headers: headers_to_pairs(&stmt.headers),
         body: stmt.body.clone(),
         module_env: Env::new(),
         module_fns: FnEnv::new(),
@@ -59,8 +62,12 @@ pub(super) fn handle_http_block(
             } else {
                 format!("/{}/{}", prefix_trimmed, path_trimmed)
             };
+            let response_headers = merge_response_headers(&stmt.headers, &route.response_headers);
             context.register_http_route(HttpRoute {
                 path: full_path,
+                cors: route.cors,
+                parent_cors: stmt.cors.clone(),
+                response_headers,
                 ..route
             });
         }
@@ -94,6 +101,12 @@ pub(super) fn handle_http_block(
             params: route_stmt.params.clone(),
             variadic_param: route_stmt.variadic_param.clone(),
             return_type: route_stmt.return_type.clone(),
+            cors: route_stmt.cors.clone(),
+            parent_cors: stmt.cors.clone(),
+            response_headers: merge_response_headers(
+                &stmt.headers,
+                &headers_to_pairs(&route_stmt.headers),
+            ),
             body: route_stmt.body.clone(),
             module_env: Env::new(),
             module_fns: FnEnv::new(),
@@ -159,8 +172,7 @@ fn load_module_routes(
     // Execute the module fully in an isolated clone of the context.
     // This processes $mod, $fn, and $GET/$POST/... declarations.
     let mut module_context = context.clone();
-    module_context
-        .set_current_file(Some(resolved.file_path.to_string_lossy().to_string()));
+    module_context.set_current_file(Some(resolved.file_path.to_string_lossy().to_string()));
 
     // Track how many routes existed before execution so we can isolate
     // only the routes this module adds.
@@ -174,10 +186,7 @@ fn load_module_routes(
         &mut std::io::sink(),
     )
     .map_err(|err| {
-        Error::Interpreter(format!(
-            "error loading module '{}': {}",
-            module_path, err
-        ))
+        Error::Interpreter(format!("error loading module '{}': {}", module_path, err))
     })?;
 
     // Routes registered by this module, with module-level env/fns attached
@@ -199,4 +208,32 @@ fn load_module_routes(
     }
 
     Ok(routes)
+}
+
+fn headers_to_pairs(headers: &[crate::ast::SetHdrEntry]) -> Vec<(String, String)> {
+    headers
+        .iter()
+        .map(|entry| (entry.name.clone(), entry.value.clone()))
+        .collect()
+}
+
+fn merge_response_headers(
+    block_headers: &[crate::ast::SetHdrEntry],
+    route_headers: &[(String, String)],
+) -> Vec<(String, String)> {
+    let mut merged = headers_to_pairs(block_headers);
+
+    for entry in route_headers {
+        let normalized = entry.0.to_ascii_lowercase();
+        if let Some(existing) = merged
+            .iter_mut()
+            .find(|(name, _)| name.to_ascii_lowercase() == normalized)
+        {
+            existing.1 = entry.1.clone();
+        } else {
+            merged.push((entry.0.clone(), entry.1.clone()));
+        }
+    }
+
+    merged
 }

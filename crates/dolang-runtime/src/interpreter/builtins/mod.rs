@@ -58,6 +58,14 @@ pub fn dispatch(
             "ModuleProxy has no method '{}', use module.function() to call module functions",
             method
         ))),
+        DolangValue::TypedInstance { type_name, .. } => Err(Error::Interpreter(format!(
+            "type '{}' exposes fields only; '{}' is not a built-in method",
+            type_name, method
+        ))),
+        DolangValue::Connection { .. } => Err(Error::Interpreter(format!(
+            "Connection has no method '{}'",
+            method
+        ))),
         DolangValue::Null => Err(Error::Interpreter(format!(
             "cannot call method '{}' on null",
             method

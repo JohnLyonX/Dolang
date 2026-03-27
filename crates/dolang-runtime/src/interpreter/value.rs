@@ -7,6 +7,8 @@
 
 use crate::ast::Stmt;
 use indexmap::IndexMap;
+use std::borrow::Cow;
+use std::collections::HashSet;
 use std::fmt;
 
 /// Dolang 运行时值的类型安全表示
@@ -40,6 +42,15 @@ pub enum DolangValue {
         fns: super::env::FnEnv,                      // 模块内部完整函数表
         native_exports: crate::runtime::NativeFnMap, // native 公开函数
         module_env: super::env::Env,                 // 模块执行后的环境（导入的模块代理、常量等）
+        visible_user_types: HashSet<String>,
+    },
+    TypedInstance {
+        type_name: String,
+        fields: IndexMap<String, DolangValue>,
+    },
+    Connection {
+        id: String,
+        driver: String, // "sqlite" or "postgres"
     },
     Null,
 }
@@ -70,6 +81,9 @@ impl PartialEq for DolangValue {
             (Self::Response { .. }, _) => false,
             // ModuleProxy 不可比较
             (Self::ModuleProxy { .. }, _) => false,
+            // TypedInstance 暂不支持相等比较
+            (Self::TypedInstance { .. }, _) => false,
+            (Self::Connection { id: a, .. }, Self::Connection { id: b, .. }) => a == b,
             _ => false,
         }
     }
@@ -145,27 +159,42 @@ impl fmt::Display for DolangValue {
             Self::ModuleProxy { path, .. } => {
                 write!(f, "ModuleProxy({})", path)
             }
+            Self::Connection { id, driver } => {
+                write!(f, "Connection({}:{})", driver, id)
+            }
+            Self::TypedInstance { type_name, fields } => {
+                write!(f, "{} {{", type_name)?;
+                for (i, (k, v)) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: {}", k, v)?;
+                }
+                write!(f, "}}")
+            }
         }
     }
 }
 
 impl DolangValue {
     /// 运行时类型名，用于 .type() 方法返回值
-    pub fn type_name(&self) -> &'static str {
+    pub fn type_name(&self) -> Cow<'_, str> {
         match self {
-            Self::Int(_) => "Int",
-            Self::Float(_) => "Float",
-            Self::Str(_) => "String",
-            Self::Bool(_) => "Bool",
-            Self::List(_) => "List",
-            Self::Map(_) => "Map",
-            Self::Function { .. } => "Function",
-            Self::File { .. } => "File",
-            Self::Json(_) => "Json",
-            Self::Html(_) => "Html",
-            Self::Response { .. } => "Response",
-            Self::ModuleProxy { .. } => "ModuleProxy",
-            Self::Null => "Null",
+            Self::Int(_) => Cow::Borrowed("Int"),
+            Self::Float(_) => Cow::Borrowed("Float"),
+            Self::Str(_) => Cow::Borrowed("String"),
+            Self::Bool(_) => Cow::Borrowed("Bool"),
+            Self::List(_) => Cow::Borrowed("List"),
+            Self::Map(_) => Cow::Borrowed("Map"),
+            Self::Function { .. } => Cow::Borrowed("Function"),
+            Self::File { .. } => Cow::Borrowed("File"),
+            Self::Json(_) => Cow::Borrowed("Json"),
+            Self::Html(_) => Cow::Borrowed("Html"),
+            Self::Response { .. } => Cow::Borrowed("Response"),
+            Self::ModuleProxy { .. } => Cow::Borrowed("ModuleProxy"),
+            Self::TypedInstance { type_name, .. } => Cow::Borrowed(type_name.as_str()),
+            Self::Connection { .. } => Cow::Borrowed("Connection"),
+            Self::Null => Cow::Borrowed("Null"),
         }
     }
 
@@ -184,6 +213,8 @@ impl DolangValue {
             Self::Html(v) => v.is_truthy(),
             Self::Response { .. } => true,
             Self::ModuleProxy { .. } => true,
+            Self::TypedInstance { .. } => true,
+            Self::Connection { .. } => true,
             Self::Null => false,
         }
     }
@@ -214,6 +245,15 @@ pub fn value_to_json(value: &DolangValue) -> serde_json::Value {
                 .collect::<serde_json::Map<String, serde_json::Value>>();
             serde_json::Value::Object(obj)
         }
+        DolangValue::TypedInstance { fields, .. } => {
+            let mut obj = serde_json::Map::new();
+            for (k, v) in fields {
+                if !k.starts_with('_') {
+                    obj.insert(k.clone(), value_to_json(v));
+                }
+            }
+            serde_json::Value::Object(obj)
+        }
         DolangValue::Html(v) => value_to_json(v),
         DolangValue::Null => serde_json::Value::Null,
         _ => serde_json::Value::Null,
@@ -236,7 +276,43 @@ impl fmt::Debug for DolangValue {
             Self::Html(v) => write!(f, "Html({v:?})"),
             Self::Response { status, .. } => write!(f, "Response({status})"),
             Self::ModuleProxy { path, .. } => write!(f, "ModuleProxy({path:?})"),
+            Self::TypedInstance { type_name, fields } => {
+                write!(f, "TypedInstance({type_name:?}, {fields:?})")
+            }
+            Self::Connection { id, driver } => write!(f, "Connection({driver:?}, {id:?})"),
         }
+    }
+}
+
+#[cfg(test)]
+mod connection_tests {
+    use super::*;
+
+    #[test]
+    fn connection_value_has_correct_type_name() {
+        let conn = DolangValue::Connection {
+            id: "conn:sqlite:0".to_string(),
+            driver: "sqlite".to_string(),
+        };
+        assert_eq!(conn.type_name(), "Connection");
+    }
+
+    #[test]
+    fn connection_value_is_truthy() {
+        let conn = DolangValue::Connection {
+            id: "conn:sqlite:0".to_string(),
+            driver: "sqlite".to_string(),
+        };
+        assert!(conn.is_truthy());
+    }
+
+    #[test]
+    fn connection_display() {
+        let conn = DolangValue::Connection {
+            id: "conn:sqlite:0".to_string(),
+            driver: "sqlite".to_string(),
+        };
+        assert_eq!(format!("{}", conn), "Connection(sqlite:conn:sqlite:0)");
     }
 }
 
@@ -259,5 +335,18 @@ mod tests {
         map.insert("name".to_string(), DolangValue::Str("dolang".to_string()));
         let json = value_to_json(&DolangValue::Json(map));
         assert_eq!(json["name"], "dolang");
+    }
+
+    #[test]
+    fn json_conversion_hides_typed_instance_private_fields() {
+        let mut fields = IndexMap::new();
+        fields.insert("name".to_string(), DolangValue::Str("alice".to_string()));
+        fields.insert("_password".to_string(), DolangValue::Str("secret".to_string()));
+        let json = value_to_json(&DolangValue::TypedInstance {
+            type_name: "User".to_string(),
+            fields,
+        });
+        assert_eq!(json["name"], "alice");
+        assert!(json.get("_password").is_none());
     }
 }

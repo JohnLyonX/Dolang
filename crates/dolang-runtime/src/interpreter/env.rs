@@ -34,6 +34,8 @@ pub fn get_value_type(val: &DolangValue) -> ValueType {
         DolangValue::Html(_) => ValueType::Dynamic,
         DolangValue::Response { .. } => ValueType::Response,
         DolangValue::ModuleProxy { .. } => ValueType::Dynamic,
+        DolangValue::TypedInstance { .. } => ValueType::Dynamic,
+        DolangValue::Connection { .. } => ValueType::Dynamic,
         DolangValue::Null => ValueType::Dynamic,
     }
 }
@@ -50,8 +52,14 @@ pub type TypeEnv = HashMap<String, ValueType>;
 /// Key: variable name, Value: true if constant
 pub type ConstEnv = HashMap<String, bool>;
 
-/// Function environment: name -> FnDeclStmt
-pub type FnEnv = HashMap<String, FnDeclStmt>;
+#[derive(Debug, Clone)]
+pub struct RuntimeFn {
+    pub decl: FnDeclStmt,
+    pub source_file: Option<String>,
+}
+
+/// Function environment: name -> runtime function metadata
+pub type FnEnv = HashMap<String, RuntimeFn>;
 
 /// Counter for generating unique anonymous function names
 static FN_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -66,10 +74,10 @@ pub fn generate_fn_name() -> String {
 /// Returns None if the type annotation is invalid
 pub fn parse_type_annotation(type_str: &str) -> Option<ValueType> {
     match type_str {
-        "Int" | "Integer" => Some(ValueType::Int),
+        "Int" => Some(ValueType::Int),
         "Float" => Some(ValueType::Float),
-        "String" | "Str" => Some(ValueType::String),
-        "Bool" | "Boolean" => Some(ValueType::Bool),
+        "String" => Some(ValueType::String),
+        "Bool" => Some(ValueType::Bool),
         "List" => Some(ValueType::List),
         "Map" => Some(ValueType::Map),
         _ => None,

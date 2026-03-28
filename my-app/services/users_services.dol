@@ -1,20 +1,46 @@
-$Type User {
-    id: Int
-    name: String
-    email: String?
+$mod data.users_data;
+
+$fn all_users() {
+    $# [
+        User {
+            id: 1,
+            name: "John",
+            email: "john@example.com",
+            role: "admin",
+            password: "hash_john",
+            salt: "salt_john",
+        },
+        User {
+            id: 2,
+            name: "Alice",
+            email: "alice@example.com",
+            role: "editor",
+            password: "hash_alice",
+            salt: "salt_alice",
+        },
+        User {
+            id: 3,
+            name: "Bob",
+            email: "bob@example.com",
+            role: "viewer",
+            password: "hash_bob",
+            salt: "salt_bob",
+        }
+    ];
 }
 
+$fn find_all_users() -> List<User> {
+    $# all_users();
+}
 
-$fn find_user(id) -> JSON<User> {
-    $ result = $JSON{
-        id: 1
-        name: "John"
-        email: "liangzhanbo@gmail.com"
-    };
+$fn find_user_by_id(id) -> User {
+    $ users = all_users();
 
-    $if id == '1' {
-        $# result;
+    $for user in users {
+        $if user.id.to_str() == id {
+            $# user;
+        }
     }
 
-    $# $JSON{"Null": "No data"};
+    $throw "user not found";
 }

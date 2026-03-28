@@ -1,3 +1,16 @@
-$main(){
-    $HTTP("/v1/api").link("routers.user_routers");
+$mod services.users_services;
+
+$main() {
+    $HTTP("/v1/api").link("routers.users_routers");
+
+    $HTTP("/v2/api") {
+        $GET("/users") getUsers() -> List<User> {
+            $# users_services.find_all_users();
+        }
+
+        $GET("/users/:id") getUserById(id) -> User {
+            $# users_services.find_user_by_id(id);
+        }
+
+    }
 }

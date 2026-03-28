@@ -1,5 +1,10 @@
+$mod data.users_data;
 $mod services.users_services;
 
-$GET("/getUser") getUserRouter(id)  -> JSON<User>{
-    $# find_user(id);
+$GET("/users") getUsers() -> List<User> {
+    $# users_services.find_all_users();
+}
+
+$GET("/users/:id") getUserById(id) -> User {
+    $# users_services.find_user_by_id(id);
 }

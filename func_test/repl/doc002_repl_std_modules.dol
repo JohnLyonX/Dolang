@@ -1,0 +1,8 @@
+$mod std.str;
+$mod std.time;
+$mod std.uuid;
+$ text = "你a";
+$ id = uuid.v4();
+$>> str.to_upper(text);
+$>> time.now();
+$>> uuid.is_valid(id);

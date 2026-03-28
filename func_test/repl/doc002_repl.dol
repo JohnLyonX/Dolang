@@ -1,0 +1,40 @@
+$ writer = $>>FILE("func_test/repl_file_methods.txt");
+writer.content("hello\nworld");
+$ html_writer = $>>FILE("func_test/repl_index.html");
+html_writer.content("<h1>repl-linked</h1>");
+$ file_lines = $<<FILE("func_test/repl_file_methods.txt", "LINES");
+$ file_text = $<<FILE("func_test/repl_file_methods.txt");
+$ dir = $<<FILE("func_test");
+$ html_value = $HTML("<h1>repl-html</h1>");
+$ html_linked = $HTML().link("func_test.repl_index");
+$ json_value = $JSON { "ok": true, "name": "repl" };
+$ map_value = { "a": 1, "b": 2 };
+$ file_lines_text = file_lines.read();
+$ file_read_lines_method = file_text.read_lines();
+$ str_length_alias = "abc".length();
+$ list_length_alias = [1, 2, 3].length();
+$ map_length_alias = map_value.length();
+$ string_len_bytes = "你a".len();
+$>> f"FILE_EXISTS={file_lines.exists()}";
+$>> f"FILE_SIZE={file_lines.size()}";
+$>> f"FILE_IS_DIR={dir.is_dir()}";
+$>> f"FILE_READ={file_text.read()}";
+$>> f"FILE_READ_LINES={file_lines_text}";
+$>> f"FILE_READ_LINES_METHOD={file_read_lines_method}";
+$>> f"FILE_TYPE={file_lines.type()}";
+$>> f"JSON_TYPE={json_value.type()}";
+$>> f"JSON_TEXT={json_value.to_str()}";
+$>> f"HTML_TYPE={html_value.type()}";
+$>> f"HTML_TEXT={html_value.to_str()}";
+$>> f"HTML_LINK_TYPE={html_linked.type()}";
+$>> f"HTML_LINK_TEXT={html_linked.to_str()}";
+$>> f"STR_LENGTH_ALIAS={str_length_alias}";
+$>> f"LIST_LENGTH_ALIAS={list_length_alias}";
+$>> f"MAP_LENGTH_ALIAS={map_length_alias}";
+$try {
+    $ bad_slice = "hello".slice(-1, 5);
+    $>> f"STRING_SLICE_NEG={bad_slice}";
+} $catch err {
+    $>> f"STRING_SLICE_NEG_ERR={err}";
+}
+$>> f"STRING_LEN_BYTES={string_len_bytes}";

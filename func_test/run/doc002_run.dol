@@ -1,0 +1,93 @@
+$mod std.fs;
+$mod std.http;
+$mod std.str;
+$mod std.time;
+$mod std.uuid;
+
+fs.mkdir_all("func_test/run/pages");
+fs.write_text("func_test/run/pages/index.html", "<h1>run-html</h1>");
+
+$ writer = $>>FILE("func_test/run/file_methods.txt");
+writer.content("hello\nworld");
+$ file_lines = $<<FILE("func_test/run/file_methods.txt", "LINES");
+$ file_text = $<<FILE("func_test/run/file_methods.txt");
+$ dir = $<<FILE("func_test/run");
+$ file_lines_text = str.join(file_lines.read(), "|");
+$ file_read_lines_method = str.join(file_text.read_lines(), "|");
+
+$ json_value = $JSON { "ok": true, "name": "run" };
+$ html_value = $HTML().link("pages.index");
+$ uuid_value = uuid.v4();
+$ time_now = time.now();
+$ time_now_ms = time.now_ms();
+$ time_weekday = time.weekday(0);
+$ time_shifted = time.add_days(0, 2);
+$ time_diff = time.diff_days(172800, 0);
+
+$ http_get = http.get("http://127.0.0.1:8080/http/ping");
+$ http_post = http.post("http://127.0.0.1:8080/http/post", { "from": "run-post" });
+$ http_put = http.put("http://127.0.0.1:8080/http/put", { "from": "run-put" });
+$ http_delete = http.delete("http://127.0.0.1:8080/http/delete");
+$ http_request = http.request("POST", "http://127.0.0.1:8080/http/post", { "from": "run-request" }, { "X-Test": "1" });
+$ time_format = time.format(0, "%Y-%m-%d");
+$ time_parse = time.parse("1970-01-03", "%Y-%m-%d");
+$ str_length_alias = "abc".length();
+$ list_length_alias = [1, 2, 3].length();
+$ map_value = { "a": 1, "b": 2 };
+$ map_length_alias = map_value.length();
+$ string_len_bytes = "你a".len();
+$ http_get_status = http_get["status"];
+$ http_post_status = http_post["status"];
+$ http_put_status = http_put["status"];
+$ http_delete_status = http_delete["status"];
+$ http_request_status = http_request["status"];
+
+$>> f"FILE_EXISTS={file_lines.exists()}";
+$>> f"FILE_SIZE={file_lines.size()}";
+$>> f"FILE_IS_DIR={dir.is_dir()}";
+$>> f"FILE_READ={file_text.read()}";
+$>> f"FILE_READ_LINES={file_lines_text}";
+$>> f"FILE_READ_LINES_METHOD={file_read_lines_method}";
+$>> f"FILE_TYPE={file_lines.type()}";
+
+$>> f"JSON_TYPE={json_value.type()}";
+$>> f"JSON_TEXT={json_value.to_str()}";
+
+$>> f"HTML_TYPE={html_value.type()}";
+$>> f"HTML_TEXT={html_value.to_str()}";
+
+$>> f"TIME_NOW_TYPE={time_now.type()}";
+$>> f"TIME_NOW_MS_TYPE={time_now_ms.type()}";
+$>> f"TIME_FORMAT={time_format}";
+$>> f"TIME_PARSE={time_parse}";
+$>> f"TIME_YEAR={time.year(0)}";
+$>> f"TIME_MONTH={time.month(0)}";
+$>> f"TIME_DAY={time.day(0)}";
+$>> f"TIME_HOUR={time.hour(0)}";
+$>> f"TIME_MINUTE={time.minute(0)}";
+$>> f"TIME_SECOND={time.second(0)}";
+$>> f"TIME_WEEKDAY={time_weekday}";
+$>> f"TIME_ADD_DAYS={time_shifted}";
+$>> f"TIME_DIFF_DAYS={time_diff}";
+
+$>> f"UUID_VALUE={uuid_value}";
+$>> f"UUID_VALID={uuid.is_valid(uuid_value)}";
+
+$>> f"STR_LENGTH_ALIAS={str_length_alias}";
+$>> f"LIST_LENGTH_ALIAS={list_length_alias}";
+$>> f"MAP_LENGTH_ALIAS={map_length_alias}";
+
+$try {
+    $ bad_slice = "hello".slice(-1, 5);
+    $>> f"STRING_SLICE_NEG={bad_slice}";
+} $catch err {
+    $>> f"STRING_SLICE_NEG_ERR={err}";
+}
+
+$>> f"STRING_LEN_BYTES={string_len_bytes}";
+
+$>> f"HTTP_GET_STATUS={http_get_status}";
+$>> f"HTTP_POST_STATUS={http_post_status}";
+$>> f"HTTP_PUT_STATUS={http_put_status}";
+$>> f"HTTP_DELETE_STATUS={http_delete_status}";
+$>> f"HTTP_REQUEST_STATUS={http_request_status}";

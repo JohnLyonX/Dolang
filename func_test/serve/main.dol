@@ -1,0 +1,121 @@
+$mod std.fs;
+$mod std.http;
+$mod std.str;
+$mod std.time;
+$mod std.uuid;
+
+fs.mkdir_all("pages");
+fs.write_text("pages/index.html", "<h1>serve-html</h1>");
+
+$GET("/http/ping") http_ping() -> JSON {
+    $# { "ok": true, "method": "GET" };
+}
+
+$POST("/http/post") http_post(body) -> JSON {
+    $# { "ok": true, "method": "POST", "from": body["from"] };
+}
+
+$PUT("/http/put") http_put(body) -> JSON {
+    $# { "ok": true, "method": "PUT", "from": body["from"] };
+}
+
+$DEL("/http/delete") http_delete() -> JSON {
+    $# { "ok": true, "method": "DELETE" };
+}
+
+$GET("/suite/file") suite_file() -> JSON {
+    $ writer = $>>FILE("file_methods.txt");
+    writer.content("hello\nworld");
+    $ file_lines = $<<FILE("file_methods.txt", "LINES");
+    $ file_text = $<<FILE("file_methods.txt");
+    $ dir = $<<FILE(".");
+    $# {
+        "exists": file_lines.exists(),
+        "size": file_lines.size(),
+        "is_dir": dir.is_dir(),
+        "read": file_text.read(),
+        "lines": file_lines.read(),
+        "read_lines_method": file_text.read_lines(),
+        "type": file_lines.type()
+    };
+}
+
+$GET("/suite/json") suite_json() -> JSON {
+    $ json_value = $JSON { "ok": true, "name": "serve" };
+    $# {
+        "type": json_value.type(),
+        "text": json_value.to_str()
+    };
+}
+
+$GET("/suite/html") suite_html() -> JSON {
+    $ html_value = $HTML().link("pages.index");
+    $# {
+        "type": html_value.type(),
+        "text": html_value.to_str()
+    };
+}
+
+$GET("/suite/time") suite_time() -> JSON {
+    $# {
+        "now_type": time.now().type(),
+        "now_ms_type": time.now_ms().type(),
+        "format": time.format(0, "%Y-%m-%d"),
+        "parse": time.parse("1970-01-03", "%Y-%m-%d"),
+        "year": time.year(0),
+        "month": time.month(0),
+        "day": time.day(0),
+        "hour": time.hour(0),
+        "minute": time.minute(0),
+        "second": time.second(0),
+        "weekday": time.weekday(0),
+        "add_days": time.add_days(0, 2),
+        "diff_days": time.diff_days(172800, 0)
+    };
+}
+
+$GET("/suite/http") suite_http() -> JSON {
+    $ http_get = http.get("http://127.0.0.1:8080/http/ping");
+    $ http_post = http.post("http://127.0.0.1:8080/http/post", { "from": "serve-post" });
+    $ http_put = http.put("http://127.0.0.1:8080/http/put", { "from": "serve-put" });
+    $ http_delete = http.delete("http://127.0.0.1:8080/http/delete");
+    $ http_request = http.request("POST", "http://127.0.0.1:8080/http/post", { "from": "serve-request" }, { "X-Test": "1" });
+    $# {
+        "get_status": http_get["status"],
+        "post_status": http_post["status"],
+        "put_status": http_put["status"],
+        "delete_status": http_delete["status"],
+        "request_status": http_request["status"]
+    };
+}
+
+$GET("/suite/uuid") suite_uuid() -> JSON {
+    $ id = uuid.v4();
+    $# {
+        "value": id,
+        "valid": uuid.is_valid(id)
+    };
+}
+
+$GET("/suite/length") suite_length() -> JSON {
+    $# {
+        "string_length": "abc".length(),
+        "list_length": [1, 2, 3].length(),
+        "map_length": {"a": 1, "b": 2}.length()
+    };
+}
+
+$GET("/suite/string-slice-negative") suite_string_slice_negative() -> JSON {
+    $try {
+        $# { "result": "hello".slice(-1, 5) };
+    } $catch err {
+        $# { "error": err };
+    }
+}
+
+$GET("/suite/string-len-diff") suite_string_len_diff() -> JSON {
+    $# {
+        "byte_len": "你a".len(),
+        "char_len": str.len("你a")
+    };
+}

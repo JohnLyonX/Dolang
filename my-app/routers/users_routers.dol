@@ -1,7 +1,7 @@
 $mod data.users_data;
 $mod services.users_services;
 
-$GET("/users") getUsers() -> List<User> {
+$GET("/users") getUsers() -> List {
     $# users_services.find_all_users();
 }
 

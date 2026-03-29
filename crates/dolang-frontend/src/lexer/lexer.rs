@@ -203,6 +203,10 @@ impl Lexer {
                     self.advance_n(8);
                     return Ok(Token::new(Type::AtSetHdr, "@SET_HDR", start));
                 }
+                if self.match_seq("@HIDE") && self.annotation_boundary_after(5) {
+                    self.advance_n(5);
+                    return Ok(Token::new(Type::AtHide, "@HIDE", start));
+                }
                 self.advance();
                 Ok(Token::new(Type::At, "@", start))
             }

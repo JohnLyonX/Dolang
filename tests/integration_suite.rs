@@ -15,9 +15,9 @@ use dolang::runtime::{ProgramState, RuntimeContext, RuntimeMode, execute_program
 use integration::{assert_fixture_stdout, assert_route_string};
 use support::{
     http_get, http_options, http_request, http_request_with_headers,
-    http_request_with_headers_and_body,
-    route_by_signature, run_fixture, run_program_at_path, start_live_http_server,
-    start_live_http_server_from_context, try_start_live_http_server_from_context,
+    http_request_with_headers_and_body, route_by_signature, run_fixture, run_program_at_path,
+    start_live_http_server, start_live_http_server_from_context,
+    try_start_live_http_server_from_context,
 };
 
 #[test]
@@ -57,6 +57,51 @@ fn http_fixture_covers_route_registration_and_test_mode_execution() {
     assert_eq!(outcome.context.routes().len(), 2);
     assert!(route_by_signature(outcome.context.routes(), "GET", "/health").is_some());
     assert_route_string("fixtures/http/echo_route.dol", "GET", "/health", "ok");
+}
+
+#[test]
+fn http_handler_return_type_mismatch_fails_in_test_mode_bootstrap() {
+    let outcome = run_fixture(
+        "spec/invalid/http/http_handler_return_type_mismatch.dol",
+        RuntimeMode::Test,
+    );
+
+    let error = outcome
+        .error
+        .expect("http return type mismatch fixture should fail");
+    assert!(error.contains("http handler 'get_user' expects return type 'Int' but got 'Map'"));
+}
+
+#[test]
+fn http_handler_user_return_type_bootstraps_in_test_mode() {
+    let outcome = run_fixture(
+        "spec/valid/http/http_handler_user_return_type.dol",
+        RuntimeMode::Test,
+    );
+    assert!(
+        outcome.error.is_none(),
+        "visible user return type should pass"
+    );
+}
+
+#[test]
+fn http_handler_unknown_user_type_fails_in_test_mode_bootstrap() {
+    let outcome = run_fixture(
+        "spec/invalid/http/http_handler_unknown_user_type_without_import.dol",
+        RuntimeMode::Test,
+    );
+
+    let error = outcome
+        .error
+        .expect("unknown user return type fixture should fail");
+    assert!(error.contains("http handler 'get_user' references unknown return type 'User'"));
+}
+
+#[test]
+fn http_fixture_still_bootstraps_when_probe_inputs_are_sufficient() {
+    let outcome = run_fixture("fixtures/http/echo_route.dol", RuntimeMode::Test);
+    assert!(outcome.error.is_none(), "http fixture should execute");
+    assert_eq!(outcome.context.routes().len(), 2);
 }
 
 #[test]
@@ -835,7 +880,11 @@ fn live_http_request_context_primitives_are_visible_in_real_requests() {
 
     assert_eq!(response.status, 200);
     assert!(response.body.contains("\"id\":\"42\""), "{}", response.body);
-    assert!(response.body.contains("\"limit\":\"10\""), "{}", response.body);
+    assert!(
+        response.body.contains("\"limit\":\"10\""),
+        "{}",
+        response.body
+    );
     assert!(
         response.body.contains("\"auth\":\"Bearer demo-token\""),
         "{}",
@@ -865,8 +914,16 @@ fn live_http_multiple_path_params_are_visible_in_real_requests() {
     let response = http_get(&base_url, "/org/acme/repo/dolang");
 
     assert_eq!(response.status, 200);
-    assert!(response.body.contains("\"org\":\"acme\""), "{}", response.body);
-    assert!(response.body.contains("\"repo\":\"dolang\""), "{}", response.body);
+    assert!(
+        response.body.contains("\"org\":\"acme\""),
+        "{}",
+        response.body
+    );
+    assert!(
+        response.body.contains("\"repo\":\"dolang\""),
+        "{}",
+        response.body
+    );
 
     fs::remove_dir_all(&project_dir).expect("cleanup");
 }
@@ -897,7 +954,11 @@ fn live_http_post_body_is_visible_in_real_requests() {
     );
 
     assert_eq!(response.status, 200);
-    assert!(response.body.contains("\"name\":\"Alice\""), "{}", response.body);
+    assert!(
+        response.body.contains("\"name\":\"Alice\""),
+        "{}",
+        response.body
+    );
 
     fs::remove_dir_all(&project_dir).expect("cleanup");
 }

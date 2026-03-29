@@ -16,6 +16,7 @@ pub(super) fn handle_type_decl(stmt: &TypeDeclStmt, context: &mut RuntimeContext
                 name: f.name.clone(),
                 type_name: f.type_name.clone(),
                 optional: f.optional,
+                hidden: f.hidden,
             })
             .collect(),
     };

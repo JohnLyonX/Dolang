@@ -207,6 +207,15 @@ fn value_to_json(v: &DolangValue) -> JsonValue {
             }
             JsonValue::Object(obj)
         }
+        DolangValue::TypedInstance { fields, .. } => {
+            let mut obj: serde_json::Map<String, JsonValue> = serde_json::Map::new();
+            for (k, v) in fields {
+                if !k.starts_with('_') {
+                    obj.insert(k.clone(), value_to_json(v));
+                }
+            }
+            JsonValue::Object(obj)
+        }
         _ => JsonValue::Null,
     }
 }

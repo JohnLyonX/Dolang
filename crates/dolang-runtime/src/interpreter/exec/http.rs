@@ -4,15 +4,16 @@ use std::path::Path;
 
 use crate::ast::{HttpBlockStmt, HttpFnStmt};
 use crate::error::Error;
-use crate::interpreter::env::{Env, FnEnv};
-use crate::module::ModuleResolver;
-use crate::runtime::RuntimeContext;
 
-use super::super::HttpRoute;
+use crate::module::ModuleResolver;
+use crate::runtime::{ProgramState, RuntimeContext, RuntimeMode};
+
+use super::super::{DolangValue, HttpRoute, exec_http_handler};
 use super::Flow;
 
 pub(super) fn handle_http_fn(
     stmt: &HttpFnStmt,
+    state: &ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn Write,
 ) -> Flow {
@@ -27,10 +28,13 @@ pub(super) fn handle_http_fn(
         parent_cors: None,
         response_headers: headers_to_pairs(&stmt.headers),
         body: stmt.body.clone(),
-        module_env: Env::new(),
-        module_fns: FnEnv::new(),
+        module_env: state.env.clone(),
+        module_fns: state.fns.clone(),
     };
 
+    if let Err(err) = maybe_probe_http_handler(&route, context) {
+        return Flow::Err(err);
+    }
     context.register_http_route(route);
     writeln!(
         w,
@@ -43,6 +47,7 @@ pub(super) fn handle_http_fn(
 
 pub(super) fn handle_http_block(
     stmt: &HttpBlockStmt,
+    state: &ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn Write,
 ) -> Flow {
@@ -63,13 +68,17 @@ pub(super) fn handle_http_block(
                 format!("/{}/{}", prefix_trimmed, path_trimmed)
             };
             let response_headers = merge_response_headers(&stmt.headers, &route.response_headers);
-            context.register_http_route(HttpRoute {
+            let route = HttpRoute {
                 path: full_path,
                 cors: route.cors,
                 parent_cors: stmt.cors.clone(),
                 response_headers,
                 ..route
-            });
+            };
+            if let Err(err) = maybe_probe_http_handler(&route, context) {
+                return Flow::Err(err);
+            }
+            context.register_http_route(route);
         }
 
         writeln!(
@@ -94,7 +103,7 @@ pub(super) fn handle_http_block(
             route_stmt.path.clone()
         };
 
-        context.register_http_route(HttpRoute {
+        let route = HttpRoute {
             method: route_stmt.method.clone(),
             path: full_path,
             name: route_stmt.name.clone(),
@@ -108,9 +117,13 @@ pub(super) fn handle_http_block(
                 &headers_to_pairs(&route_stmt.headers),
             ),
             body: route_stmt.body.clone(),
-            module_env: Env::new(),
-            module_fns: FnEnv::new(),
-        });
+            module_env: state.env.clone(),
+            module_fns: state.fns.clone(),
+        };
+        if let Err(err) = maybe_probe_http_handler(&route, context) {
+            return Flow::Err(err);
+        }
+        context.register_http_route(route);
     }
 
     writeln!(
@@ -208,6 +221,70 @@ fn load_module_routes(
     }
 
     Ok(routes)
+}
+
+fn maybe_probe_http_handler(route: &HttpRoute, context: &RuntimeContext) -> Result<(), Error> {
+    if !matches!(context.mode(), RuntimeMode::Test) {
+        return Ok(());
+    }
+
+    probe_http_handler_return_type(route, context)
+}
+
+fn probe_http_handler_return_type(
+    route: &HttpRoute,
+    context: &RuntimeContext,
+) -> Result<(), Error> {
+    let mut probe_context = context.clone();
+    let mut probe_state = ProgramState::new();
+
+    probe_state.env.extend(route.module_env.clone());
+    probe_state.fns.extend(route.module_fns.clone());
+
+    for param in &route.params {
+        probe_state
+            .env
+            .insert(param.clone(), DolangValue::Str("__dummy__".to_string()));
+    }
+
+    probe_state.env.insert(
+        "__headers__".to_string(),
+        DolangValue::Json(indexmap::IndexMap::new()),
+    );
+    probe_state.env.insert(
+        "body".to_string(),
+        default_probe_body(route.return_type.as_deref()),
+    );
+
+    let (_should_continue, result, error) =
+        exec_http_handler(&route.body, &mut probe_state, &mut probe_context);
+    if let Some(error) = error {
+        return Err(Error::Interpreter(error));
+    }
+
+    super::functions::validate_declared_return_type(
+        "http handler",
+        &route.name,
+        route.return_type.as_deref(),
+        result.as_ref(),
+        &probe_context,
+    )
+}
+
+fn default_probe_body(return_type: Option<&str>) -> DolangValue {
+    match return_type.map(str::trim) {
+        Some("Int") | Some("Integer") => DolangValue::Int(0),
+        Some("Float") => DolangValue::Float(0.0),
+        Some("String") | Some("Str") => DolangValue::Str("__dummy__".to_string()),
+        Some("Bool") | Some("Boolean") => DolangValue::Bool(false),
+        Some("List") => DolangValue::List(vec![]),
+        Some("Map") | Some("Json") => DolangValue::Map(indexmap::IndexMap::new()),
+        Some("Response") => DolangValue::Response {
+            status: 200,
+            body: None,
+        },
+        _ => DolangValue::Null,
+    }
 }
 
 fn headers_to_pairs(headers: &[crate::ast::SetHdrEntry]) -> Vec<(String, String)> {

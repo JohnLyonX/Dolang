@@ -59,6 +59,7 @@ pub enum Type {
     At,         // @ - annotation entrypoint
     AtCors,     // @CORS - CORS annotation
     AtSetHdr,   // @SET_HDR - response header annotation
+    AtHide,     // @HIDE - field visibility annotation
 
     // HTTP method keywords
     HttpGet,   // $GET
@@ -151,6 +152,7 @@ impl fmt::Display for Type {
             Type::At => write!(f, "@"),
             Type::AtCors => write!(f, "@CORS"),
             Type::AtSetHdr => write!(f, "@SET_HDR"),
+            Type::AtHide => write!(f, "@HIDE"),
             Type::HttpGet => write!(f, "$GET"),
             Type::HttpPost => write!(f, "$POST"),
             Type::HttpPut => write!(f, "$PUT"),

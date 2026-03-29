@@ -130,5 +130,8 @@ pub fn eval_expr(
         Expr::ResConstructor(res) => {
             constructors::eval_res_constructor(e, res, env, fns, context, w)
         }
+        Expr::TypeInstance(ctor) => {
+            constructors::eval_struct_constructor(ctor, env, fns, context, w)
+        }
     }
 }

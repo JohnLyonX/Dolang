@@ -262,6 +262,14 @@ impl<'a> StmtParser<'a> {
         self.skip_semis();
 
         while !self.at_end() && self.peek().typ != Type::RBrace {
+            // optional @HIDE annotation
+            let hidden = if !self.at_end() && self.peek().typ == Type::AtHide {
+                self.advance();
+                true
+            } else {
+                false
+            };
+
             // field name
             if self.peek().typ != Type::Ident {
                 return Err(Error::Parse(crate::error::ParseError {
@@ -269,10 +277,24 @@ impl<'a> StmtParser<'a> {
                     line: 1,
                     column: 1,
                     found: None,
-                    expected: Some("identifier".to_string()),
+                    expected: Some("identifier or @HIDE annotation".to_string()),
                 }));
             }
             let field_name = self.advance().literal.clone();
+
+            if field_name.starts_with('_') {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: format!(
+                        "field name '{}' uses '_' prefix; use '@HIDE {}' instead",
+                        field_name,
+                        field_name.trim_start_matches('_')
+                    ),
+                    line: 1,
+                    column: 1,
+                    found: Some(field_name),
+                    expected: Some("@HIDE annotation or plain field name".to_string()),
+                }));
+            }
 
             // colon
             if self.at_end() || self.peek().typ != Type::Colon {
@@ -310,6 +332,7 @@ impl<'a> StmtParser<'a> {
                 name: field_name,
                 type_name,
                 optional,
+                hidden,
             });
 
             // allow comma or semicolon between fields (optional)

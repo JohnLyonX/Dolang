@@ -19,6 +19,9 @@ pub const RUNTIME_MODULE_LOAD: &str = "DOL-R005";
 pub const RUNTIME_TYPE_MISMATCH: &str = "DOL-R006";
 pub const RUNTIME_INVALID_EXPRESSION: &str = "DOL-R007";
 pub const RUNTIME_INVALID_ASSIGNMENT: &str = "DOL-R008";
+pub const RUNTIME_FIELD_NOT_FOUND: &str = "DOL-R009";
+pub const RUNTIME_INVALID_FIELD_ACCESS: &str = "DOL-R010";
+pub const RUNTIME_FIELD_TYPE_MISMATCH: &str = "DOL-R011";
 
 pub const PROJECT_LOAD: &str = "DOL-C001";
 pub const CONFIG_CORS_INVALID: &str = "DOL-C002";

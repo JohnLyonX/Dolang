@@ -11,6 +11,7 @@ pub struct TypeField {
     pub name: String,
     pub type_name: String,
     pub optional: bool,
+    pub hidden: bool,
 }
 
 /// Shape descriptor registered by `$Type` declarations.

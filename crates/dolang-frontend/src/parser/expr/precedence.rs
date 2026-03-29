@@ -184,9 +184,16 @@ impl<'a> ExprParser<'a> {
                 self.pos += 1;
 
                 if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
-                    // Allow `obj.field.method()` chaining: if the next token is '.',
-                    // this is a property access (e.g. `services.auth.login()`).
-                    if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Dot {
+                    // Allow zero-arg method / field access when:
+                    // 1. chaining: next token is '.' (e.g. `services.auth.login()`)
+                    // 2. end of token slice (e.g. `user.password` on LHS of assignment
+                    //    or in `$>> user.password;` after token collection strips ';')
+                    let next_is_terminator = self.pos >= self.tokens.len()
+                        || matches!(
+                            self.tokens[self.pos].typ,
+                            Type::Dot | Type::Semicolon | Type::Comma | Type::RParen | Type::RBracket
+                        );
+                    if next_is_terminator {
                         expr = Box::new(Expr::MethodCall(MethodCall {
                             span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
                             object: expr,

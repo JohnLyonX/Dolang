@@ -184,7 +184,15 @@ impl DolangValue {
             Self::Float(_) => Cow::Borrowed("Float"),
             Self::Str(_) => Cow::Borrowed("String"),
             Self::Bool(_) => Cow::Borrowed("Bool"),
-            Self::List(_) => Cow::Borrowed("List"),
+            Self::List(items) => {
+                if let Some(first) = items.first() {
+                    let first_type = first.type_name();
+                    if items.iter().all(|item| item.type_name() == first_type) {
+                        return Cow::Owned(format!("List<{}>", first_type));
+                    }
+                }
+                Cow::Borrowed("List")
+            }
             Self::Map(_) => Cow::Borrowed("Map"),
             Self::Function { .. } => Cow::Borrowed("Function"),
             Self::File { .. } => Cow::Borrowed("File"),

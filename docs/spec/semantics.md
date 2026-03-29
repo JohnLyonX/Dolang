@@ -44,7 +44,13 @@
   - `Float`
   - `String`
   - `Bool`
+  - `List`
+  - `Map`
   - `Json`
+  - `Response`
+  - 用户自定义类型（如 `User`）
+  - `List<T>`，其中 `T` 可以是内建类型或用户自定义类型
+- `RuntimeMode::Test` 下，HTTP handler 在注册阶段也会执行同级别的返回类型检查
 - 没有 `$#` 的函数返回 `Null`
 
 ### 控制流

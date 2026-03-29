@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use crate::ast::{
     BoolLiteral, CharLiteral, Expr, FStringLiteral, FnCallExpr, HdrReadExpr, HtmlConstructor,
     JsonConstructor, ListLiteral, MapLiteral, NullLiteral, NumberLiteral, ResConstructor, Span,
-    StringLiteral, VarLookup,
+    StringLiteral, StructConstructor, VarLookup,
 };
 use crate::error::Error;
 use crate::token::Type;
@@ -75,6 +75,8 @@ impl<'a> ExprParser<'a> {
                         name: tok.literal,
                         args,
                     })))
+                } else if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::LBrace {
+                    self.parse_struct_constructor(tok.pos, tok.literal)
                 } else {
                     Ok(Box::new(Expr::VarLookup(VarLookup {
                         span: Span::from_token(tok.pos),
@@ -353,6 +355,56 @@ impl<'a> ExprParser<'a> {
         Ok(Box::new(Expr::HdrRead(HdrReadExpr {
             span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
             header_name,
+        })))
+    }
+
+    fn parse_struct_constructor(
+        &mut self,
+        start: usize,
+        type_name: String,
+    ) -> Result<Box<Expr>, Error> {
+        self.pos += 1; // consume '{'
+        let mut fields: Vec<(String, Expr)> = Vec::new();
+
+        while self.pos < self.tokens.len() && self.tokens[self.pos].typ != Type::RBrace {
+            // field name (identifier)
+            if self.tokens[self.pos].typ != Type::Ident {
+                return Err(self.error_expected(
+                    "expected field name in struct constructor",
+                    "identifier",
+                ));
+            }
+            let field_name = self.tokens[self.pos].literal.clone();
+            self.pos += 1;
+
+            // colon
+            if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Colon {
+                return Err(self.error_expected(
+                    &format!("expected ':' after field '{}'", field_name),
+                    ":",
+                ));
+            }
+            self.pos += 1;
+
+            // value expression
+            let val = self.parse_expr()?;
+            fields.push((field_name, *val));
+
+            // optional comma
+            if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
+                self.pos += 1;
+            }
+        }
+
+        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RBrace {
+            return Err(self.error_expected("expected '}' to close struct constructor", "}"));
+        }
+        self.pos += 1; // consume '}'
+
+        Ok(Box::new(Expr::TypeInstance(StructConstructor {
+            span: Span::from_token(start),
+            type_name,
+            fields,
         })))
     }
 

@@ -39,6 +39,7 @@
 
 - 对齐 spec 样例与当前 parser/runtime 真实行为
 - HTTP handler 在真实 `serve` 请求链路中的路径参数、query 参数与 `$HDR(...)` 请求头读取行为已补齐并覆盖集成测试
+- `RuntimeMode::Test` 下 HTTP handler 注册阶段现在会执行返回类型校验；同时普通 `$fn` 与 HTTP handler 共用同一套返回类型验证逻辑
 - `$RES(status, body)` HTTP 状态码修复：之前 status 参数被忽略，响应始终为 HTTP 200；
   现已正确返回指定状态码（如 404、201、500 等）
 - HTTP handler 中未捕获的 `$throw` 在客户端侧稳定返回 HTTP 500 错误响应

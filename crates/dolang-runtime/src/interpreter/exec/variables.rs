@@ -1,4 +1,5 @@
 use crate::ast::{AssignStmt, ConstDeclStmt, Expr, MethodCall, VarDeclStmt};
+use crate::diagnostics::codes;
 use crate::error::Error;
 use crate::runtime::{ProgramState, RuntimeContext};
 
@@ -112,6 +113,101 @@ pub(super) fn handle_assign_stmt(
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Flow {
+    if let Expr::MethodCall(target) = &*stmt.name {
+        // TypedInstance field assignment: instance.field = val
+        let var_name = match eval_expr(&target.object, &state.env, &mut state.fns, context, w, true) {
+            Ok(DolangValue::Str(s)) => s,
+            Ok(_) => {
+                return Flow::Err(Error::InvalidAssignment(Some(
+                    "field assignment requires a direct variable as receiver".to_string(),
+                )));
+            }
+            Err(err) => return Flow::Err(err),
+        };
+
+        let val = match check_eval_result(eval_expr(
+            &stmt.value,
+            &state.env,
+            &mut state.fns,
+            context,
+            w,
+            false,
+        )) {
+            Ok(v) => v,
+            Err(err) => return Flow::Err(err),
+        };
+
+        // Determine stored key and expected field type (accounting for @HIDE fields)
+        let (stored_key, expected_field_type) = {
+            let existing = match state.env.get(&var_name) {
+                Some(e) => e,
+                None => {
+                    return Flow::Err(Error::Interpreter(format!(
+                        "variable '{}' not found",
+                        var_name
+                    )));
+                }
+            };
+            if let DolangValue::TypedInstance { type_name, fields } = existing {
+                let shape_opt = context.get_type(type_name);
+                let field_def = shape_opt.and_then(|s| {
+                    s.fields.iter().find(|f| f.name == target.method).cloned()
+                });
+                let expected_type = field_def.as_ref().map(|f| f.type_name.clone());
+                let key = match field_def {
+                    Some(f) if f.hidden => format!("_{}", target.method),
+                    _ => {
+                        if !fields.contains_key(&target.method) {
+                            let hk = format!("_{}", target.method);
+                            if fields.contains_key(&hk) { hk } else { target.method.clone() }
+                        } else {
+                            target.method.clone()
+                        }
+                    }
+                };
+                (key, expected_type)
+            } else {
+                return Flow::Err(Error::InvalidAssignment(Some(format!(
+                    "'{}' is not a struct instance",
+                    var_name
+                ))));
+            }
+        };
+
+        // Type-check: verify assigned value matches the declared field type
+        if let Some(ref expected_type) = expected_field_type {
+            let type_ok = match expected_type.as_str() {
+                "Int" => matches!(val, DolangValue::Int(_)),
+                "Float" => matches!(val, DolangValue::Float(_) | DolangValue::Int(_)),
+                "String" => matches!(val, DolangValue::Str(_)),
+                "Bool" => matches!(val, DolangValue::Bool(_)),
+                "List" => matches!(val, DolangValue::List(_)),
+                "Map" => matches!(val, DolangValue::Map(_)),
+                _ => true, // user-defined or unknown types pass through
+            };
+            if !type_ok {
+                return Flow::Err(Error::Diagnostic(
+                    crate::diagnostics::Diagnostic::error(
+                        codes::RUNTIME_FIELD_TYPE_MISMATCH,
+                        format!(
+                            "field '{}' expects type '{}', got '{}'",
+                            target.method,
+                            expected_type,
+                            val.type_name()
+                        ),
+                    )
+                    .with_span(crate::ast::Span::from_token(stmt.span.start)),
+                ));
+            }
+        }
+
+        if let Some(DolangValue::TypedInstance { fields, .. }) = state.env.get_mut(&var_name) {
+            fields.insert(stored_key, val);
+        }
+
+        return Flow::Normal;
+    }
+
     if let Expr::IndexAccess(idx) = &*stmt.name {
         let var_name = match eval_expr(&idx.object, &state.env, &mut state.fns, context, w, true) {
             Ok(DolangValue::Str(s)) => s,

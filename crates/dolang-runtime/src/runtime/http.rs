@@ -2,6 +2,7 @@ use indexmap::IndexMap;
 
 use crate::error::Error;
 use crate::interpreter::{DolangValue, HttpRoute, exec_http_handler};
+use crate::interpreter::exec::validate_declared_return_type;
 
 use super::{ProgramState, RuntimeContext};
 
@@ -82,7 +83,22 @@ pub fn execute_http_route(
         state.env.insert("body".to_string(), body.clone());
     }
 
-    exec_http_handler(&route.body, &mut state, &mut runtime_context)
+    let (should_continue, result, error) =
+        exec_http_handler(&route.body, &mut state, &mut runtime_context);
+
+    if error.is_none() {
+        if let Err(e) = validate_declared_return_type(
+            "http handler",
+            &route.name,
+            route.return_type.as_deref(),
+            result.as_ref(),
+            &runtime_context,
+        ) {
+            return (true, None, Some(e.to_string()));
+        }
+    }
+
+    (should_continue, result, error)
 }
 
 #[allow(dead_code)]

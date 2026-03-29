@@ -84,6 +84,31 @@ pub fn eval_method_call(
         ));
     }
 
+    // TypedInstance field access: instance.field_name (zero-arg)
+    if let DolangValue::TypedInstance { type_name, fields } = &obj_val {
+        if call.args.is_empty() {
+            if let Some(value) = fields.get(&call.method) {
+                return Ok(value.clone());
+            }
+            // @HIDE fields are stored with "_" prefix; allow access via clean name
+            let hidden_key = format!("_{}", call.method);
+            if let Some(value) = fields.get(&hidden_key) {
+                return Ok(value.clone());
+            }
+            // Field declared in TypeShape but not yet set → return Null (uninitialized)
+            if let Some(shape) = context.get_type(type_name) {
+                if shape.fields.iter().any(|f| f.name == call.method) {
+                    return Ok(DolangValue::Null);
+                }
+            }
+            return Err(super::runtime_error(
+                e,
+                codes::RUNTIME_INVALID_FIELD_ACCESS,
+                format!("type '{}' has no field '{}'", type_name, call.method),
+            ));
+        }
+    }
+
     super::super::builtins::dispatch(&obj_val, &call.method, &arg_vals, context)
 }
 

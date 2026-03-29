@@ -7,7 +7,7 @@ use crate::ast::{
 use crate::error::Error;
 use crate::runtime::RuntimeContext;
 
-use super::super::env::{Env, FnEnv, generate_fn_name};
+use super::super::env::{Env, FnEnv, RuntimeFn, generate_fn_name};
 use super::super::value::DolangValue;
 use super::eval_expr;
 
@@ -114,6 +114,12 @@ pub fn eval_fn_literal(lit: &FnLiteral, fns: &mut FnEnv) -> Result<DolangValue, 
         return_type: lit.return_type.clone(),
         body: lit.body.clone(),
     };
-    fns.insert(fn_name.clone(), fn_decl);
+    fns.insert(
+        fn_name.clone(),
+        RuntimeFn {
+            decl: fn_decl,
+            source_file: None,
+        },
+    );
     Ok(DolangValue::Str(fn_name))
 }

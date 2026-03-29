@@ -1,4 +1,5 @@
 use std::borrow::ToOwned;
+use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -51,6 +52,7 @@ pub(super) fn handle_mod_decl(
             fns: FnEnv::new(),
             native_exports: native_exports.clone(),
             module_env: Env::new(),
+            visible_user_types: HashSet::new(),
         };
         state.env.insert(namespace, module_value);
         return Flow::Normal;
@@ -224,7 +226,7 @@ fn build_module_namespace(
     let fns = module_state.fns.clone();
     let mut exports = FnEnv::new();
     for (name, fn_decl) in &fns {
-        if fn_decl.is_public {
+        if fn_decl.decl.is_public {
             exports.insert(name.clone(), fn_decl.clone());
         }
     }
@@ -235,6 +237,7 @@ fn build_module_namespace(
         fns,
         native_exports: crate::runtime::NativeFnMap::new(),
         module_env: module_state.env,
+        visible_user_types: HashSet::new(),
     })
 }
 

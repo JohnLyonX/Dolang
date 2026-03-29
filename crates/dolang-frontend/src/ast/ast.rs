@@ -53,6 +53,7 @@ pub enum Expr {
     JsonConstructor(JsonConstructor), // $JSON { "key": value, ... }
     HtmlConstructor(HtmlConstructor), // $HTML("<h1>...</h1>")
     ResConstructor(ResConstructor), // $RES(status, body)
+    TypeInstance(StructConstructor), // TypeName { field: value, ... }
 }
 
 #[derive(Debug, Clone)]
@@ -387,12 +388,21 @@ pub struct MainDeclStmt {
     pub body: Vec<Stmt>,
 }
 
-/// A single field in a $Type declaration: `name: TypeName?`
+/// A single field in a $Type declaration: `name: TypeName?` or `@HIDE name: TypeName`
 #[derive(Debug, Clone)]
 pub struct TypeField {
     pub name: String,
     pub type_name: String, // "Int" | "Str" | "Bool" | "Float"
     pub optional: bool,    // true if field has `?` suffix
+    pub hidden: bool,      // true if field has `@HIDE` annotation
+}
+
+/// Struct constructor: `TypeName { field: value, ... }`
+#[derive(Debug, Clone)]
+pub struct StructConstructor {
+    pub span: Span,
+    pub type_name: String,
+    pub fields: Vec<(String, Expr)>,
 }
 
 /// Type declaration: $Type User { id: Int, name: Str, email: Str? }
@@ -818,6 +828,7 @@ impl Expr {
             Expr::JsonConstructor(j) => j.span(),
             Expr::HtmlConstructor(h) => h.span(),
             Expr::ResConstructor(r) => r.span(),
+            Expr::TypeInstance(t) => t.span,
         }
     }
 }

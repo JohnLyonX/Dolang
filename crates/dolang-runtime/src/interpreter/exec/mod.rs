@@ -14,7 +14,7 @@ use std::io::{Write, stdout};
 
 use super::value::DolangValue;
 
-pub use functions::{call_fn, call_module_fn};
+pub use functions::{call_fn, call_module_fn, validate_declared_return_type};
 
 /// Internal control-flow signal returned by exec_inner.
 #[derive(Debug)]
@@ -77,8 +77,8 @@ pub(super) fn exec_inner(
         Stmt::For(stmt) => control_flow::handle_for_stmt(stmt, state, context, w),
         Stmt::ForIn(stmt) => control_flow::handle_for_in_stmt(stmt, state, context, w),
         Stmt::FnDecl(stmt) => functions::handle_fn_decl(stmt, state),
-        Stmt::HttpFn(stmt) => http::handle_http_fn(stmt, context, w),
-        Stmt::HttpBlock(stmt) => http::handle_http_block(stmt, context, w),
+        Stmt::HttpFn(stmt) => http::handle_http_fn(stmt, state, context, w),
+        Stmt::HttpBlock(stmt) => http::handle_http_block(stmt, state, context, w),
         Stmt::Static(stmt) => modules::handle_static_stmt(stmt, context, w),
         Stmt::FileWrite(stmt) => io::handle_file_write_stmt(stmt, state, context, w),
         Stmt::FileRead(stmt) => io::handle_file_read_stmt(stmt, state, context, w),

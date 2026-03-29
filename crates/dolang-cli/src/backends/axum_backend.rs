@@ -215,6 +215,7 @@ fn build_router(
                         )
                             .into_response();
                     }
+                    eprintln!("[ERROR] {err_msg}");
                     return (
                         axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                         axum::response::Json(serde_json::json!({"error": err_msg})),
@@ -636,6 +637,15 @@ fn value_to_json(v: &DolangValue) -> JsonValue {
             let mut obj = serde_json::Map::new();
             for (k, v) in map {
                 obj.insert(k.clone(), value_to_json(v));
+            }
+            JsonValue::Object(obj)
+        }
+        DolangValue::TypedInstance { fields, .. } => {
+            let mut obj = serde_json::Map::new();
+            for (k, v) in fields {
+                if !k.starts_with('_') {
+                    obj.insert(k.clone(), value_to_json(v));
+                }
             }
             JsonValue::Object(obj)
         }

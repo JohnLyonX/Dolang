@@ -1,75 +1,71 @@
 # 8. 集合与常用方法
 
-这一章集中讲三类最常用的值：字符串、列表、map。每一类都给出“创建、读取、修改、查询”的基本方式。
+这一章集中讲三类最常用的值：字符串、列表、Map。重点是“创建、读取、修改、查询”和“什么时候该去 `std.*`”。
 
 ## 字符串
 
 ```dol
-$ s = "hello";
-$>> s.len();
-$>> s.contains("ell");
-$>> s.starts_with("he");
-$>> s.ends_with("lo");
-$>> s.slice(1, 3);
+$ text = "  hello,world  ";
+$>> text.trim();
+$>> text.upper();
+$>> text.split(",");
+$>> text.contains("hello");
 ```
 
-再看几个常用方法：
+`split()` 返回 `List`，所以可以继续接列表处理：
 
 ```dol
-$ s = "  Hello, World  ";
-$>> s.trim();
-$>> s.upper();
-$>> s.lower();
-$>> s.replace("World", "Dolang");
-$>> s.split(",");
-$>> "42".to_int();
-$>> "3.14".to_float();
-$>> "true".to_bool();
+$ parts = "a,b,c".split(",");
+$>> parts.len();
+$>> parts.join("-");
 ```
-
-字符串方法适合“当前值本身”的直接处理。
 
 ## 列表
 
 ```dol
-$ nums = [3, 1, 4];
-$>> nums.len();
-nums.push(5);
-$>> nums.pop();
-$>> nums.contains(1);
-```
-
-如果你希望变量在后续赋值时继续保持列表类型，也可以显式声明：
-
-```dol
-$ nums: List = [3, 1, 4];
-```
-
-更多常用方法：
-
-```dol
 $ nums = [3, 1, 4, 1, 5];
+$>> nums.len();
+$>> nums.contains(4);
 $>> nums.index_of(4);
-$>> nums.last_index_of(1);
+$>> nums.count(1);
 $>> nums.slice(1, 4);
+```
+
+常用原地修改方法：
+
+```dol
+nums.push(9);
+nums.sort();
+nums.sort_desc();
+nums.reverse();
+```
+
+常见读法：
+
+```dol
 $>> nums.first();
 $>> nums.last();
-$>> nums.is_empty();
 $>> nums.unique();
-$>> nums.count(1);
-$>> nums.join("-");
+$>> [[1, 2], [3, 4]].flatten();
 ```
 
-可变方法：
+### 索引越界
+
+当前实现里，列表索引越界会报运行时错误，不会返回 `null`。
+
+例如下面这种写法不应作为主线常规用法：
 
 ```dol
-$ nums = [3, 1, 4];
-nums.push(5);
-nums.insert(1, 9);
-nums.remove_at(0);
-nums.reverse();
-nums.sort();
-$>> nums;
+$ items = [1, 2, 3];
+$>> items[10];
+```
+
+更安全的写法是先看长度：
+
+```dol
+$if nums.len() > 2 {
+    $>> nums[2];
+}
 ```
 
 ## Map
@@ -77,86 +73,72 @@ $>> nums;
 ```dol
 $ user = {"name": "Tom", "age": 25};
 $>> user["name"];
+$>> user.len();
 $>> user.keys();
 $>> user.values();
 $>> user.contains_key("age");
 ```
 
-同样可以显式声明：
+### Map 写入
 
-```dol
-$ user: Map = {"name": "Tom", "age": 25};
-```
-
-还可以删除 key：
-
-```dol
-$ user = {"name": "Tom", "age": 25};
-user.remove("age");
-$>> user;
-```
-
-## 索引访问
-
-```dol
-$ items = ["a", "b", "c"];
-$>> items[0];
-```
-
-map 也可以通过 key 访问：
+当前主线写法直接使用索引赋值：
 
 ```dol
 $ user = {"name": "Tom"};
-$>> user["name"];
+user["email"] = "tom@example.com";
+user["age"] = 25;
+$>> user["email"];
 ```
 
-## 方法和标准库的区别
-
-两类能力都会出现：
-
-- 值方法：`"hello".len()`、`nums.push(1)`
-- 标准库函数：`str.trim("  hi  ")`、`math.sqrt(9.0)`
-
-值方法适合日常直接操作，`std.*` 模块适合整理通用函数。
-
-一个最直观的对比：
+删除键：
 
 ```dol
-$mod std.str;
-
-$ text = "  hello  ";
-$>> text.trim();
-$>> str.trim(text);
+user.remove("age");
 ```
 
-这两种写法都能表达“去空白”，只是组织方式不同。
+### 什么时候改用 `std.json`
 
-## 链式调用
-
-当前不少表达式都可以直接链起来写：
+如果你操作的是通用 JSON 结构，或者想做“按路径更新、合并、格式化”，优先用 `std.json`：
 
 ```dol
-$>> "a,b,c".split(",").len();
-$>> "  hello  ".trim().upper();
+$mod std.json;
+
+$ obj = {"name": "Tom"};
+$ obj = json.set(obj, "email", "tom@example.com");
+$>> json.stringify(obj);
 ```
 
-这种写法适合短链路处理，但链太长时仍然建议拆成中间变量。
+可以把两者这样区分：
+
+- `Map` 原生操作：当前变量上的直接读写
+- `std.json`：更偏通用 JSON 工具和转换函数
+
+## 值方法和标准库的区别
+
+- 值方法：`nums.push(1)`、`user.keys()`、`"a,b".split(",")`
+- 标准库：`str.trim(text)`、`json.set(obj, key, value)`、`math.sqrt(9.0)`
+
+如果只是处理当前值本身，先选值方法；如果要做通用转换或组合工具，再去 `std.*`。
 
 ## 一个完整例子
 
 ```dol
-$ user = {"name": "Alice", "tags": ["lang", "tool", "lang"]};
-$ tags = user["tags"];
+$ raw = "alice,bob,bob,carol";
+$ names = raw.split(",");
+names.sort_desc();
 
-$>> user["name"].upper();
-$>> tags.unique();
-$>> tags.join(", ");
+$ stats = {"count": names.len()};
+stats["unique_count"] = names.unique().len();
+
+$>> names;
+$>> stats["count"];
+$>> stats["unique_count"];
 ```
 
-## 迁移期参考
+## 继续查表
 
-- [stdlib.md](stdlib.md)
-- [examples.md](examples.md)
+- 值方法与模块索引：[13-stdlib-overview.md](13-stdlib-overview.md)
+- 完整 API：[../reference/stdlib-api.md](../reference/stdlib-api.md)
 
 ## 下一章
 

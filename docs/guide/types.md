@@ -1,11 +1,12 @@
 # 类型注解
 
-Dolang 支持**渐进类型注解**：注解完全可选，不影响程序运行，但能提升代码可读性。
-
-> 迁移说明
+> **Status: Migration Source**
 >
-> 本页属于旧 guide 页面。
-> `List` / `Map` 显式声明现在已经可用，但主线说明以 [09-gradual-typing.md](09-gradual-typing.md) 为准。
+> 这是一页迁移期旧类型文档。
+> 当前主线请改读 [09-gradual-typing.md](09-gradual-typing.md)。
+> 本页仍保留的独特价值是旧版示例集合，但其中参数类型注解、`JSON<User>` 等写法不应视为当前主线承诺。
+
+Dolang 支持**渐进类型注解**：注解完全可选，不影响程序运行，但能提升代码可读性。
 
 ---
 
@@ -89,25 +90,17 @@ $Type User {
 - 可选字段：在类型后加 `?`
 - 无 getter / setter，无私有字段，无方法
 
-### 与函数返回类型结合
+### 与返回类型相关的迁移提醒
 
-```dolang
-$fn getUser(id) -> JSON<User> {
-    $# {"id": id, "name": "Alice"};
-}
-```
+旧文档里曾经把 `$Type` 和 `JSON<User>` 放在一起讲解。
 
-`JSON<User>` 表示"返回符合 User 形状的 JSON"，运行时不做强制校验。
+这一轮主线已经不再把 `JSON<User>` 当作稳定教学写法，所以这里不要继续照抄旧签名。当前阅读方式是：
 
-HTTP handler 同样支持：
+- 结构说明看 `$Type`
+- 普通 JSON 返回看 `-> JSON`
+- 集合返回看 `-> List<T>`
 
-```dolang
-$GET("/users/:id") get_user(id) -> JSON<User> {
-    $# {"id": id, "name": "Alice"};
-}
-```
-
-建议把 `$Type` 定义集中放在 `models/` 目录，函数和路由引用。
+主线说明以 [09-gradual-typing.md](09-gradual-typing.md) 为准。
 
 ---
 

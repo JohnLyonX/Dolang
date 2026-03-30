@@ -1,6 +1,6 @@
 # 18. 模式与实战配方
 
-这一章收集“怎么组合使用 Dolang”的实际路径。
+这一章给的是可复制的起步配方，而不是零散片段。
 
 ## 配方 1：单文件脚本
 
@@ -10,7 +10,7 @@
 - 小工具
 - 一次性脚本
 
-一个最小例子：
+文件：`sum.dol`
 
 ```dol
 $ nums = [1, 2, 3, 4, 5];
@@ -23,16 +23,40 @@ $for n in nums {
 $>> total;
 ```
 
-## 配方 2：标准库驱动的小工具
+运行：
 
-典型组合：
+```bash
+dolang run sum.dol
+```
 
-- `std.str`
-- `std.json`
-- `std.path`
-- `std.fs`
+预期输出：
 
-例如：
+```text
+15
+```
+
+回看章节：
+
+- [07-functions.md](07-functions.md)
+- [08-collections-and-methods.md](08-collections-and-methods.md)
+
+## 配方 2：读取并处理 JSON 文件
+
+目录：
+
+```text
+json-tool/
+├── main.dol
+└── data.json
+```
+
+`data.json`
+
+```json
+{"name":"dolang","tags":["lang","tool","lang"]}
+```
+
+`main.dol`
 
 ```dol
 $mod std.fs;
@@ -40,18 +64,34 @@ $mod std.json;
 
 $ raw = fs.read_text("data.json");
 $ obj = json.parse(raw);
-$>> json.stringify(obj);
+$ tags = obj["tags"];
+
+$>> obj["name"];
+$>> tags.unique().len();
 ```
 
-## 配方 3：带 package 的小项目
+运行：
 
-适合：
+```bash
+dolang run main.dol
+```
 
-- 有配置项
-- 有多个模块
-- 需要服务模式
+预期输出：
 
-最小结构：
+```text
+dolang
+2
+```
+
+回看章节：
+
+- [08-collections-and-methods.md](08-collections-and-methods.md)
+- [13-stdlib-overview.md](13-stdlib-overview.md)
+- [14-io-env-config.md](14-io-env-config.md)
+
+## 配方 3：带 `package.toml` 的小项目
+
+目录：
 
 ```text
 my-app/
@@ -61,46 +101,117 @@ my-app/
     └── helper.dol
 ```
 
-## 配方 4：拆模块的 HTTP 服务
+`package.toml`
 
-推荐组合：
+```toml
+name = "my-app"
+version = "0.1.0"
+entry = "main.dol"
 
-- `package.toml`
-- `$mod` 普通模块
-- `$HTTP(...).link(...)`
-
-入口文件可以像这样：
-
-```dol
-$HTTP("/api").link("routers.api");
-$STATIC("/static", "static");
+[server]
+host = "127.0.0.1"
+port = 8080
 ```
 
-## 配方 5：从脚本迁移到服务
+`shared/helper.dol`
 
-常见演进顺序：
+```dol
+$fn greeting() -> String {
+    $# "hello from helper";
+}
+```
 
-1. 从单文件脚本开始
-2. 抽出模块
-3. 引入 `package.toml`
-4. 暴露 HTTP 路由
-5. 用 `dolang test` 验证路由
+`main.dol`
 
-## 一套实用的成长路径
+```dol
+$mod shared.helper;
+$>> helper.greeting();
+```
 
-如果你是第一次系统写 Dolang，建议按这个顺序练习：
+运行：
 
-1. 先写只包含变量、循环、函数的脚本
-2. 再引入 `std.str`、`std.math`、`std.json`
-3. 再把脚本拆成两个模块
-4. 再加 `package.toml`
-5. 最后再进入 HTTP 服务
+```bash
+dolang run main.dol
+```
 
-## 这一章后续会继续扩写什么
+预期输出：
 
-优先级最高的补充方向：
+```text
+hello from helper
+```
 
-- 文件处理脚本实战
-- JSON API 小项目
-- 多模块目录组织模板
-- 服务入口与路由拆分模板
+回看章节：
+
+- [11-modules.md](11-modules.md)
+- [12-projects-and-package.md](12-projects-and-package.md)
+
+## 配方 4：模块化 HTTP 服务
+
+目录：
+
+```text
+http-app/
+├── package.toml
+├── main.dol
+└── routers/
+    └── api.dol
+```
+
+`package.toml`
+
+```toml
+name = "http-app"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+```
+
+`routers/api.dol`
+
+```dol
+$GET("/status") status() -> JSON {
+    $# $JSON { "ok": true };
+}
+```
+
+`main.dol`
+
+```dol
+@CORS("*")
+$main() {
+    $>> "[INFO] server starting";
+}
+
+$HTTP("/api").link("routers.api");
+```
+
+运行：
+
+```bash
+dolang serve .
+```
+
+验证：
+
+```bash
+curl http://127.0.0.1:8080/api/status
+```
+
+预期结果：
+
+```text
+{"ok":true}
+```
+
+回看章节：
+
+- [12-projects-and-package.md](12-projects-and-package.md)
+- [15-http-basics.md](15-http-basics.md)
+- [16-http-organization.md](16-http-organization.md)
+
+## 迁移说明
+
+旧的零散示例页仍在 [examples.md](examples.md)，但主线示例职责已经迁到本章。

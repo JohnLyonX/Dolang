@@ -9,16 +9,6 @@ $HTTP {
     $GET("/ping") ping() -> String {
         $# "pong";
     }
-}
-```
-
-适合把同一个文件里的多条路由聚到一起：
-
-```dol
-$HTTP {
-    $GET("/ping") ping() -> String {
-        $# "pong";
-    }
 
     $GET("/health") health() -> String {
         $# "ok";
@@ -36,11 +26,34 @@ $HTTP("/api/v1") {
 }
 ```
 
-这样可以少写重复前缀，适合按版本或按业务域组织路由。
+## `$main()` 的位置
 
-## 在块上挂 `@SET_HDR(...)`
+`$main()` 适合放全局初始化逻辑：
 
-块级 `@SET_HDR(...)` 适合写整个路由组都要带上的静态响应头：
+```dol
+@CORS("*")
+$main() {
+    $>> "[INFO] server starting";
+}
+```
+
+什么时候需要：
+
+- 需要全局 `@CORS`
+- 需要启动日志或初始化动作
+- 想把“启动阶段逻辑”和“路由定义”显式分开
+
+什么时候可以省略：
+
+- 只有少量路由
+- 没有全局初始化逻辑
+
+它和 `entry` 的关系是：
+
+- `entry` 选入口文件
+- `$main()` 定义该文件里的 serve 入口逻辑
+
+## 组织 `@SET_HDR(...)`
 
 ```dol
 @SET_HDR({
@@ -54,51 +67,23 @@ $HTTP("/api") {
 }
 ```
 
-路由级也可以继续声明：
-
-```dol
-@SET_HDR({ "Cache-Control": "no-store" })
-$GET("/admin") admin() -> String {
-    $# "ok";
-}
-```
-
-合并规则：
+规则：
 
 - 块级 header 会传给块内路由
 - 同名 header 由更靠近路由的声明覆盖
-- 不同名 header 会一起保留
 
 ## 组织 `@CORS(...)`
 
 `@CORS(...)` 可以放在三个层级：
 
-- `$main() {}` 前，表示全局默认策略
-- `$HTTP(...)` 前，表示某个路由组的策略
-- 具体路由前，表示单条路由策略
+- `$main()` 前：全局默认策略
+- `$HTTP(...)` 前：路由组策略
+- 具体路由前：单条路由策略
 
-例如：
+优先级：
 
-```dol
-@CORS("*")
-$main() {}
-
-@CORS({
-    origins: ["https://api.example.com"],
-    methods: ["GET", "POST"]
-})
-$HTTP("/api") {
-    $GET("/users") users() -> JSON {
-        $# $JSON { "ok": true };
-    }
-}
-```
-
-优先级是：
-
-- 路由级 `@CORS` 覆盖块级
-- 块级 `@CORS` 覆盖全局
-- 这里是整份配置替换，不做字段级合并
+- 路由级覆盖块级
+- 块级覆盖全局
 
 ## 链接外部路由模块
 
@@ -108,69 +93,36 @@ $HTTP("/v1/api").link("routers.api");
 
 `.link()` 只用于挂载 HTTP 路由，不等于普通 `$mod` 导入。
 
-可以把它理解成：
-
-- `$mod` 导入普通模块函数
-- `$HTTP(...).link(...)` 挂载路由定义
-
-例如：
-
-`routers/api.dol`：
-
-```dol
-$GET("/status") status() -> String {
-    $# "running";
-}
-```
-
-`main.dol`：
-
-```dol
-$HTTP("/v1/api").link("routers.api");
-```
-
-## 静态资源
+## 静态资源和 HTML 文件
 
 ```dol
 $STATIC("/static", "static");
-```
 
-也支持单参数形式：
-
-```dol
-$STATIC("static");
-```
-
-它适合把某个目录作为静态文件入口暴露出去。
-
-## HTML 外部文件链接
-
-```dol
 $GET("/") index() -> HTML {
     $# $HTML().link("pages.index");
 }
 ```
 
-这适合：
+## 路由冲突怎么处理
 
-- 首页 HTML
-- 简单静态页面
-- 把 HTML/CSS/JS 作为文件组织而不是全部写进字符串
+当前仓库没有把“同路径同方法重复注册”的底层策略写成稳定主线规则，因此这一章只给出安全建议，不虚构实现细节。
 
-## 路由拆分建议
+推荐做法：
 
-当项目开始变大时，可以按这个顺序组织：
+1. 同一个路径只在一个文件里定义一次
+2. 先按业务域拆路由，再用 `.link()` 汇总
+3. 启动时打开 `--routertab` 或最小化路由文件确认最终注册结果
+4. 排查顺序先看入口文件、再看 `.link()`、最后看重复路径
 
-1. 先把多个路由放进 `$HTTP { ... }`
-2. 再把业务域拆到不同文件
-3. 在入口文件里用 `.link()` 挂载
-4. 静态资源单独交给 `$STATIC(...)`
+如果你怀疑冲突，先把可疑路由缩成最小例子再排查。
 
 ## 一个完整例子
 
 ```dol
 @CORS("*")
-$main() {}
+$main() {
+    $>> "[INFO] server starting";
+}
 
 @SET_HDR({ "X-Frame-Options": "DENY" })
 $HTTP("/api") {
@@ -182,11 +134,6 @@ $HTTP("/api") {
 $HTTP("/site").link("routers.site");
 $STATIC("/static", "static");
 ```
-
-## 进一步参考
-
-- `docs/reference/http.md`
-- `docs/spec/modules.md`
 
 ## 下一章
 

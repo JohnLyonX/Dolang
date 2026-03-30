@@ -1,5 +1,11 @@
 # 标准库参考
 
+> **Status: Migration Source**
+>
+> 这是一页迁移期旧参考文档。
+> 当前主线的总览请读 [13-stdlib-overview.md](13-stdlib-overview.md)，完整查表请读 [../reference/stdlib-api.md](../reference/stdlib-api.md)。
+> 本页仍保留的独特价值是旧版 API 罗列，可作为迁移素材，但不应继续作为主线入口。
+
 Dolang 的标准库分为两层：
 
 - **内置方法**：所有值都自带的方法，无需 import

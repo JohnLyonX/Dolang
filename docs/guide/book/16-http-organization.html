@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -181,13 +181,6 @@
     $GET("/ping") ping() -&gt; String {
         $# "pong";
     }
-}
-</code></pre>
-<p>适合把同一个文件里的多条路由聚到一起：</p>
-<pre><code class="language-dol">$HTTP {
-    $GET("/ping") ping() -&gt; String {
-        $# "pong";
-    }
 
     $GET("/health") health() -&gt; String {
         $# "ok";
@@ -201,9 +194,30 @@
     }
 }
 </code></pre>
-<p>这样可以少写重复前缀，适合按版本或按业务域组织路由。</p>
-<h2 id="在块上挂-set_hdr"><a class="header" href="#在块上挂-set_hdr">在块上挂 <code>@SET_HDR(...)</code></a></h2>
-<p>块级 <code>@SET_HDR(...)</code> 适合写整个路由组都要带上的静态响应头：</p>
+<h2 id="main-的位置"><a class="header" href="#main-的位置"><code>$main()</code> 的位置</a></h2>
+<p><code>$main()</code> 适合放全局初始化逻辑：</p>
+<pre><code class="language-dol">@CORS("*")
+$main() {
+    $&gt;&gt; "[INFO] server starting";
+}
+</code></pre>
+<p>什么时候需要：</p>
+<ul>
+<li>需要全局 <code>@CORS</code></li>
+<li>需要启动日志或初始化动作</li>
+<li>想把“启动阶段逻辑”和“路由定义”显式分开</li>
+</ul>
+<p>什么时候可以省略：</p>
+<ul>
+<li>只有少量路由</li>
+<li>没有全局初始化逻辑</li>
+</ul>
+<p>它和 <code>entry</code> 的关系是：</p>
+<ul>
+<li><code>entry</code> 选入口文件</li>
+<li><code>$main()</code> 定义该文件里的 serve 入口逻辑</li>
+</ul>
+<h2 id="组织-set_hdr"><a class="header" href="#组织-set_hdr">组织 <code>@SET_HDR(...)</code></a></h2>
 <pre><code class="language-dol">@SET_HDR({
     "X-Frame-Options": "DENY",
     "Cache-Control": "no-cache"
@@ -214,92 +228,49 @@ $HTTP("/api") {
     }
 }
 </code></pre>
-<p>路由级也可以继续声明：</p>
-<pre><code class="language-dol">@SET_HDR({ "Cache-Control": "no-store" })
-$GET("/admin") admin() -&gt; String {
-    $# "ok";
-}
-</code></pre>
-<p>合并规则：</p>
+<p>规则：</p>
 <ul>
 <li>块级 header 会传给块内路由</li>
 <li>同名 header 由更靠近路由的声明覆盖</li>
-<li>不同名 header 会一起保留</li>
 </ul>
 <h2 id="组织-cors"><a class="header" href="#组织-cors">组织 <code>@CORS(...)</code></a></h2>
 <p><code>@CORS(...)</code> 可以放在三个层级：</p>
 <ul>
-<li><code>$main() {}</code> 前，表示全局默认策略</li>
-<li><code>$HTTP(...)</code> 前，表示某个路由组的策略</li>
-<li>具体路由前，表示单条路由策略</li>
+<li><code>$main()</code> 前：全局默认策略</li>
+<li><code>$HTTP(...)</code> 前：路由组策略</li>
+<li>具体路由前：单条路由策略</li>
 </ul>
-<p>例如：</p>
-<pre><code class="language-dol">@CORS("*")
-$main() {}
-
-@CORS({
-    origins: ["https://api.example.com"],
-    methods: ["GET", "POST"]
-})
-$HTTP("/api") {
-    $GET("/users") users() -&gt; JSON {
-        $# $JSON { "ok": true };
-    }
-}
-</code></pre>
-<p>优先级是：</p>
+<p>优先级：</p>
 <ul>
-<li>路由级 <code>@CORS</code> 覆盖块级</li>
-<li>块级 <code>@CORS</code> 覆盖全局</li>
-<li>这里是整份配置替换，不做字段级合并</li>
+<li>路由级覆盖块级</li>
+<li>块级覆盖全局</li>
 </ul>
 <h2 id="链接外部路由模块"><a class="header" href="#链接外部路由模块">链接外部路由模块</a></h2>
 <pre><code class="language-dol">$HTTP("/v1/api").link("routers.api");
 </code></pre>
 <p><code>.link()</code> 只用于挂载 HTTP 路由，不等于普通 <code>$mod</code> 导入。</p>
-<p>可以把它理解成：</p>
-<ul>
-<li><code>$mod</code> 导入普通模块函数</li>
-<li><code>$HTTP(...).link(...)</code> 挂载路由定义</li>
-</ul>
-<p>例如：</p>
-<p><code>routers/api.dol</code>：</p>
-<pre><code class="language-dol">$GET("/status") status() -&gt; String {
-    $# "running";
-}
-</code></pre>
-<p><code>main.dol</code>：</p>
-<pre><code class="language-dol">$HTTP("/v1/api").link("routers.api");
-</code></pre>
-<h2 id="静态资源"><a class="header" href="#静态资源">静态资源</a></h2>
+<h2 id="静态资源和-html-文件"><a class="header" href="#静态资源和-html-文件">静态资源和 HTML 文件</a></h2>
 <pre><code class="language-dol">$STATIC("/static", "static");
-</code></pre>
-<p>也支持单参数形式：</p>
-<pre><code class="language-dol">$STATIC("static");
-</code></pre>
-<p>它适合把某个目录作为静态文件入口暴露出去。</p>
-<h2 id="html-外部文件链接"><a class="header" href="#html-外部文件链接">HTML 外部文件链接</a></h2>
-<pre><code class="language-dol">$GET("/") index() -&gt; HTML {
+
+$GET("/") index() -&gt; HTML {
     $# $HTML().link("pages.index");
 }
 </code></pre>
-<p>这适合：</p>
-<ul>
-<li>首页 HTML</li>
-<li>简单静态页面</li>
-<li>把 HTML/CSS/JS 作为文件组织而不是全部写进字符串</li>
-</ul>
-<h2 id="路由拆分建议"><a class="header" href="#路由拆分建议">路由拆分建议</a></h2>
-<p>当项目开始变大时，可以按这个顺序组织：</p>
+<h2 id="路由冲突怎么处理"><a class="header" href="#路由冲突怎么处理">路由冲突怎么处理</a></h2>
+<p>当前仓库没有把“同路径同方法重复注册”的底层策略写成稳定主线规则，因此这一章只给出安全建议，不虚构实现细节。</p>
+<p>推荐做法：</p>
 <ol>
-<li>先把多个路由放进 <code>$HTTP { ... }</code></li>
-<li>再把业务域拆到不同文件</li>
-<li>在入口文件里用 <code>.link()</code> 挂载</li>
-<li>静态资源单独交给 <code>$STATIC(...)</code></li>
+<li>同一个路径只在一个文件里定义一次</li>
+<li>先按业务域拆路由，再用 <code>.link()</code> 汇总</li>
+<li>启动时打开 <code>--routertab</code> 或最小化路由文件确认最终注册结果</li>
+<li>排查顺序先看入口文件、再看 <code>.link()</code>、最后看重复路径</li>
 </ol>
+<p>如果你怀疑冲突，先把可疑路由缩成最小例子再排查。</p>
 <h2 id="一个完整例子"><a class="header" href="#一个完整例子">一个完整例子</a></h2>
 <pre><code class="language-dol">@CORS("*")
-$main() {}
+$main() {
+    $&gt;&gt; "[INFO] server starting";
+}
 
 @SET_HDR({ "X-Frame-Options": "DENY" })
 $HTTP("/api") {
@@ -311,11 +282,6 @@ $HTTP("/api") {
 $HTTP("/site").link("routers.site");
 $STATIC("/static", "static");
 </code></pre>
-<h2 id="进一步参考"><a class="header" href="#进一步参考">进一步参考</a></h2>
-<ul>
-<li><code>docs/reference/http.md</code></li>
-<li><code>docs/spec/modules.md</code></li>
-</ul>
 <h2 id="下一章"><a class="header" href="#下一章">下一章</a></h2>
 <p>继续看 <a href="17-testing-and-debugging.html">17-testing-and-debugging.md</a>。</p>
 

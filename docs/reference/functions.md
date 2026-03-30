@@ -1,5 +1,11 @@
 # 函数系统
 
+> 迁移提示
+>
+> 本页是旧 reference 页面，仍有部分历史示例。
+> 当前主线函数口径请优先参考 [../guide/07-functions.md](../guide/07-functions.md)、[../guide/09-gradual-typing.md](../guide/09-gradual-typing.md) 和 [syntax.md](syntax.md)。
+> 如果本页示例与这些页面冲突，以主线和当前实现为准。
+
 Dolang 支持完整的函数功能，包括函数定义、参数传递、返回值、递归等。
 
 ## 函数定义
@@ -171,26 +177,16 @@ $GET("/pages/home") home() -> HTML {
 }
 ```
 
-### `JSON<TypeName>` — 带形状约束的返回类型
+### 历史写法提示：`JSON<TypeName>`
 
-当函数返回符合 `$Type` 定义形状的 JSON 时，使用 `JSON<TypeName>` 注解：
+以下是旧 reference 中曾出现过的签名形式：`$fn getUser(id) -> JSON<User> { ... }`
 
-```dolang
-$Type User {
-    id: Int
-    name: Str
-    email: Str?
-}
+当前主线不再把 `JSON<TypeName>` 当作稳定教学写法。阅读函数签名时，优先使用：
 
-$fn getUser(id) -> JSON<User> {
-    $# {"id": id, "name": "Alice"};
-}
-```
+- 普通 `-> JSON`
+- 或集合返回写成 `-> List<T>`
 
-- `JSON` 是运行时格式（解释器理解）
-- `<User>` 是形状约束（给开发者和 LSP 工具看）
-- 运行时不强制校验字段，类型是文档层
-- HTTP handler 同样支持：`$GET("/users/:id") get_user(id) -> JSON<User>`
+涉及 `$Type` 的结构表达，请以 [../guide/09-gradual-typing.md](../guide/09-gradual-typing.md) 为准。
 
 ---
 

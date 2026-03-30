@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -175,82 +175,147 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="17-测试与调试"><a class="header" href="#17-测试与调试">17. 测试与调试</a></h1>
-<p>这一章介绍当前最实用的调试路径。</p>
-<h2 id="用-dolang-test-跑路由"><a class="header" href="#用-dolang-test-跑路由">用 <code>dolang test</code> 跑路由</a></h2>
+<p>这一章给一条最实用的工作流：先验证最小功能，再缩小问题面，再做最小复现。</p>
+<h2 id="1-断言与基本验证"><a class="header" href="#1-断言与基本验证">1. 断言与基本验证</a></h2>
+<p>最轻量的验证方式仍然是直接运行并看输出：</p>
+<pre><code class="language-dol">$fn add(a, b) -&gt; Int {
+    $# a + b;
+}
+
+$&gt;&gt; add(1, 2);
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run main.dol
+</code></pre>
+<p>预期看到：</p>
+<pre><code class="language-text">3
+</code></pre>
+<p>对脚本逻辑来说，先把“输入是什么、输出是什么”写清楚，比一开始就堆复杂测试框架更重要。</p>
+<p>如果你想把“预期必须成立”写进代码里，优先用 <code>std.core.check.assert</code>：</p>
+<pre><code class="language-dol">$mod std.core.check;
+
+check.assert(1 + 1 == 2, "基础算术失败");
+check.assert("hello".len() == 5, "字符串长度失败");
+$&gt;&gt; "checks passed";
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run test_math.dol
+</code></pre>
+<p>通过时，你会看到：</p>
+<pre><code class="language-text">checks passed
+</code></pre>
+<p>断言失败时，程序会直接报错并停止，这很适合写最小脚本验证。</p>
+<h2 id="2-测试文件组织建议"><a class="header" href="#2-测试文件组织建议">2. 测试文件组织建议</a></h2>
+<p>当例子开始变大，推荐直接使用 <code>.dol</code> 测试脚本：</p>
+<pre><code class="language-text">my-app/
+├── main.dol
+├── shared/
+│   └── helper.dol
+└── tests/
+    ├── test_math.dol
+    └── test_users.dol
+</code></pre>
+<p>例如 <code>tests/test_math.dol</code>：</p>
+<pre><code class="language-dol">$mod std.core.check;
+
+check.assert(1 + 1 == 2, "1 + 1 应该等于 2");
+check.assert([1, 2, 2].count(2) == 2, "count(2) 应该等于 2");
+$&gt;&gt; "test_math ok";
+</code></pre>
+<p>当前仓库也可以直接参考：</p>
+<ul>
+<li><code>tests/spec/valid/</code></li>
+<li><code>tests/spec/invalid/</code></li>
+<li><code>tests/fixtures/</code></li>
+</ul>
+<p>这些目录最适合看两件事：</p>
+<ul>
+<li>最小正确写法是什么</li>
+<li>最小错误复现应该缩到多小</li>
+</ul>
+<h2 id="3-用-dolang-test-验证-http"><a class="header" href="#3-用-dolang-test-验证-http">3. 用 <code>dolang test</code> 验证 HTTP</a></h2>
+<p>最常用命令：</p>
 <pre><code class="language-bash">dolang test
 dolang test main.dol
 dolang test --route GET /hello
+dolang test --route POST /echo --body '{"name":"Tom"}'
 </code></pre>
-<p>带请求体：</p>
-<pre><code class="language-bash">dolang test --route POST /echo --body '{"name":"Tom"}'
-</code></pre>
-<p>你可以先把它理解成“对当前 HTTP 路由做最小验证”的入口。</p>
-<h2 id="推荐测试顺序"><a class="header" href="#推荐测试顺序">推荐测试顺序</a></h2>
-<p>建议按这个顺序排查问题：</p>
+<h3 id="脚本验证路径"><a class="header" href="#脚本验证路径">脚本验证路径</a></h3>
+<p>对纯脚本逻辑，推荐顺序：</p>
 <ol>
-<li>先跑 <code>dolang run file.dol</code></li>
-<li>HTTP 场景再跑 <code>dolang serve</code> 或 <code>dolang test</code></li>
-<li>最后把问题缩成最小样例</li>
+<li>先 <code>dolang run tests/test_xxx.dol</code></li>
+<li>必要时拆成更小函数</li>
+<li>再把问题缩成最小文件</li>
 </ol>
-<h2 id="用---route-缩小问题面"><a class="header" href="#用---route-缩小问题面">用 <code>--route</code> 缩小问题面</a></h2>
-<p>如果一个文件里有多条路由，优先只测出问题的那一条：</p>
-<pre><code class="language-bash">dolang test --route GET /hello
+<h3 id="http-验证路径"><a class="header" href="#http-验证路径">HTTP 验证路径</a></h3>
+<p>对 HTTP handler，推荐顺序：</p>
+<ol>
+<li>先 <code>dolang test --route ...</code></li>
+<li>再 <code>dolang serve ...</code> 做真实请求验证</li>
+<li>只在需要时再扩到完整项目路径</li>
+</ol>
+<h2 id="4-终端输出怎么看"><a class="header" href="#4-终端输出怎么看">4. 终端输出怎么看</a></h2>
+<h3 id="一个通过的例子"><a class="header" href="#一个通过的例子">一个通过的例子</a></h3>
+<pre><code class="language-text">$ dolang test --route GET /hello
+[OK] GET /hello
 </code></pre>
-<p>这样比一次性跑全部路由更容易定位问题。</p>
-<p>如果你的路由定义本身带参数，占位匹配要按“已注册路由路径”理解，而不是先把它当成完整集成测试工具。</p>
-<h2 id="用-repl-做最小复现"><a class="header" href="#用-repl-做最小复现">用 REPL 做最小复现</a></h2>
+<h3 id="一个失败的例子"><a class="header" href="#一个失败的例子">一个失败的例子</a></h3>
+<pre><code class="language-text">$ dolang run bad.dol
+[ERROR] runtime error: variable 'x' not found
+</code></pre>
+<p>遇到失败时，先做三件事：</p>
+<ol>
+<li>看错误类别</li>
+<li>看报错位置</li>
+<li>看是语法、类型、模块、文件还是 HTTP 路由问题</li>
+</ol>
+<h2 id="5-调试工作流"><a class="header" href="#5-调试工作流">5. 调试工作流</a></h2>
+<h3 id="用-repl-做最小复现"><a class="header" href="#用-repl-做最小复现">用 REPL 做最小复现</a></h3>
 <p>REPL 适合：</p>
 <ul>
 <li>试表达式</li>
 <li>试类型行为</li>
 <li>试字符串和列表方法</li>
 </ul>
-<h2 id="用打印定位问题"><a class="header" href="#用打印定位问题">用打印定位问题</a></h2>
+<h3 id="用打印定位问题"><a class="header" href="#用打印定位问题">用打印定位问题</a></h3>
 <pre><code class="language-dol">$&gt;&gt; "debug";
 $&gt;&gt; value;
 $&gt;&gt;ERR(f"unexpected: {value}");
 </code></pre>
-<p>打印最适合放在：</p>
+<p>最适合放打印的位置：</p>
 <ul>
 <li>分支判断前后</li>
 <li>文件读取之后</li>
 <li>返回之前</li>
-<li>catch 块里</li>
+<li><code>catch</code> 块里</li>
 </ul>
-<h2 id="用-trycatch-包住不稳定点"><a class="header" href="#用-trycatch-包住不稳定点">用 try/catch 包住不稳定点</a></h2>
-<p>例如文件读取：</p>
+<h3 id="用-try--catch-包住不稳定点"><a class="header" href="#用-try--catch-包住不稳定点">用 <code>$try / $catch</code> 包住不稳定点</a></h3>
 <pre><code class="language-dol">$mod std.fs;
 $try {
     $ content = fs.read_text("missing.txt");
     $&gt;&gt; content;
 } $catch err {
-    $&gt;&gt;ERR(err);
+    $&gt;&gt;ERR(f"read failed: {err}");
 }
 </code></pre>
-<h2 id="用最小文件定位问题"><a class="header" href="#用最小文件定位问题">用最小文件定位问题</a></h2>
-<p>当问题不明显时，建议新建一个最小 <code>.dol</code> 文件，只保留：</p>
+<h2 id="6-常见排障配方"><a class="header" href="#6-常见排障配方">6. 常见排障配方</a></h2>
+<h3 id="handler-返回空-body"><a class="header" href="#handler-返回空-body">handler 返回空 body</a></h3>
 <ul>
-<li>触发问题的最短输入</li>
-<li>一到两个函数</li>
-<li>一次运行命令</li>
+<li>现象：请求成功，但没有你预期的响应体</li>
+<li>检查点：handler 是否真的执行到 <code>$#</code></li>
+<li>推荐动作：先改成最小固定返回，例如 <code># "ok"</code> 或固定 JSON</li>
 </ul>
-<p>例如不要一上来就在完整项目里查问题，先缩成：</p>
-<pre><code class="language-dol">$ value: Int = "text";
-</code></pre>
-<p>或者：</p>
-<pre><code class="language-dol">$mod missing.module;
-</code></pre>
-<h2 id="参考测试资产"><a class="header" href="#参考测试资产">参考测试资产</a></h2>
-<p>仓库里已有很多可参考样例：</p>
+<h3 id="模块函数没被调用"><a class="header" href="#模块函数没被调用">模块函数没被调用</a></h3>
 <ul>
-<li><code>tests/spec/valid/</code></li>
-<li><code>tests/spec/invalid/</code></li>
-<li><code>tests/fixtures/</code></li>
+<li>现象：程序能跑，但结果像是走了旧逻辑</li>
+<li>检查点：是否写了正确的 <code>$mod</code> 路径，是否通过命名空间调用</li>
+<li>推荐动作：先在入口处打印模块调用结果，确认不是旧页面里的平铺导入预期</li>
 </ul>
-<p>这些目录最适合拿来做两件事：</p>
+<h3 id="类型注解相关报错"><a class="header" href="#类型注解相关报错">类型注解相关报错</a></h3>
 <ul>
-<li>看“正确写法”长什么样</li>
-<li>看“错误最小复现”应该缩到什么程度</li>
+<li>现象：声明或返回时提示类型不匹配</li>
+<li>检查点：变量注解是否与实际值一致，返回值是否用了 <code>List&lt;T&gt;</code></li>
+<li>推荐动作：先缩成最小函数，再回看 <a href="09-gradual-typing.html">09-gradual-typing.md</a> 和 <a href="10-error-handling.html">10-error-handling.md</a></li>
 </ul>
 <h2 id="下一章"><a class="header" href="#下一章">下一章</a></h2>
 <p>继续看 <a href="18-patterns-and-recipes.html">18-patterns-and-recipes.md</a>。</p>

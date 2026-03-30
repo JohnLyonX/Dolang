@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -175,114 +175,103 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="8-集合与常用方法"><a class="header" href="#8-集合与常用方法">8. 集合与常用方法</a></h1>
-<p>这一章集中讲三类最常用的值：字符串、列表、map。每一类都给出“创建、读取、修改、查询”的基本方式。</p>
+<p>这一章集中讲三类最常用的值：字符串、列表、Map。重点是“创建、读取、修改、查询”和“什么时候该去 <code>std.*</code>”。</p>
 <h2 id="字符串"><a class="header" href="#字符串">字符串</a></h2>
-<pre><code class="language-dol">$ s = "hello";
-$&gt;&gt; s.len();
-$&gt;&gt; s.contains("ell");
-$&gt;&gt; s.starts_with("he");
-$&gt;&gt; s.ends_with("lo");
-$&gt;&gt; s.slice(1, 3);
+<pre><code class="language-dol">$ text = "  hello,world  ";
+$&gt;&gt; text.trim();
+$&gt;&gt; text.upper();
+$&gt;&gt; text.split(",");
+$&gt;&gt; text.contains("hello");
 </code></pre>
-<p>再看几个常用方法：</p>
-<pre><code class="language-dol">$ s = "  Hello, World  ";
-$&gt;&gt; s.trim();
-$&gt;&gt; s.upper();
-$&gt;&gt; s.lower();
-$&gt;&gt; s.replace("World", "Dolang");
-$&gt;&gt; s.split(",");
-$&gt;&gt; "42".to_int();
-$&gt;&gt; "3.14".to_float();
-$&gt;&gt; "true".to_bool();
+<p><code>split()</code> 返回 <code>List</code>，所以可以继续接列表处理：</p>
+<pre><code class="language-dol">$ parts = "a,b,c".split(",");
+$&gt;&gt; parts.len();
+$&gt;&gt; parts.join("-");
 </code></pre>
-<p>字符串方法适合“当前值本身”的直接处理。</p>
 <h2 id="列表"><a class="header" href="#列表">列表</a></h2>
-<pre><code class="language-dol">$ nums = [3, 1, 4];
-$&gt;&gt; nums.len();
-nums.push(5);
-$&gt;&gt; nums.pop();
-$&gt;&gt; nums.contains(1);
-</code></pre>
-<p>如果你希望变量在后续赋值时继续保持列表类型，也可以显式声明：</p>
-<pre><code class="language-dol">$ nums: List = [3, 1, 4];
-</code></pre>
-<p>更多常用方法：</p>
 <pre><code class="language-dol">$ nums = [3, 1, 4, 1, 5];
+$&gt;&gt; nums.len();
+$&gt;&gt; nums.contains(4);
 $&gt;&gt; nums.index_of(4);
-$&gt;&gt; nums.last_index_of(1);
-$&gt;&gt; nums.slice(1, 4);
-$&gt;&gt; nums.first();
-$&gt;&gt; nums.last();
-$&gt;&gt; nums.is_empty();
-$&gt;&gt; nums.unique();
 $&gt;&gt; nums.count(1);
-$&gt;&gt; nums.join("-");
+$&gt;&gt; nums.slice(1, 4);
 </code></pre>
-<p>可变方法：</p>
-<pre><code class="language-dol">$ nums = [3, 1, 4];
-nums.push(5);
-nums.insert(1, 9);
-nums.remove_at(0);
-nums.reverse();
+<p>常用原地修改方法：</p>
+<pre><code class="language-dol">nums.push(9);
 nums.sort();
-$&gt;&gt; nums;
+nums.sort_desc();
+nums.reverse();
+</code></pre>
+<p>常见读法：</p>
+<pre><code class="language-dol">$&gt;&gt; nums.first();
+$&gt;&gt; nums.last();
+$&gt;&gt; nums.unique();
+$&gt;&gt; [[1, 2], [3, 4]].flatten();
+</code></pre>
+<h3 id="索引越界"><a class="header" href="#索引越界">索引越界</a></h3>
+<p>当前实现里，列表索引越界会报运行时错误，不会返回 <code>null</code>。</p>
+<p>例如下面这种写法不应作为主线常规用法：</p>
+<pre><code class="language-dol">$ items = [1, 2, 3];
+$&gt;&gt; items[10];
+</code></pre>
+<p>更安全的写法是先看长度：</p>
+<pre><code class="language-dol">$if nums.len() &gt; 2 {
+    $&gt;&gt; nums[2];
+}
 </code></pre>
 <h2 id="map"><a class="header" href="#map">Map</a></h2>
 <pre><code class="language-dol">$ user = {"name": "Tom", "age": 25};
 $&gt;&gt; user["name"];
+$&gt;&gt; user.len();
 $&gt;&gt; user.keys();
 $&gt;&gt; user.values();
 $&gt;&gt; user.contains_key("age");
 </code></pre>
-<p>同样可以显式声明：</p>
-<pre><code class="language-dol">$ user: Map = {"name": "Tom", "age": 25};
-</code></pre>
-<p>还可以删除 key：</p>
-<pre><code class="language-dol">$ user = {"name": "Tom", "age": 25};
-user.remove("age");
-$&gt;&gt; user;
-</code></pre>
-<h2 id="索引访问"><a class="header" href="#索引访问">索引访问</a></h2>
-<pre><code class="language-dol">$ items = ["a", "b", "c"];
-$&gt;&gt; items[0];
-</code></pre>
-<p>map 也可以通过 key 访问：</p>
+<h3 id="map-写入"><a class="header" href="#map-写入">Map 写入</a></h3>
+<p>当前主线写法直接使用索引赋值：</p>
 <pre><code class="language-dol">$ user = {"name": "Tom"};
-$&gt;&gt; user["name"];
+user["email"] = "tom@example.com";
+user["age"] = 25;
+$&gt;&gt; user["email"];
 </code></pre>
-<h2 id="方法和标准库的区别"><a class="header" href="#方法和标准库的区别">方法和标准库的区别</a></h2>
-<p>两类能力都会出现：</p>
+<p>删除键：</p>
+<pre><code class="language-dol">user.remove("age");
+</code></pre>
+<h3 id="什么时候改用-stdjson"><a class="header" href="#什么时候改用-stdjson">什么时候改用 <code>std.json</code></a></h3>
+<p>如果你操作的是通用 JSON 结构，或者想做“按路径更新、合并、格式化”，优先用 <code>std.json</code>：</p>
+<pre><code class="language-dol">$mod std.json;
+
+$ obj = {"name": "Tom"};
+$ obj = json.set(obj, "email", "tom@example.com");
+$&gt;&gt; json.stringify(obj);
+</code></pre>
+<p>可以把两者这样区分：</p>
 <ul>
-<li>值方法：<code>"hello".len()</code>、<code>nums.push(1)</code></li>
-<li>标准库函数：<code>str.trim("  hi  ")</code>、<code>math.sqrt(9.0)</code></li>
+<li><code>Map</code> 原生操作：当前变量上的直接读写</li>
+<li><code>std.json</code>：更偏通用 JSON 工具和转换函数</li>
 </ul>
-<p>值方法适合日常直接操作，<code>std.*</code> 模块适合整理通用函数。</p>
-<p>一个最直观的对比：</p>
-<pre><code class="language-dol">$mod std.str;
-
-$ text = "  hello  ";
-$&gt;&gt; text.trim();
-$&gt;&gt; str.trim(text);
-</code></pre>
-<p>这两种写法都能表达“去空白”，只是组织方式不同。</p>
-<h2 id="链式调用"><a class="header" href="#链式调用">链式调用</a></h2>
-<p>当前不少表达式都可以直接链起来写：</p>
-<pre><code class="language-dol">$&gt;&gt; "a,b,c".split(",").len();
-$&gt;&gt; "  hello  ".trim().upper();
-</code></pre>
-<p>这种写法适合短链路处理，但链太长时仍然建议拆成中间变量。</p>
-<h2 id="一个完整例子"><a class="header" href="#一个完整例子">一个完整例子</a></h2>
-<pre><code class="language-dol">$ user = {"name": "Alice", "tags": ["lang", "tool", "lang"]};
-$ tags = user["tags"];
-
-$&gt;&gt; user["name"].upper();
-$&gt;&gt; tags.unique();
-$&gt;&gt; tags.join(", ");
-</code></pre>
-<h2 id="迁移期参考"><a class="header" href="#迁移期参考">迁移期参考</a></h2>
+<h2 id="值方法和标准库的区别"><a class="header" href="#值方法和标准库的区别">值方法和标准库的区别</a></h2>
 <ul>
-<li><a href="stdlib.html">stdlib.md</a></li>
-<li><a href="examples.html">examples.md</a></li>
+<li>值方法：<code>nums.push(1)</code>、<code>user.keys()</code>、<code>"a,b".split(",")</code></li>
+<li>标准库：<code>str.trim(text)</code>、<code>json.set(obj, key, value)</code>、<code>math.sqrt(9.0)</code></li>
+</ul>
+<p>如果只是处理当前值本身，先选值方法；如果要做通用转换或组合工具，再去 <code>std.*</code>。</p>
+<h2 id="一个完整例子"><a class="header" href="#一个完整例子">一个完整例子</a></h2>
+<pre><code class="language-dol">$ raw = "alice,bob,bob,carol";
+$ names = raw.split(",");
+names.sort_desc();
+
+$ stats = {"count": names.len()};
+stats["unique_count"] = names.unique().len();
+
+$&gt;&gt; names;
+$&gt;&gt; stats["count"];
+$&gt;&gt; stats["unique_count"];
+</code></pre>
+<h2 id="继续查表"><a class="header" href="#继续查表">继续查表</a></h2>
+<ul>
+<li>值方法与模块索引：<a href="13-stdlib-overview.html">13-stdlib-overview.md</a></li>
+<li>完整 API：<a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a></li>
 </ul>
 <h2 id="下一章"><a class="header" href="#下一章">下一章</a></h2>
 <p>继续看 <a href="09-gradual-typing.html">09-gradual-typing.md</a>。</p>

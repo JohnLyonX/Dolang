@@ -1,5 +1,11 @@
 # 实用示例
 
+> **Status: Migration Source**
+>
+> 这页不再承担“主线示例集”职责。
+> 当前可运行配方请改读 [18-patterns-and-recipes.md](18-patterns-and-recipes.md)。
+> 本页仅保留零散旧示例和迁移线索；遇到和主线冲突的写法，应以编号章节、reference 和 spec 为准。
+
 本章节提供真实使用场景的示例，帮助你快速上手 Dolang。
 
 ---
@@ -171,6 +177,8 @@ $fn compute(n) {
 
 ## 6. 列表操作
 
+主线去向：[08-collections-and-methods.md](08-collections-and-methods.md)
+
 ```dolang
 $ nums = [3, 1, 4, 1, 5, 9, 2, 6];
 
@@ -193,6 +201,8 @@ $>> nums.is_empty();      // false
 ---
 
 ## 7. Map 操作
+
+主线去向：[08-collections-and-methods.md](08-collections-and-methods.md)
 
 ```dolang
 $ user = {"name": "Tom", "age": 25};
@@ -218,6 +228,8 @@ $try {
 } $catch err {
     $>> f"Error: {err}";
 }
+
+主线去向：[10-error-handling.md](10-error-handling.md)
 ```
 
 **主动抛出异常**

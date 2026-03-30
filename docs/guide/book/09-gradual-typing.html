@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -182,18 +182,6 @@
 x = "hello";
 x = true;
 </code></pre>
-<p>这表示：</p>
-<ul>
-<li>不写类型注解时，Dolang 不把变量锁死在某一个类型上</li>
-<li>这对快速脚本和原型开发很方便</li>
-</ul>
-<p>例如：</p>
-<pre><code class="language-dol">$ value = 1;
-$&gt;&gt; value.type();
-
-value = "done";
-$&gt;&gt; value.type();
-</code></pre>
 <h2 id="显式类型注解"><a class="header" href="#显式类型注解">显式类型注解</a></h2>
 <pre><code class="language-dol">$ count: Int = 0;
 $ name: String = "Alice";
@@ -204,21 +192,7 @@ $ config: Map = {"name": "demo"};
 <p>常量也支持类型注解：</p>
 <pre><code class="language-dol">$@ MAX: Int = 100;
 </code></pre>
-<p>这类注解的作用是：</p>
-<ul>
-<li>声明时检查右值类型</li>
-<li>后续赋值时继续检查</li>
-</ul>
-<p>例如：</p>
-<pre><code class="language-dol">$ count: Int = 1;
-count = 2;
-</code></pre>
-<p>下面这种写法会报错：</p>
-<pre><code class="language-dol">$ count: Int = 1;
-count = "two";
-</code></pre>
-<h2 id="当前可依赖的声明类型名"><a class="header" href="#当前可依赖的声明类型名">当前可依赖的声明类型名</a></h2>
-<p>按当前实现，变量/常量声明里稳定可写入主线文档的类型名包括：</p>
+<p>当前主线可依赖的声明类型名：</p>
 <ul>
 <li><code>Int</code></li>
 <li><code>Float</code></li>
@@ -229,136 +203,78 @@ count = "two";
 <li><code>List</code></li>
 <li><code>Map</code></li>
 </ul>
-<p>我实际验证过这组声明在三种入口都能工作：</p>
-<ul>
-<li>REPL</li>
-<li>文件模式：<code>cargo run -- run xxx.dol</code></li>
-<li>serve 模式：<code>cargo run -- serve .</code></li>
-</ul>
-<p>例如：</p>
-<pre><code class="language-dol">$ items: List = [1, 2, 3];
-$ config: Map = {"name": "demo", "ok": true};
-
-$&gt;&gt; items.type();
-$&gt;&gt; config.type();
-$&gt;&gt; items[0];
-$&gt;&gt; config["name"];
-</code></pre>
-<p>仍然不要把下面这些提前写成“变量/常量声明已稳定支持”的类型名：</p>
-<ul>
-<li><code>Json</code></li>
-<li><code>Response</code></li>
-</ul>
-<h2 id="函数返回类型"><a class="header" href="#函数返回类型">函数返回类型</a></h2>
-<pre><code class="language-dol">$fn greet(name) -&gt; String {
-    $# f"Hello, {name}";
+<p>当前不要把 <code>Json</code>、<code>Response</code> 写成“变量/常量声明可稳定使用”的类型名。</p>
+<h2 id="函数参数类型注解的态度"><a class="header" href="#函数参数类型注解的态度">函数参数类型注解的态度</a></h2>
+<p>当前主线文档统一采用保守口径：<strong>不教学、不承诺参数类型注解语法</strong>。</p>
+<p>也就是说，这一版只写：</p>
+<pre><code class="language-dol">$fn add(a, b) -&gt; Int {
+    $# a + b;
 }
 </code></pre>
-<p>函数返回类型会做运行时检查。</p>
-<p>另一个例子：</p>
-<pre><code class="language-dol">$fn is_even(n) -&gt; Bool {
-    $# n % 2 == 0;
-}
-</code></pre>
-<h2 id="type-与-jsonuser"><a class="header" href="#type-与-jsonuser"><code>$Type</code> 与 <code>JSON&lt;User&gt;</code></a></h2>
-<p>当前实现支持 <code>$Type</code> 声明形状，也支持 <code>JSON&lt;User&gt;</code> 这样的返回标注语法。</p>
-<p>最小例子：</p>
+<p>如果你需要更强约束，优先使用：</p>
+<ul>
+<li>返回类型</li>
+<li>局部变量显式声明</li>
+<li><code>.type()</code> / <code>std.core.check</code></li>
+<li><a href="10-error-handling.html">10-error-handling.md</a> 里的错误处理方式</li>
+</ul>
+<h2 id="返回类型和-listt"><a class="header" href="#返回类型和-listt">返回类型和 <code>List&lt;T&gt;</code></a></h2>
+<p>返回类型是这一章最重要的稳定能力之一。</p>
+<h3 id="正确写法"><a class="header" href="#正确写法">正确写法</a></h3>
 <pre><code class="language-dol">$Type User {
     id: Int
     name: Str
 }
+
+$fn list_users() -&gt; List&lt;User&gt; {
+    $# [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"}
+    ];
+}
 </code></pre>
-<p>更完整一点的写法：</p>
+<p>这里要记住两条：</p>
+<ul>
+<li><code>List&lt;T&gt;</code> 是当前主线可用写法</li>
+<li>裸 <code>List</code> 不应再作为返回类型写法来教学</li>
+</ul>
+<p><code>T</code> 可以是内建类型，也可以是先定义好的用户类型。</p>
+<h2 id="type"><a class="header" href="#type"><code>$Type</code></a></h2>
+<p><code>$Type</code> 用来描述结构，不等于 class：</p>
 <pre><code class="language-dol">$Type User {
     id: Int
     name: Str
     email: Str?
-    age: Int?
 }
 </code></pre>
-<p>这里可以先记住这些规则：</p>
-<ul>
-<li>字段类型通常写成首字母大写的类型名</li>
-<li>类型后加 <code>?</code> 表示可选字段</li>
-<li><code>$Type</code> 用来描述结构，不等于 class</li>
-<li>当前主线文档不把它讲成带 getter / setter / 方法的对象系统</li>
-</ul>
-<h3 id="和函数返回结合"><a class="header" href="#和函数返回结合">和函数返回结合</a></h3>
-<pre><code class="language-dol">$fn get_user(id) -&gt; JSON&lt;User&gt; {
-    $# $JSON { "id": id, "name": "Alice" };
+<p>它最适合和 <code>List&lt;T&gt;</code>、接口返回说明、阅读文档时的结构表达配合使用。</p>
+<h2 id="http-返回里的-listt"><a class="header" href="#http-返回里的-listt">HTTP 返回里的 <code>List&lt;T&gt;</code></a></h2>
+<p>在 HTTP 章节里同样推荐这样写：</p>
+<pre><code class="language-dol">$Type User {
+    id: Int
+    name: Str
+}
+
+$GET("/users") list_users() -&gt; List&lt;User&gt; {
+    $# [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"}
+    ];
 }
 </code></pre>
-<h3 id="和-http-handler-结合"><a class="header" href="#和-http-handler-结合">和 HTTP handler 结合</a></h3>
-<pre><code class="language-dol">$GET("/users/:id") get_user(id) -&gt; JSON&lt;User&gt; {
-    $# $JSON { "id": id, "name": "Alice" };
-}
-</code></pre>
-<p><code>JSON&lt;User&gt;</code> 更适合先理解成“返回值想表达的是 <code>User</code> 形状的 JSON”。</p>
-<p>这能帮助你把数据结构写得更清楚，但不要把它误解成已经等同于成熟静态类型系统或完整强校验模型。</p>
-<p>推荐阅读方式：</p>
-<ol>
-<li>在这一章先知道 <code>$Type</code> 是什么</li>
-<li>到 HTTP 章节再看 <code>JSON&lt;User&gt;</code> 的接口写法</li>
-</ol>
+<p>如果类型或返回校验失败，它会表现为用户可见错误；如何排查请继续看 <a href="10-error-handling.html">10-error-handling.md</a>。</p>
 <h2 id="运行时类型查询"><a class="header" href="#运行时类型查询">运行时类型查询</a></h2>
-<p>除了类型注解，Dolang 还支持在运行时查询值类型：</p>
 <pre><code class="language-dol">$&gt;&gt; 42.type();
-$&gt;&gt; 3.14.type();
 $&gt;&gt; "hello".type();
-$&gt;&gt; true.type();
 $&gt;&gt; [1, 2].type();
 $&gt;&gt; {"a": 1}.type();
-$&gt;&gt; null.type();
-</code></pre>
-<p>这在调试动态值时很有用。</p>
-<p>对 <code>List</code> 和 <code>Map</code> 来说，显式声明与运行时类型查询可以直接配合：</p>
-<pre><code class="language-dol">$ items: List = [1, 2, 3];
-$ config: Map = {"name": "demo"};
-
-$&gt;&gt; items.type();
-$&gt;&gt; config.type();
-</code></pre>
-<p>例如：</p>
-<pre><code class="language-dol">$fn describe(val) -&gt; String {
-    $ t = val.type();
-    $if t == "Int" {
-        $# "这是整数";
-    } $elif t == "String" {
-        $# "这是字符串";
-    } $else {
-        $# f"类型: {t}";
-    }
-}
 </code></pre>
 <h2 id="stdcorecheck"><a class="header" href="#stdcorecheck"><code>std.core.check</code></a></h2>
-<p>如果你想把类型判断和简单断言写得更清楚，可以用 <code>std.core.check</code>：</p>
 <pre><code class="language-dol">$mod std.core.check;
 
 $&gt;&gt; check.type_of(42);
-$&gt;&gt; check.is_null(null);
 check.assert(1 + 1 == 2, "math broken");
 </code></pre>
-<p>它适合：</p>
-<ul>
-<li>小型断言</li>
-<li>调试时检查值类型</li>
-<li>写更清晰的工具函数</li>
-</ul>
-<h2 id="什么时候该加类型"><a class="header" href="#什么时候该加类型">什么时候该加类型</a></h2>
-<p>比较适合优先加类型注解的地方：</p>
-<ul>
-<li>计数器</li>
-<li>金额</li>
-<li>状态值</li>
-<li>配置项</li>
-<li>对外返回值</li>
-</ul>
-<p>不需要一上来给所有变量都加类型，Dolang 的设计也不是鼓励你这么做。</p>
-<h2 id="迁移期参考"><a class="header" href="#迁移期参考">迁移期参考</a></h2>
-<ul>
-<li><a href="types.html">types.md</a></li>
-<li><code>docs/spec/semantics.md</code></li>
-</ul>
 <h2 id="下一章"><a class="header" href="#下一章">下一章</a></h2>
 <p>继续看 <a href="10-error-handling.html">10-error-handling.md</a>。</p>
 

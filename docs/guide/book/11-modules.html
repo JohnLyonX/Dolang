@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -175,47 +175,41 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="11-模块系统"><a class="header" href="#11-模块系统">11. 模块系统</a></h1>
-<p>Dolang 通过 <code>$mod</code> 组织可复用代码。只要脚本开始变大，你几乎一定会进入模块拆分。</p>
-<h2 id="导入模块"><a class="header" href="#导入模块">导入模块</a></h2>
+<p>Dolang 通过 <code>$mod</code> 组织可复用代码。脚本一旦开始变大，就应该进入模块拆分。</p>
+<h2 id="导入单个模块"><a class="header" href="#导入单个模块">导入单个模块</a></h2>
 <pre><code class="language-dol">$mod shared.helper;
 $&gt;&gt; helper.answer();
 </code></pre>
-<p>模块路径使用点号分隔，对应文件系统中的 <code>.dol</code> 文件。</p>
-<p>例如下面的目录：</p>
-<pre><code class="language-text">app/
-├── main.dol
-└── shared/
-    └── helper.dol
-</code></pre>
-<p><code>main.dol</code>：</p>
-<pre><code class="language-dol">$mod shared.helper;
-$&gt;&gt; helper.answer();
-</code></pre>
-<p><code>shared/helper.dol</code>：</p>
-<pre><code class="language-dol">$fn answer() -&gt; Int {
-    $# 42;
-}
-</code></pre>
+<p>模块路径使用点号分隔，对应 <code>.dol</code> 文件路径。</p>
 <h2 id="命名空间访问"><a class="header" href="#命名空间访问">命名空间访问</a></h2>
-<p>导入后，不会把函数直接铺平到全局；通常通过模块命名空间访问：</p>
+<p>导入后，通过文件名命名空间访问：</p>
 <pre><code class="language-dol">$mod helper;
 $&gt;&gt; helper.answer();
 </code></pre>
-<p>也就是说，<code>$mod helper;</code> 导入后，你写的是 <code>helper.answer()</code>，而不是直接写 <code>answer()</code>。</p>
-<h2 id="通配符模块导入"><a class="header" href="#通配符模块导入">通配符模块导入</a></h2>
+<p>重点是：<strong>不会把函数直接铺平到当前作用域。</strong></p>
+<h2 id="通配符导入mod-math"><a class="header" href="#通配符导入mod-math">通配符导入：<code>$mod math.*;</code></a></h2>
 <p>当前实现支持：</p>
 <pre><code class="language-dol">$mod math.*;
 </code></pre>
-<p>它表示导入某个模块目录下的直接子模块。</p>
-<p>例如目录：</p>
+<p>它的含义是：</p>
+<ul>
+<li>导入 <code>math/</code> 目录下的直接子模块</li>
+<li>把这些子模块注册成命名空间</li>
+<li>不会把子模块函数直接平铺到当前作用域</li>
+</ul>
+<p>例如：</p>
 <pre><code class="language-text">math/
 ├── add.dol
-└── mul.dol
+└── calc.dol
 </code></pre>
-<p>导入：</p>
 <pre><code class="language-dol">$mod math.*;
+$&gt;&gt; add.answer();
+$&gt;&gt; calc.square(3);
 </code></pre>
-<p>这时会把 <code>math/</code> 目录下的直接子模块注册为命名空间，而不是把函数平铺进当前文件。</p>
+<p>不要把它理解成下面这种旧预期：</p>
+<pre><code class="language-dol">$mod math.*;
+$&gt;&gt; answer();      // 旧预期，当前主线不这样讲
+</code></pre>
 <h2 id="公有函数与私有函数"><a class="header" href="#公有函数与私有函数">公有函数与私有函数</a></h2>
 <pre><code class="language-dol">$fn public_api() -&gt; Int {
     $# 1;
@@ -225,44 +219,30 @@ _$fn hidden() -&gt; Int {
     $# 2;
 }
 </code></pre>
-<p><code>$mod</code> 只暴露公开函数。</p>
-<p>可以把规则记成：</p>
+<p>规则：</p>
 <ul>
 <li><code>$fn</code> 默认公开</li>
 <li><code>_$fn</code> 默认私有</li>
-<li>私有函数只给当前模块内部使用</li>
+<li><code>$mod</code> 只暴露公开函数</li>
 </ul>
-<p>例如：</p>
-<pre><code class="language-dol">_$fn twice(x) -&gt; Int {
-    $# x * 2;
-}
-
-$fn calc(x) -&gt; Int {
-    $# twice(x) + 1;
-}
-</code></pre>
 <h2 id="std-命名空间"><a class="header" href="#std-命名空间"><code>std.*</code> 命名空间</a></h2>
 <p>标准库模块也通过 <code>$mod</code> 导入：</p>
-<pre><code class="language-dol">$mod std.math;
-$mod std.str;
-</code></pre>
-<p>但 <code>std.*</code> 是保留命名空间，它的解析规则和普通项目模块不同。</p>
-<p>常见写法：</p>
 <pre><code class="language-dol">$mod std.math;
 $mod std.str;
 
 $&gt;&gt; math.sqrt(16.0);
 $&gt;&gt; str.trim("  hello  ");
 </code></pre>
+<p><code>std.*</code> 是保留命名空间，只走标准库解析，不和普通项目模块混用。</p>
 <h2 id="当前模块解析顺序"><a class="header" href="#当前模块解析顺序">当前模块解析顺序</a></h2>
-<p>普通模块的主顺序可以先记成：</p>
+<p>普通模块的主顺序：</p>
 <ol>
 <li>当前文件所在目录</li>
 <li>当前项目根目录</li>
 <li>项目根目录下的 <code>modules/</code></li>
 <li>如果声明了依赖，再查 <code>deps/</code></li>
 </ol>
-<p><code>std.*</code> 则只走标准库解析，不和普通项目模块混用。</p>
+<p><code>std.*</code> 则只走标准库解析。</p>
 <h2 id="一个完整例子"><a class="header" href="#一个完整例子">一个完整例子</a></h2>
 <p>目录：</p>
 <pre><code class="language-text">demo/
@@ -283,10 +263,10 @@ $fn answer() -&gt; Int {
 <pre><code class="language-dol">$mod shared.helper;
 $&gt;&gt; helper.answer();
 </code></pre>
-<h2 id="迁移期参考"><a class="header" href="#迁移期参考">迁移期参考</a></h2>
+<h2 id="继续查边界"><a class="header" href="#继续查边界">继续查边界</a></h2>
 <ul>
-<li><a href="modules.html">modules.md</a></li>
-<li><code>docs/spec/modules.md</code></li>
+<li>主线废弃说明：<a href="modules.html">modules.md</a></li>
+<li>行为边界：<a href="../spec/modules.html">../spec/modules.md</a></li>
 </ul>
 <h2 id="下一章"><a class="header" href="#下一章">下一章</a></h2>
 <p>继续看 <a href="12-projects-and-package.html">12-projects-and-package.md</a>。</p>

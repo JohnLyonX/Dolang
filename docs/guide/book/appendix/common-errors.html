@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "../searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-f522da52.js"></script>
@@ -175,27 +175,34 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="common-errors"><a class="header" href="#common-errors">Common Errors</a></h1>
-<h2 id="解析错误"><a class="header" href="#解析错误">解析错误</a></h2>
+<h2 id="解析阶段"><a class="header" href="#解析阶段">解析阶段</a></h2>
 <ul>
 <li>缺少分号</li>
 <li>表达式右侧缺失</li>
 <li>括号或大括号不匹配</li>
+<li>语法还没进入执行阶段，因此不能靠 <code>$catch</code> 处理</li>
 </ul>
-<h2 id="运行时错误"><a class="header" href="#运行时错误">运行时错误</a></h2>
+<h2 id="运行阶段"><a class="header" href="#运行阶段">运行阶段</a></h2>
 <ul>
 <li>未定义变量</li>
 <li>类型不匹配</li>
 <li>模块未找到</li>
 <li>文件读取失败</li>
-<li>JSON 解析失败</li>
+<li>环境变量不存在</li>
+<li>HTTP handler 返回类型不匹配</li>
 </ul>
-<h2 id="排查建议"><a class="header" href="#排查建议">排查建议</a></h2>
+<h2 id="快速排查顺序"><a class="header" href="#快速排查顺序">快速排查顺序</a></h2>
 <ol>
-<li>先看错误类别</li>
-<li>再看文件位置</li>
-<li>把问题缩小到最小 <code>.dol</code> 文件</li>
-<li>需要时在 REPL 里验证</li>
+<li>先看是 parse error 还是 runtime error</li>
+<li>再看报错位置</li>
+<li>缩成最小 <code>.dol</code> 文件</li>
+<li>用 REPL 或 <code>dolang test --route ...</code> 复现</li>
 </ol>
+<h2 id="交叉阅读"><a class="header" href="#交叉阅读">交叉阅读</a></h2>
+<ul>
+<li>主线说明：<a href="../10-error-handling.html">../10-error-handling.md</a></li>
+<li>查表说明：<a href="../../reference/errors.html">../../reference/errors.md</a></li>
+</ul>
 
                     </main>
 

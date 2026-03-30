@@ -27,8 +27,6 @@ port = 8080
 APP_NAME = "My App"
 ```
 
-这是一个“当前可用字段都比较明确”的最小项目配置。
-
 ## 当前重要字段
 
 - `name`
@@ -38,62 +36,73 @@ APP_NAME = "My App"
 - `[env]`
 - `[dependencies]`
 
-其中 `[dependencies]` 当前更适合理解为“模块解析边界的一部分”，不要直接写成成熟包管理工作流。
+其中 `[dependencies]` 当前更适合理解为模块解析边界的一部分，而不是成熟包管理工作流。
 
-## 一个最小项目示例
+## 入口文件和 `entry`
 
-`package.toml`：
+当 CLI 传入目录时：
 
-```toml
-name = "project-config"
-version = "0.1.0"
-entry = "main.dol"
+1. 先定位项目根
+2. 读取 `package.toml`
+3. 使用 `entry` 指定的入口文件
+4. 如果没有 manifest，则默认尝试 `main.dol`
 
-[env]
-APP_NAME = "Dolang"
-```
+所以：
 
-`main.dol`：
+- `entry` 决定“从哪个文件启动项目”
+- 它不等于 `$main()`
+
+## `$main()` 什么时候需要
+
+`$main()` 是 serve 模式下的顶层入口，用来放全局初始化逻辑。
+
+例如：
 
 ```dol
-$ app = $<<CONFIG("APP_NAME");
-$>> app;
+@CORS("*")
+$main() {
+    $>> "[INFO] server starting";
+}
+
+$GET("/health") health() -> String {
+    $# "ok";
+}
 ```
 
-## 运行项目
+可以这样理解：
 
-```bash
-dolang run main.dol
-dolang serve .
-```
+- 只需要一个简单路由时，可以不写 `$main()`
+- 需要全局 `@CORS`、启动日志、启动前准备动作时，再写 `$main()`
+- `entry` 负责选入口文件，`$main()` 负责该文件里的服务入口逻辑
 
-当前 CLI 中：
-
-- `run` 运行的是明确的 `.dol` 文件
-- `serve` 可以直接接项目目录
-
-当 `serve` 接收目录时，会先定位项目根，再读取 `package.toml` 的 `entry`。
-
-如果没有 manifest，则会退回到默认入口逻辑。
-
-## 配置读取
+## `$<<CONFIG(...)` 的使用边界
 
 `[env]` 中的值可以通过 `$<<CONFIG(...)` 读取：
 
 ```dol
 $ app = $<<CONFIG("APP_NAME");
+```
+
+但要记住：
+
+- 它依赖项目配置上下文
+- 当前实现里只在 `serve` 模式下可用
+- 不应把它当成 `run` 模式下的通用配置入口
+
+推荐的跨模式兜底写法是优先读环境变量，把 `CONFIG` 留给 serve 项目：
+
+```dol
+$mod std.env;
+
+$ app = env.get_or("APP_NAME", "My App");
 $>> app;
 ```
 
-这适合读取：
-
-- 应用名
-- 环境标记
-- 默认端口相关配置
+如果你明确只在 `serve` 项目里运行，再使用 `$<<CONFIG(...)`。
 
 ## `server` 配置
 
-服务模式会用到 `[server]`：
+服务模式会读取 `[server]`：
 
 ```toml
 [server]
@@ -101,13 +110,13 @@ host = "0.0.0.0"
 port = 8080
 ```
 
-当你执行：
+执行：
 
 ```bash
 dolang serve .
 ```
 
-CLI 会加载项目配置，并据此启动服务。
+时，CLI 会加载这部分配置。
 
 ## 项目和单文件的区别
 
@@ -124,19 +133,11 @@ CLI 会加载项目配置，并据此启动服务。
 - 服务模式
 - 后续继续扩展
 
-## 一个推荐的起步目录
-
-```text
-my-app/
-├── package.toml
-├── main.dol
-└── shared/
-    └── helper.dol
-```
-
 ## 进一步参考
 
-- `docs/reference/project-system.md`
+- [14-io-env-config.md](14-io-env-config.md)
+- [16-http-organization.md](16-http-organization.md)
+- [../reference/project-system.md](../reference/project-system.md)
 
 ## 下一章
 

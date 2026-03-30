@@ -1,22 +1,34 @@
 # Dolang Guide
 
-本页既是 `docs/guide/` 的入口，也是这一轮文档重构的章节目录。
+本页是 `docs/guide/` 的主入口。Guide 只负责学习路径，不负责完整 API 查表，也不负责定义最终实现边界。
 
-当前策略：
+如果你第一次系统学习 Dolang，按本页编号章节往下读即可；如果你已经知道自己要查哪个能力，优先跳到对应 reference 页面。
 
-- 旧的 guide 页面先保留，不删不减
-- 新增按编号组织的章节
-- 后续逐步把旧内容迁移、扩写、重组到新章节
+## 文档分层规则
 
-这一版目录只基于当前仓库已经实现并可从 spec、实现、fixture、example 中交叉确认的能力，不把尚未稳定或尚未真正落地的设计放进主线。
+- Guide：讲学习顺序、最小示例、推荐写法
+- Reference：讲查表、速查、完整接口索引
+- Spec：讲当前实现行为与边界
 
-## 编写原则
+出现冲突时：
 
-- 先讲“怎么用”，再补“为什么这样设计”
-- 每章尽量只覆盖一个主题，正文配最小可运行示例
-- Guide 讲学习路径，Reference 讲查表，Spec 讲当前实现边界
-- 以当前实现为准，不提前写未来版本语法
-- Web、项目系统、标准库是 Dolang 的用户主线，不应只放在零散参考文档里
+1. 以当前实现和 `tests/spec/*` 为准
+2. 然后看 `docs/spec/*`
+3. Guide / Reference 只保留与上述一致的说法
+
+## 迁移期旧页面状态规则
+
+本目录仍保留一批旧页面，但它们不再共同承担“主线指南”职责。状态统一分为三类：
+
+- `Deprecated`：内容已与主线冲突，应停止作为教学入口使用
+- `Supplemental`：仍有补充背景或示例价值，但不替代编号章节
+- `Migration Source`：保留迁移索引或尚未完全整合的旧内容
+
+使用建议：
+
+- 学习主线时优先读编号章节
+- 查完整 stdlib API 时读 [../reference/stdlib-api.md](../reference/stdlib-api.md)
+- 对语言边界有疑问时读 [../spec/README.md](../spec/README.md)
 
 ## 章节目录
 
@@ -85,6 +97,14 @@ docs/guide/
 - [stdlib.md](stdlib.md)
 - [types.md](types.md)
 - [web.md](web.md)
+
+Reference 快速入口：
+
+- [../reference/syntax.md](../reference/syntax.md)
+- [../reference/errors.md](../reference/errors.md)
+- [../reference/project-system.md](../reference/project-system.md)
+- [../reference/http.md](../reference/http.md)
+- [../reference/stdlib-api.md](../reference/stdlib-api.md)
 
 ## 主线章节
 
@@ -162,7 +182,7 @@ docs/guide/
 - 变量/常量类型注解
 - 当前真正支持的声明类型名
 - 函数返回类型检查
-- `JSON<User>` 与 `$Type` 的定位
+- `List<T>` 与 `$Type` 的定位
 
 #### 10. 错误处理
 

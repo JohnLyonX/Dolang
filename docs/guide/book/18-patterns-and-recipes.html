@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -175,7 +175,7 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="18-模式与实战配方"><a class="header" href="#18-模式与实战配方">18. 模式与实战配方</a></h1>
-<p>这一章收集“怎么组合使用 Dolang”的实际路径。</p>
+<p>这一章给的是可复制的起步配方，而不是零散片段。</p>
 <h2 id="配方-1单文件脚本"><a class="header" href="#配方-1单文件脚本">配方 1：单文件脚本</a></h2>
 <p>适合：</p>
 <ul>
@@ -183,7 +183,7 @@
 <li>小工具</li>
 <li>一次性脚本</li>
 </ul>
-<p>一个最小例子：</p>
+<p>文件：<code>sum.dol</code></p>
 <pre><code class="language-dol">$ nums = [1, 2, 3, 4, 5];
 $ total = 0;
 
@@ -193,73 +193,134 @@ $for n in nums {
 
 $&gt;&gt; total;
 </code></pre>
-<h2 id="配方-2标准库驱动的小工具"><a class="header" href="#配方-2标准库驱动的小工具">配方 2：标准库驱动的小工具</a></h2>
-<p>典型组合：</p>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run sum.dol
+</code></pre>
+<p>预期输出：</p>
+<pre><code class="language-text">15
+</code></pre>
+<p>回看章节：</p>
 <ul>
-<li><code>std.str</code></li>
-<li><code>std.json</code></li>
-<li><code>std.path</code></li>
-<li><code>std.fs</code></li>
+<li><a href="07-functions.html">07-functions.md</a></li>
+<li><a href="08-collections-and-methods.html">08-collections-and-methods.md</a></li>
 </ul>
-<p>例如：</p>
+<h2 id="配方-2读取并处理-json-文件"><a class="header" href="#配方-2读取并处理-json-文件">配方 2：读取并处理 JSON 文件</a></h2>
+<p>目录：</p>
+<pre><code class="language-text">json-tool/
+├── main.dol
+└── data.json
+</code></pre>
+<p><code>data.json</code></p>
+<pre><code class="language-json">{"name":"dolang","tags":["lang","tool","lang"]}
+</code></pre>
+<p><code>main.dol</code></p>
 <pre><code class="language-dol">$mod std.fs;
 $mod std.json;
 
 $ raw = fs.read_text("data.json");
 $ obj = json.parse(raw);
-$&gt;&gt; json.stringify(obj);
+$ tags = obj["tags"];
+
+$&gt;&gt; obj["name"];
+$&gt;&gt; tags.unique().len();
 </code></pre>
-<h2 id="配方-3带-package-的小项目"><a class="header" href="#配方-3带-package-的小项目">配方 3：带 package 的小项目</a></h2>
-<p>适合：</p>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run main.dol
+</code></pre>
+<p>预期输出：</p>
+<pre><code class="language-text">dolang
+2
+</code></pre>
+<p>回看章节：</p>
 <ul>
-<li>有配置项</li>
-<li>有多个模块</li>
-<li>需要服务模式</li>
+<li><a href="08-collections-and-methods.html">08-collections-and-methods.md</a></li>
+<li><a href="13-stdlib-overview.html">13-stdlib-overview.md</a></li>
+<li><a href="14-io-env-config.html">14-io-env-config.md</a></li>
 </ul>
-<p>最小结构：</p>
+<h2 id="配方-3带-packagetoml-的小项目"><a class="header" href="#配方-3带-packagetoml-的小项目">配方 3：带 <code>package.toml</code> 的小项目</a></h2>
+<p>目录：</p>
 <pre><code class="language-text">my-app/
 ├── package.toml
 ├── main.dol
 └── shared/
     └── helper.dol
 </code></pre>
-<h2 id="配方-4拆模块的-http-服务"><a class="header" href="#配方-4拆模块的-http-服务">配方 4：拆模块的 HTTP 服务</a></h2>
-<p>推荐组合：</p>
-<ul>
-<li><code>package.toml</code></li>
-<li><code>$mod</code> 普通模块</li>
-<li><code>$HTTP(...).link(...)</code></li>
-</ul>
-<p>入口文件可以像这样：</p>
-<pre><code class="language-dol">$HTTP("/api").link("routers.api");
-$STATIC("/static", "static");
+<p><code>package.toml</code></p>
+<pre><code class="language-toml">name = "my-app"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
 </code></pre>
-<h2 id="配方-5从脚本迁移到服务"><a class="header" href="#配方-5从脚本迁移到服务">配方 5：从脚本迁移到服务</a></h2>
-<p>常见演进顺序：</p>
-<ol>
-<li>从单文件脚本开始</li>
-<li>抽出模块</li>
-<li>引入 <code>package.toml</code></li>
-<li>暴露 HTTP 路由</li>
-<li>用 <code>dolang test</code> 验证路由</li>
-</ol>
-<h2 id="一套实用的成长路径"><a class="header" href="#一套实用的成长路径">一套实用的成长路径</a></h2>
-<p>如果你是第一次系统写 Dolang，建议按这个顺序练习：</p>
-<ol>
-<li>先写只包含变量、循环、函数的脚本</li>
-<li>再引入 <code>std.str</code>、<code>std.math</code>、<code>std.json</code></li>
-<li>再把脚本拆成两个模块</li>
-<li>再加 <code>package.toml</code></li>
-<li>最后再进入 HTTP 服务</li>
-</ol>
-<h2 id="这一章后续会继续扩写什么"><a class="header" href="#这一章后续会继续扩写什么">这一章后续会继续扩写什么</a></h2>
-<p>优先级最高的补充方向：</p>
+<p><code>shared/helper.dol</code></p>
+<pre><code class="language-dol">$fn greeting() -&gt; String {
+    $# "hello from helper";
+}
+</code></pre>
+<p><code>main.dol</code></p>
+<pre><code class="language-dol">$mod shared.helper;
+$&gt;&gt; helper.greeting();
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run main.dol
+</code></pre>
+<p>预期输出：</p>
+<pre><code class="language-text">hello from helper
+</code></pre>
+<p>回看章节：</p>
 <ul>
-<li>文件处理脚本实战</li>
-<li>JSON API 小项目</li>
-<li>多模块目录组织模板</li>
-<li>服务入口与路由拆分模板</li>
+<li><a href="11-modules.html">11-modules.md</a></li>
+<li><a href="12-projects-and-package.html">12-projects-and-package.md</a></li>
 </ul>
+<h2 id="配方-4模块化-http-服务"><a class="header" href="#配方-4模块化-http-服务">配方 4：模块化 HTTP 服务</a></h2>
+<p>目录：</p>
+<pre><code class="language-text">http-app/
+├── package.toml
+├── main.dol
+└── routers/
+    └── api.dol
+</code></pre>
+<p><code>package.toml</code></p>
+<pre><code class="language-toml">name = "http-app"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+</code></pre>
+<p><code>routers/api.dol</code></p>
+<pre><code class="language-dol">$GET("/status") status() -&gt; JSON {
+    $# $JSON { "ok": true };
+}
+</code></pre>
+<p><code>main.dol</code></p>
+<pre><code class="language-dol">@CORS("*")
+$main() {
+    $&gt;&gt; "[INFO] server starting";
+}
+
+$HTTP("/api").link("routers.api");
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash">dolang serve .
+</code></pre>
+<p>验证：</p>
+<pre><code class="language-bash">curl http://127.0.0.1:8080/api/status
+</code></pre>
+<p>预期结果：</p>
+<pre><code class="language-text">{"ok":true}
+</code></pre>
+<p>回看章节：</p>
+<ul>
+<li><a href="12-projects-and-package.html">12-projects-and-package.md</a></li>
+<li><a href="15-http-basics.html">15-http-basics.md</a></li>
+<li><a href="16-http-organization.html">16-http-organization.md</a></li>
+</ul>
+<h2 id="迁移说明"><a class="header" href="#迁移说明">迁移说明</a></h2>
+<p>旧的零散示例页仍在 <a href="examples.html">examples.md</a>，但主线示例职责已经迁到本章。</p>
 
                     </main>
 

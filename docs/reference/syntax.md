@@ -1,141 +1,114 @@
 # 语法参考
 
-本文档提供 Dolang 的完整语法参考。
+本文档按“能快速查关键写法”的方式整理 Dolang 常用语法。
 
 ## 语句结束符
 
 所有语句必须以 `;` 结尾：
 
 ```dao
-$>> 1;
-1
-
 $>> "Hello";
-Hello
 ```
 
-## 注释
-
-Dolang 支持两种注释语法：
-
-### 单行注释
-
-使用 `//` 开头到行尾：
+## 声明与函数
 
 ```dao
-$ a = 1; // 这是一个注释
-$>> a;   // 输出: 1
-```
+$ value = 1;
+$ value: Int = 1;
+$@ NAME = "dolang";
 
-### 多行注释
-
-使用 `/* ... */` 包裹：
-
-```dao
-$ a = 1; /* 这是一个
-多行注释 */ $>> a;
-```
-
----
-
-## 关键字概览表
-
-### 声明关键字
-
-| 关键字 | 说明 | 示例 |
-|--------|------|------|
-| `$` | 变量声明（动态模式） | `$ a = 1;` |
-| `$` | 变量声明（静态模式） | `$ a: Int = 1;` |
-| `$@` | 常量声明 | `$@ PI = 3.14;` |
-| `$fn` | 函数声明 | `$fn add(a, b) { ... }` |
-
-> **渐进式类型**：变量声明时不写类型注解（如 `$ a = 1;`）为动态模式；写类型注解（如 `$ a: Int = 1;`）为静态模式。
-
-### 输出关键字
-
-| 关键字 | 说明 | 示例 |
-|--------|------|------|
-| `$>>` | 打印输出（标准输出） | `$>> "Hello";` |
-| `$>>ERR(...)` | 打印输出（标准错误） | `$>>ERR("Error message");` |
-| `$>>ERR(f"...")` | 支持 f-string | `$>>ERR(f"Error: {msg}");` |
-| `$>>FILE(...)` | 写入文件 | `$>>FILE("path", "content");` |
-| `$#` | 函数返回值 | `$# value;` |
-
-### 输入关键字
-
-| 关键字 | 说明 | 示例 |
-|--------|------|------|
-| `$<<ENV("KEY")` | 读取环境变量 | `$ home = $<<ENV("HOME");` |
-| `$<<LINE()` | 读取 stdin 一行 | `$ input = $<<LINE();` |
-| `$<<LINE("提示")` | 读取 stdin（带提示） | `$ name = $<<LINE("请输入: ");` |
-| `$<<FILE("path")` | 读取文件（返回 File 对象） | `$ f = $<<FILE("data.txt");` |
-
-### 流程控制关键字
-
-| 关键字 | 说明 | 示例 |
-|--------|------|------|
-| `$if` | 条件判断 | `$if condition { ... }` |
-| `$elif` | 条件分支 | `$elif condition { ... }` |
-| `$else` | 默认分支 | `$else { ... }` |
-| `$while` | 当循环 | `$while condition { ... }` |
-| `$loop` | 无限循环 | `$loop { ... }` |
-| `$for` | 计数循环 | `$for i = 0; i < 10; i = i + 1 { ... }` |
-| `$break` | 跳出循环 | `$break;` |
-| `$continue` | 继续下次循环 | `$continue;` |
-
-### 代码块
-
-| 符号 | 说明 | 示例 |
-|------|------|------|
-| `{` | 代码块开始 | `$if ... { ... }` |
-| `}` | 代码块结束 | `$if ... { ... }` |
-| `;` | 语句结束 | `$>> a;` |
-
----
-
-## 代码块
-
-代码块使用 `{` 和 `}` 包裹，用于组织多条语句：
-
-```dao
-$if condition {
-    statement1;
-    statement2;
+$fn greet(name) -> String {
+    $# name;
 }
 ```
 
-代码块可以嵌套：
+参数类型注解当前不是主线承诺语法；reference 也不把它写成稳定用法。
+
+## 输入与输出
 
 ```dao
-$if outer_condition {
-    $if inner_condition {
-        $>> "nested";
-    }
+$>> "Hello";
+$>>ERR("bad input");
+$ name = $<<LINE();
+$ home = $<<ENV("HOME");
+$ text = $<<FILE("notes.txt");
+$ lines = $<<FILE("notes.txt", "LINES");
+```
+
+关于 `$<<FILE(...)`，统一口径如下：
+
+- `$<<FILE(path)`：按全文读取
+- `$<<FILE(path, "LINES")`：按行读取
+- 如果你需要更明确、更完整的文件 API，优先改用 `std.fs.read_text(...)` / `std.fs.read_lines(...)`
+
+## 控制流
+
+```dao
+$if cond {
+} $elif other {
+} $else {
+}
+
+$while cond {
+}
+
+$loop {
+    $break;
+}
+
+$for item in items {
+    $continue;
 }
 ```
 
----
-
-## 可变参数语法
-
-使用 `...` 符号定义可变参数函数：
-
-| 符号 | 说明 | 示例 |
-|------|------|------|
-| `...` | 可变参数 | `$fn add(...nums) { ... }` |
-
-**示例**：
+## 模块
 
 ```dao
-// 收集所有参数到列表
-$fn sum(...nums) {
-    $# nums;
-};
-$>> sum(1, 2, 3);  // 输出: [1, 2, 3]
+$mod helper;
+$mod math.*;
+$mod std.math;
+```
 
-// 混合普通参数和可变参数
-$fn greet(name, ...others) {
-    $# [name, others];
-};
-$>> greet("Tom", "Jerry");  // 输出: [Tom, [Jerry]]
+`$mod a.*;` 导入直接子模块命名空间，不会把函数平铺到当前作用域。
+
+## 类型与返回
+
+```dao
+$Type User {
+    id: Int
+    name: Str
+}
+
+$fn list_users() -> List<User> {
+    $# [{"id": 1, "name": "Alice"}];
+}
+```
+
+返回集合时，主线推荐写 `List<T>`，而不是裸 `List`。
+
+## HTTP
+
+```dao
+$GET("/hello") hello() -> String {
+    $# "world";
+}
+
+$POST("/echo") echo() -> JSON {
+    $# $JSON { "body": body };
+}
+
+$HTTP("/api").link("routers.api");
+```
+
+## 构造器与入口
+
+```dao
+$# $JSON { "ok": true };
+$# $HTML("<h1>Hello</h1>");
+$# $HTML().link("pages.index");
+$# $RES(201, {"created": true});
+
+$main() {
+    $>> "starting";
+}
 ```

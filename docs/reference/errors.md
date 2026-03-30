@@ -1,216 +1,93 @@
 # 错误参考
 
-本文档列出 Dolang 常见的错误类型及其处理方式。
+本文档按“查表”方式列出 Dolang 常见错误与处理建议。
 
-## 语法错误
+## 错误类别
 
-Dolang 提供详细的解析错误信息，包括错误位置、找到的 token 和期望的内容：
+| 类别 | 何时出现 | 能否被 `$catch` 捕获 |
+|------|----------|----------------------|
+| 词法错误 | 代码还没被正确切 token | 不能 |
+| 语法错误 | parser 无法构造合法语句 | 不能 |
+| 运行时错误 | 程序执行过程中失败 | 通常可以 |
+| 项目装载错误 | 入口、模块、项目加载失败 | 不建议把它当普通业务错误处理 |
 
-```dao
-$result = $fn(x,y) {
- x + y
-}
+## 常见运行时错误
 
-result(a,b);
-```
-
-运行结果：
-```
-[ERROR] Parse error at line 1:1
-  found: Ident
-  unexpected token after expression
-```
-
-**错误信息包含**：
-- 错误位置（行:列）
-- 找到的 token 类型
-- 期望的内容或错误描述
-
-### 常见语法错误
-
-- 缺少分号：`$>> "hello"` → 需要 `$>> "hello";`
-- 缺少大括号：`$if true` → 需要 `$if true { }`
-- 括号不匹配：函数调用参数未闭合
-- 无效转义字符：`$>> "Hello\qWorld"` → `[ERROR] lexer error: invalid escape sequence "\q"`
-- Char 类型不支持转义：`$ c = '\n';` → `[ERROR] lexer error: Char type does not support escape sequences`
-
----
-
-## 类型错误
-
-### 动态模式（默认）- 重新赋值可改变类型
-
-v1.3 起，动态模式下重新赋值可以改变类型：
-
-```dao
-$ a = 1;
-a = "hello";   // ✅ 允许，类型从 Int 变为 String
-```
-
-### 静态模式 - 类型不匹配错误
-
-使用类型注解后，重新赋值必须保持类型一致：
-
-```dao
-$ a: Int = 1;
-a = "hello";
-```
-
-运行结果：
-```
-[ERROR] type error: variable 'a' is declared as 'Int', cannot assign 'String' value
-  hint: use '$ a: String = ...' to redeclare with a new type
-```
-
-**解决方案**：
-- 使用 `$` 重新声明（变量遮蔽）：`$ a = "hello";`
-- 或重新指定类型：`$ a: String = "hello";`
-
----
-
-### 声明时类型注解与值不匹配
-
-类型注解和实际值的类型不一致：
+### 类型不匹配
 
 ```dao
 $ x: Int = "hello";
 ```
 
-运行结果：
-```
-[ERROR] type error: declared type 'Int' does not match value type 'String'
-  hint: change the annotation or the value
-```
+说明：声明类型和实际值不一致。
 
----
-
-### 未知类型注解
-
-使用了不支持的类型名：
+### 未定义变量
 
 ```dao
-$ x: Number = 30;
+$>> missing;
 ```
 
-运行结果：
-```
-[ERROR] type error: unknown type 'Number', supported types are: Int, Float, String, Bool
-```
+说明：变量未声明就被读取。
 
----
-
-## 常量重赋值错误
-
-常量不可修改：
-
-```dao
-$@ PI = 3.14;
-PI = 3.14159;
-```
-
-运行结果：
-```
-[ERROR] runtime error: cannot reassign constant 'PI'
-```
-
-**解决方案**：使用 `$` 声明新变量
-
----
-
-## 函数调用错误
-
-### 调用未定义的函数
-
-```dao
-foo();
-```
-
-运行结果：
-```
-[ERROR] runtime error: function 'foo' is not defined
-```
-
-### 函数重定义错误
-
-```dao
-$fn add(a, b) {
-    $# a + b;
-}
-$fn add(a, b) {
-    $# a;
-}
-```
-
-运行结果：
-```
-[ERROR] runtime error: function 'add' is already defined
-```
-
-### 返回类型不匹配
-
-```dao
-$fn test() -> String {
-    $# 123;
-}
-```
-
-运行结果：
-```
-[ERROR] runtime error: function 'test' expects return type 'String' but got 'Int'
-```
-
-### 未声明返回类型但返回值
-
-```dao
-$fn add(x, y) {
-    $# x + y;
-}
-```
-
-运行结果：
-```
-[ERROR] runtime error: function 'add' has no return type declared but returns a value
-```
-
----
-
-## 未定义变量错误
-
-使用未声明的变量：
-
-```dao
-$>> x;
-```
-
-运行结果：
-```
-[ERROR] runtime error: variable 'x' not found
-```
-
----
-
-## 运行时错误
-
-### 除零错误
-
-除法和取模运算除以零时返回错误：
+### 除零
 
 ```dao
 $>> 10 / 0;
 ```
 
-运行结果：
+说明：普通运行时错误，可用 `$try / $catch` 包住。
+
+### 文件读取失败
+
+```dao
+$mod std.fs;
+$try {
+    $ content = fs.read_text("missing.txt");
+} $catch err {
+    $>> err;
+}
 ```
-[ERROR] runtime error: division by zero
+
+说明：文件不存在、路径错误或把目录当文件读取时都可能触发。
+
+### 模块加载失败
+
+```dao
+$mod missing.module;
 ```
 
----
+说明：通常发生在装载阶段，优先先修模块路径和项目结构，而不是把它当正常业务分支。
 
-## 错误处理最佳实践
+## `$catch` 可捕获性速查
 
-1. **仔细阅读错误信息**：错误信息会指出错误位置和原因
-2. **动态模式**：不需要类型约束时，直接 `$ x = value;` 即可随意改变类型
-3. **静态模式**：需要类型保护时，使用 `$ x: Type = value;` 声明
-4. **变量遮蔽**：需要改变类型时使用 `$` 重新声明
-5. **声明返回类型**：函数有返回值时务必声明返回类型
-6. **先声明后使用**：变量必须先声明再使用
+| 场景 | 是否建议写成“可捕获” |
+|------|-----------------------|
+| `$throw "oops"` | 是 |
+| 除零 | 是 |
+| 未定义变量 | 是 |
+| 类型不匹配 | 是 |
+| 文件读取失败 | 是 |
+| 模块加载失败 | 谨慎，不作为主线业务流程依赖 |
+| 语法错误 | 否 |
+
+## `err` 怎么用
+
+主线安全用法：
+
+- 直接打印 `err`
+- 拼接到日志字符串
+- 返回默认值或改写 HTTP 响应
+
+不把 `err` 当固定字段结构来写文档承诺。
+
+## 排查建议
+
+1. 先看错误类别
+2. 再看报错位置
+3. 缩成最小 `.dol` 文件
+4. HTTP 问题优先用 `dolang test --route ...`
+
+## 交叉阅读
+
+- 主线说明：[../guide/10-error-handling.md](../guide/10-error-handling.md)
+- 常见错误附录：[../guide/appendix/common-errors.md](../guide/appendix/common-errors.md)

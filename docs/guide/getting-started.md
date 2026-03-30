@@ -1,5 +1,11 @@
 # 快速开始
 
+> **Status: Supplemental**
+>
+> 这是一页迁移期补充材料。
+> 如果你要走当前主线，请改读 [02-installation-and-cli.md](02-installation-and-cli.md) 和 [03-first-program.md](03-first-program.md)。
+> 本页仍保留的独特价值是“一页式上手”节奏，适合快速预览，但不再承担完整教学职责。
+
 本指南帮助你在 5 分钟内上手 Dolang。
 
 ---
@@ -135,7 +141,7 @@ $while i < 3 {
 
 ## 下一步
 
-- [实用示例](examples.md) — 更多代码示例
-- [标准库参考](stdlib.md) — 内置方法与标准库模块
-- [模块系统](modules.md) — 导入和组织代码
-- [Web 服务](web.md) — 构建 HTTP API
+- [18-patterns-and-recipes.md](18-patterns-and-recipes.md) — 现行可运行配方
+- [../reference/stdlib-api.md](../reference/stdlib-api.md) — 标准库与值方法查表
+- [11-modules.md](11-modules.md) — 当前模块系统主线
+- [15-http-basics.md](15-http-basics.md) / [16-http-organization.md](16-http-organization.md) — 当前 HTTP 主线

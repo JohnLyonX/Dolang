@@ -1,6 +1,6 @@
 # 3. 第一个程序
 
-这一章用三个最短例子建立对 Dolang 的第一印象：脚本、REPL、HTTP。
+这一章只做三件事：跑第一个脚本、试一次 REPL、起第一个 HTTP 路由。
 
 ## 第一个脚本
 
@@ -15,6 +15,12 @@ $>> "Hello, Dolang!";
 ```bash
 dolang run hello.dol
 ```
+
+### 怎么确认成功
+
+- 终端应该输出 `Hello, Dolang!`
+- 如果没有输出，先检查语句末尾是否有分号
+- 如果提示找不到文件，确认你在 `hello.dol` 所在目录执行命令
 
 ## 第一个 REPL 交互
 
@@ -34,8 +40,8 @@ hello, builder
 
 REPL 适合做这些事情：
 
-- 试验表达式
-- 试验字符串与列表方法
+- 试表达式
+- 试字符串与列表方法
 - 快速复现小问题
 
 ## 第一个 HTTP 路由
@@ -54,9 +60,21 @@ $GET("/hello") hello() -> String {
 dolang serve main.dol
 ```
 
-这个例子说明 Dolang 当前不仅能跑脚本，也能直接定义并运行简单 HTTP 路由。
+### 怎么确认成功
 
-## 单文件与项目目录
+先看终端没有报错，再用浏览器或 `curl` 验证：
+
+```bash
+curl http://127.0.0.1:8080/hello
+```
+
+预期结果：
+
+- 响应体是 `world`
+- 如果你改了 `[server]` 端口，就把 `8080` 换成对应端口
+- 浏览器直接访问 `http://127.0.0.1:8080/hello` 也应看到同样结果
+
+## 单文件和项目目录的区别
 
 单文件适合：
 
@@ -70,11 +88,7 @@ dolang serve main.dol
 - 需要多个模块
 - 需要统一 server 配置
 
-项目目录的例子可以参考 [12-projects-and-package.md](12-projects-and-package.md)。
-
-## 迁移期参考
-
-旧版快速开始仍保留在 [getting-started.md](getting-started.md)。
+项目目录的入口、`entry` 和 `$main()` 在 [12-projects-and-package.md](12-projects-and-package.md) 里详细说明。
 
 ## 下一章
 

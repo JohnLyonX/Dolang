@@ -49,7 +49,7 @@ $GET("/users/:id") get_user(id) -> JSON {
 }
 
 // POST 请求 - 创建用户
-$POST("/users") create_user(body) -> JSON {
+$POST("/users") create_user() -> JSON {
     $ result = $JSON {
         "status": "created",
         "data": body
@@ -166,7 +166,7 @@ $GET("/text") text_handler() -> String {
 $HTTP {
     $GET("/users") list_users() -> JSON { ... }
     $GET("/users/:id") get_user(id) -> JSON { ... }
-    $POST("/users") create_user(body) -> JSON { ... }
+    $POST("/users") create_user() -> JSON { ... }
 }
 ```
 
@@ -203,13 +203,19 @@ $GET("/api/data") api_handler() -> JSON {
 }
 ```
 
-### $<< - 获取请求体
+### 请求体注入
 
-对于 POST/PUT 请求，可以通过 `body` 参数获取 JSON body：
+当前实现会把请求体注入为隐式变量 `body`。
+
+主线可依赖的口径是：
+
+- `POST`、`PUT`、`PATCH` 可读取 `body`
+- `GET`、`DELETE` 不作为主线 `body` 注入能力来承诺
+- 文档不再把 `body` 写成 handler 形参
 
 ```dao
-$POST("/users") create_user(body) -> JSON {
-    $ name = body.name;
+$POST("/users") create_user() -> JSON {
+    $ name = body["name"];
     $# $JSON { "created": true, "name": name };
 }
 ```
@@ -539,7 +545,7 @@ $GET("/list") list_users() -> JSON {
     $# $JSON { "users": ["tom", "jerry"] };
 }
 
-$POST("/create") create_user(body) -> JSON {
+$POST("/create") create_user() -> JSON {
     $# $JSON { "created": true, "data": body };
 }
 ```

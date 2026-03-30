@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -175,13 +175,14 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="13-标准库总览"><a class="header" href="#13-标准库总览">13. 标准库总览</a></h1>
-<p>Dolang 当前的标准库分成两类：</p>
+<p>这一章只回答一个问题：<strong>某个能力应该去哪里找。</strong></p>
+<p>完整 API 查表不在这里，请直接看 <a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a>。</p>
+<h2 id="标准库分两类"><a class="header" href="#标准库分两类">标准库分两类</a></h2>
 <ul>
 <li>native 模块：由 Rust 实现并注册到 runtime</li>
 <li>纯 <code>.dol</code> 模块：放在 <code>stdlib/</code> 中</li>
 </ul>
-<p>如果你想快速判断“某个能力应该去哪里找”，这一章先给你一个总地图。</p>
-<h2 id="当前可见的主要模块"><a class="header" href="#当前可见的主要模块">当前可见的主要模块</a></h2>
+<h2 id="当前常见模块"><a class="header" href="#当前常见模块">当前常见模块</a></h2>
 <p>native 模块：</p>
 <ul>
 <li><code>std.env</code></li>
@@ -203,160 +204,55 @@
 <li><code>std.math.trig</code></li>
 <li><code>std.path</code></li>
 </ul>
-<h2 id="按用途理解标准库"><a class="header" href="#按用途理解标准库">按用途理解标准库</a></h2>
-<h3 id="字符串与文本"><a class="header" href="#字符串与文本">字符串与文本</a></h3>
+<h2 id="先判断是值方法还是模块函数"><a class="header" href="#先判断是值方法还是模块函数">先判断是“值方法”还是“模块函数”</a></h2>
+<h3 id="值方法"><a class="header" href="#值方法">值方法</a></h3>
+<p>这些直接挂在值上：</p>
 <ul>
-<li><code>std.str</code></li>
-<li><code>std.str.check</code></li>
-<li><code>std.str.fmt</code></li>
+<li><code>"a,b".split(",")</code></li>
+<li><code>[1, 2, 3].len()</code></li>
+<li><code>user.keys()</code></li>
 </ul>
+<p>适合当前值本身的直接处理。</p>
+<h3 id="模块函数"><a class="header" href="#模块函数">模块函数</a></h3>
+<p>这些来自 <code>std.*</code>：</p>
 <pre><code class="language-dol">$mod std.str;
-$mod std.str.fmt;
-
-$&gt;&gt; str.trim("  hello  ");
-$&gt;&gt; fmt.pad_left("42", 5, "0");
-</code></pre>
-<h3 id="数学与数值"><a class="header" href="#数学与数值">数学与数值</a></h3>
-<ul>
-<li><code>std.math</code></li>
-<li><code>std.math.stats</code></li>
-<li><code>std.math.trig</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.math;
-$mod std.math.stats;
-
-$&gt;&gt; math.sqrt(16.0);
-$&gt;&gt; stats.mean([1, 2, 3, 4, 5]);
-</code></pre>
-<h3 id="json-与数据处理"><a class="header" href="#json-与数据处理">JSON 与数据处理</a></h3>
-<ul>
-<li><code>std.json</code></li>
-<li><code>std.path</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.json;
-$mod std.path;
-
-$ obj = json.parse("{\"name\":\"dolang\"}");
-$&gt;&gt; json.get(obj, "name");
-$&gt;&gt; path.basename("/usr/local/bin");
-</code></pre>
-<h3 id="文件与环境变量"><a class="header" href="#文件与环境变量">文件与环境变量</a></h3>
-<ul>
-<li><code>std.fs</code></li>
-<li><code>std.env</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.env;
-$mod std.fs;
-
-$&gt;&gt; env.get_or("APP_ENV", "dev");
-$&gt;&gt; fs.exists("README.md");
-</code></pre>
-<h3 id="时间唯一-id-与服务调用"><a class="header" href="#时间唯一-id-与服务调用">时间、唯一 ID 与服务调用</a></h3>
-<ul>
-<li><code>std.time</code></li>
-<li><code>std.uuid</code></li>
-<li><code>std.http</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.time;
-$mod std.uuid;
-$mod std.http;
-
-$&gt;&gt; time.format(0, "%Y-%m-%d");
-$&gt;&gt; uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
-</code></pre>
-<h3 id="基础工具"><a class="header" href="#基础工具">基础工具</a></h3>
-<ul>
-<li><code>std.core.iter</code></li>
-<li><code>std.core.check</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.core.iter;
-$mod std.core.check;
-
-$&gt;&gt; iter.range(0, 5);
-$&gt;&gt; check.type_of(42);
-</code></pre>
-<h2 id="更细一点的模块地图"><a class="header" href="#更细一点的模块地图">更细一点的模块地图</a></h2>
-<p>如果你已经学到这里，可以把常见模块先这样记：</p>
-<ul>
-<li>文本处理：<code>std.str</code>、<code>std.str.check</code>、<code>std.str.fmt</code></li>
-<li>数学计算：<code>std.math</code>、<code>std.math.stats</code>、<code>std.math.trig</code></li>
-<li>JSON 处理：<code>std.json</code></li>
-<li>路径处理：<code>std.path</code></li>
-<li>文件和目录：<code>std.fs</code></li>
-<li>环境变量：<code>std.env</code></li>
-<li>时间处理：<code>std.time</code></li>
-<li>唯一 ID：<code>std.uuid</code></li>
-<li>HTTP 客户端：<code>std.http</code></li>
-<li>通用工具：<code>std.core.iter</code>、<code>std.core.check</code></li>
-</ul>
-<p>例如 <code>std.path</code> 里除了 <code>basename</code>，还可以继续留意：</p>
-<ul>
-<li><code>join</code></li>
-<li><code>dirname</code></li>
-<li><code>ext</code></li>
-</ul>
-<p>例如 <code>std.json</code> 里除了 <code>parse</code> / <code>stringify</code>，还可以继续留意：</p>
-<ul>
-<li><code>get</code></li>
-<li><code>has</code></li>
-<li><code>keys</code></li>
-<li><code>values</code></li>
-<li><code>set</code></li>
-<li><code>delete</code></li>
-<li><code>pretty</code></li>
-<li><code>merge</code></li>
-</ul>
-<h2 id="一个最小例子"><a class="header" href="#一个最小例子">一个最小例子</a></h2>
-<pre><code class="language-dol">$mod std.math;
-$mod std.str;
-
-$&gt;&gt; math.sqrt(16.0);
-$&gt;&gt; str.trim("  hello  ");
-</code></pre>
-<h2 id="什么时候用标准库"><a class="header" href="#什么时候用标准库">什么时候用标准库</a></h2>
-<p>建议把标准库理解成三层用途：</p>
-<ul>
-<li>基础字符串、数学、JSON、文件、环境变量、时间、UUID、HTTP</li>
-<li>一些以 <code>.dol</code> 编写的组合工具</li>
-<li>未来继续扩展的公共模块入口</li>
-</ul>
-<h2 id="第一次学时怎么用"><a class="header" href="#第一次学时怎么用">第一次学时怎么用</a></h2>
-<p>建议第一次先掌握这几个模块：</p>
-<ol>
-<li><code>std.str</code></li>
-<li><code>std.math</code></li>
-<li><code>std.json</code></li>
-<li><code>std.fs</code></li>
-<li><code>std.env</code></li>
-</ol>
-<p>然后再补：</p>
-<ul>
-<li><code>std.time</code></li>
-<li><code>std.uuid</code></li>
-<li><code>std.http</code></li>
-<li><code>std.core.iter</code></li>
-<li><code>std.core.check</code></li>
-<li><code>std.str.fmt</code></li>
-<li><code>std.path</code></li>
-</ul>
-<h2 id="一个更完整的标准库组合例子"><a class="header" href="#一个更完整的标准库组合例子">一个更完整的标准库组合例子</a></h2>
-<pre><code class="language-dol">$mod std.fs;
 $mod std.json;
-$mod std.path;
-$mod std.time;
-$mod std.uuid;
 
-$ raw = fs.read_text("tests/fixtures/stdlib/hello.txt");
-$&gt;&gt; raw;
-$&gt;&gt; path.basename("/usr/local/bin");
-$&gt;&gt; time.year(0);
-$&gt;&gt; uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
-$&gt;&gt; json.stringify({"ok": true});
+$&gt;&gt; str.trim("  hello  ");
+$ obj = json.set({"name": "Tom"}, "age", 25);
 </code></pre>
-<h2 id="迁移期参考"><a class="header" href="#迁移期参考">迁移期参考</a></h2>
+<p>适合：</p>
 <ul>
-<li><a href="stdlib.html">stdlib.md</a></li>
-<li><code>docs/stdlib/README.md</code></li>
+<li>工具函数</li>
+<li>JSON 通用处理</li>
+<li>宿主能力</li>
+<li>不方便做成值方法的能力</li>
+</ul>
+<h2 id="按用途找"><a class="header" href="#按用途找">按用途找</a></h2>
+<h3 id="文本与字符串"><a class="header" href="#文本与字符串">文本与字符串</a></h3>
+<ul>
+<li>值方法：<code>trim</code>、<code>split</code>、<code>contains</code></li>
+<li>模块：<code>std.str</code>、<code>std.str.check</code>、<code>std.str.fmt</code></li>
+</ul>
+<h3 id="集合与-json"><a class="header" href="#集合与-json">集合与 JSON</a></h3>
+<ul>
+<li>值方法：<code>len</code>、<code>keys</code>、<code>values</code>、<code>flatten</code>、<code>sort_desc</code></li>
+<li>模块：<code>std.json</code></li>
+</ul>
+<h3 id="文件环境与配置"><a class="header" href="#文件环境与配置">文件、环境与配置</a></h3>
+<ul>
+<li>模块：<code>std.fs</code>、<code>std.env</code></li>
+<li>章节入口：<a href="14-io-env-config.html">14-io-env-config.md</a></li>
+</ul>
+<h3 id="http"><a class="header" href="#http">HTTP</a></h3>
+<ul>
+<li>服务端语法：第 15、16 章</li>
+<li>客户端模块：<code>std.http</code></li>
+</ul>
+<h2 id="查表去哪里"><a class="header" href="#查表去哪里">查表去哪里</a></h2>
+<ul>
+<li>完整 stdlib API：<a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a></li>
+<li>旧迁移页：<a href="stdlib.html">stdlib.md</a></li>
 </ul>
 <h2 id="下一章"><a class="header" href="#下一章">下一章</a></h2>
 <p>继续看 <a href="14-io-env-config.html">14-io-env-config.md</a>。</p>

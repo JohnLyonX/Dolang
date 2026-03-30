@@ -1,5 +1,11 @@
 # 类型系统
 
+> 迁移提示
+>
+> 本页是旧 reference 页面，仍保留历史示例。
+> 当前主线类型口径请优先参考 [../guide/09-gradual-typing.md](../guide/09-gradual-typing.md)、[errors.md](errors.md) 和 [syntax.md](syntax.md)。
+> 如果本页出现旧的泛型或返回类型写法，以主线和当前实现为准。
+
 DaoLang v1.3 采用**渐进式类型系统**，结合了动态语言的灵活性和静态类型的安全性。
 
 > **设计原则：能跑就不用加，怕出错再加。**
@@ -569,65 +575,17 @@ $Type User {
 
 ---
 
-### 返回类型注解 `-> JSON<User>`
+### 历史写法提示：`-> JSON<User>`
 
-```dolang
-$fn getUser(id) -> JSON<User> {
-    $# {"id": id, "name": "Alice"};
-}
+这一节保留是为了说明旧文档里曾经出现过 `JSON<User>` 这类签名。
 
-$GET("/users/:id") get_user(id) -> JSON<User> {
-    $# service_user.getById(id);
-}
-```
+当前主线不再把它当作稳定教学写法。请改用：
 
-`JSON<User>` 分离了两个关注点：
+- `-> JSON` 表示响应格式
+- `-> List<T>` 表示集合返回
+- `$Type` 只用于结构说明
 
-| 部分 | 含义 |
-|------|------|
-| `JSON` | 运行时渲染格式（解释器） |
-| `User` | 数据形状约束（开发者 / LSP） |
-
-函数最终返回的都是 JSON，运行时不做强制校验。
-
----
-
-### 行为说明
-
-| 阶段 | 行为 |
-|------|------|
-| 定义 `$Type` | 注册类型形状，无运行时开销 |
-| 函数执行 | 返回普通 JSON，不强制校验字段 |
-| 边界验证（可选） | 主动调用 `$validate(body, User)` 时才校验 |
-| LSP 工具 | 根据 `-> JSON<User>` 提示字段补全 |
-
----
-
-### 完整示例
-
-```dolang
-// models/user.dol
-$Type User {
-    id: Int
-    name: Str
-    email: Str?
-}
-
-// service/user.dol
-$mod models.user;
-
-$fn getById(id) -> JSON<User> {
-    $if id == "" { $throw "id required"; }
-    $# {"id": id, "name": "Alice"};
-}
-
-// routers/user.dol
-$mod service.user;
-
-$GET("/users/:id") get_user(id) -> JSON<User> {
-    $# service_user.getById(id);
-}
-```
+如果你在旧材料里看到 `JSON<User>`，应回到 [../guide/09-gradual-typing.md](../guide/09-gradual-typing.md) 采用当前口径。
 
 ---
 

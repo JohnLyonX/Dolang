@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -176,21 +176,32 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="dolang-guide"><a class="header" href="#dolang-guide">Dolang Guide</a></h1>
-<p>本页既是 <code>docs/guide/</code> 的入口，也是这一轮文档重构的章节目录。</p>
-<p>当前策略：</p>
+<p>本页是 <code>docs/guide/</code> 的主入口。Guide 只负责学习路径，不负责完整 API 查表，也不负责定义最终实现边界。</p>
+<p>如果你第一次系统学习 Dolang，按本页编号章节往下读即可；如果你已经知道自己要查哪个能力，优先跳到对应 reference 页面。</p>
+<h2 id="文档分层规则"><a class="header" href="#文档分层规则">文档分层规则</a></h2>
 <ul>
-<li>旧的 guide 页面先保留，不删不减</li>
-<li>新增按编号组织的章节</li>
-<li>后续逐步把旧内容迁移、扩写、重组到新章节</li>
+<li>Guide：讲学习顺序、最小示例、推荐写法</li>
+<li>Reference：讲查表、速查、完整接口索引</li>
+<li>Spec：讲当前实现行为与边界</li>
 </ul>
-<p>这一版目录只基于当前仓库已经实现并可从 spec、实现、fixture、example 中交叉确认的能力，不把尚未稳定或尚未真正落地的设计放进主线。</p>
-<h2 id="编写原则"><a class="header" href="#编写原则">编写原则</a></h2>
+<p>出现冲突时：</p>
+<ol>
+<li>以当前实现和 <code>tests/spec/*</code> 为准</li>
+<li>然后看 <code>docs/spec/*</code></li>
+<li>Guide / Reference 只保留与上述一致的说法</li>
+</ol>
+<h2 id="迁移期旧页面状态规则"><a class="header" href="#迁移期旧页面状态规则">迁移期旧页面状态规则</a></h2>
+<p>本目录仍保留一批旧页面，但它们不再共同承担“主线指南”职责。状态统一分为三类：</p>
 <ul>
-<li>先讲“怎么用”，再补“为什么这样设计”</li>
-<li>每章尽量只覆盖一个主题，正文配最小可运行示例</li>
-<li>Guide 讲学习路径，Reference 讲查表，Spec 讲当前实现边界</li>
-<li>以当前实现为准，不提前写未来版本语法</li>
-<li>Web、项目系统、标准库是 Dolang 的用户主线，不应只放在零散参考文档里</li>
+<li><code>Deprecated</code>：内容已与主线冲突，应停止作为教学入口使用</li>
+<li><code>Supplemental</code>：仍有补充背景或示例价值，但不替代编号章节</li>
+<li><code>Migration Source</code>：保留迁移索引或尚未完全整合的旧内容</li>
+</ul>
+<p>使用建议：</p>
+<ul>
+<li>学习主线时优先读编号章节</li>
+<li>查完整 stdlib API 时读 <a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a></li>
+<li>对语言边界有疑问时读 <a href="../spec/README.html">../spec/README.md</a></li>
 </ul>
 <h2 id="章节目录"><a class="header" href="#章节目录">章节目录</a></h2>
 <pre><code class="language-text">docs/guide/
@@ -256,6 +267,14 @@
 <li><a href="#标准库参考">stdlib.md</a></li>
 <li><a href="#类型注解">types.md</a></li>
 <li><a href="#web-服务">web.md</a></li>
+</ul>
+<p>Reference 快速入口：</p>
+<ul>
+<li><a href="../reference/syntax.html">../reference/syntax.md</a></li>
+<li><a href="../reference/errors.html">../reference/errors.md</a></li>
+<li><a href="../reference/project-system.html">../reference/project-system.md</a></li>
+<li><a href="../reference/http.html">../reference/http.md</a></li>
+<li><a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a></li>
 </ul>
 <h2 id="主线章节"><a class="header" href="#主线章节">主线章节</a></h2>
 <h3 id="part-1-起步"><a class="header" href="#part-1-起步">Part 1 起步</a></h3>
@@ -329,7 +348,7 @@
 <li>变量/常量类型注解</li>
 <li>当前真正支持的声明类型名</li>
 <li>函数返回类型检查</li>
-<li><code>JSON&lt;User&gt;</code> 与 <code>$Type</code> 的定位</li>
+<li><code>List&lt;T&gt;</code> 与 <code>$Type</code> 的定位</li>
 </ul>
 <h4 id="10-错误处理"><a class="header" href="#10-错误处理">10. 错误处理</a></h4>
 <ul>
@@ -679,7 +698,7 @@ dolang test main.dol
 <p>继续看 <a href="#3-第一个程序-1">03-first-program.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="3-第一个程序-1"><a class="header" href="#3-第一个程序-1">3. 第一个程序</a></h1>
-<p>这一章用三个最短例子建立对 Dolang 的第一印象：脚本、REPL、HTTP。</p>
+<p>这一章只做三件事：跑第一个脚本、试一次 REPL、起第一个 HTTP 路由。</p>
 <h2 id="第一个脚本"><a class="header" href="#第一个脚本">第一个脚本</a></h2>
 <p>创建 <code>hello.dol</code>：</p>
 <pre><code class="language-dol">$&gt;&gt; "Hello, Dolang!";
@@ -687,6 +706,12 @@ dolang test main.dol
 <p>运行：</p>
 <pre><code class="language-bash">dolang run hello.dol
 </code></pre>
+<h3 id="怎么确认成功"><a class="header" href="#怎么确认成功">怎么确认成功</a></h3>
+<ul>
+<li>终端应该输出 <code>Hello, Dolang!</code></li>
+<li>如果没有输出，先检查语句末尾是否有分号</li>
+<li>如果提示找不到文件，确认你在 <code>hello.dol</code> 所在目录执行命令</li>
+</ul>
 <h2 id="第一个-repl-交互"><a class="header" href="#第一个-repl-交互">第一个 REPL 交互</a></h2>
 <p>进入 REPL：</p>
 <pre><code class="language-bash">dolang
@@ -698,8 +723,8 @@ hello, builder
 </code></pre>
 <p>REPL 适合做这些事情：</p>
 <ul>
-<li>试验表达式</li>
-<li>试验字符串与列表方法</li>
+<li>试表达式</li>
+<li>试字符串与列表方法</li>
 <li>快速复现小问题</li>
 </ul>
 <h2 id="第一个-http-路由"><a class="header" href="#第一个-http-路由">第一个 HTTP 路由</a></h2>
@@ -711,8 +736,17 @@ hello, builder
 <p>启动：</p>
 <pre><code class="language-bash">dolang serve main.dol
 </code></pre>
-<p>这个例子说明 Dolang 当前不仅能跑脚本，也能直接定义并运行简单 HTTP 路由。</p>
-<h2 id="单文件与项目目录"><a class="header" href="#单文件与项目目录">单文件与项目目录</a></h2>
+<h3 id="怎么确认成功-1"><a class="header" href="#怎么确认成功-1">怎么确认成功</a></h3>
+<p>先看终端没有报错，再用浏览器或 <code>curl</code> 验证：</p>
+<pre><code class="language-bash">curl http://127.0.0.1:8080/hello
+</code></pre>
+<p>预期结果：</p>
+<ul>
+<li>响应体是 <code>world</code></li>
+<li>如果你改了 <code>[server]</code> 端口，就把 <code>8080</code> 换成对应端口</li>
+<li>浏览器直接访问 <code>http://127.0.0.1:8080/hello</code> 也应看到同样结果</li>
+</ul>
+<h2 id="单文件和项目目录的区别"><a class="header" href="#单文件和项目目录的区别">单文件和项目目录的区别</a></h2>
 <p>单文件适合：</p>
 <ul>
 <li>小脚本</li>
@@ -725,9 +759,7 @@ hello, builder
 <li>需要多个模块</li>
 <li>需要统一 server 配置</li>
 </ul>
-<p>项目目录的例子可以参考 <a href="#12-项目系统与-packagetoml">12-projects-and-package.md</a>。</p>
-<h2 id="迁移期参考-1"><a class="header" href="#迁移期参考-1">迁移期参考</a></h2>
-<p>旧版快速开始仍保留在 <a href="#快速开始">getting-started.md</a>。</p>
+<p>项目目录的入口、<code>entry</code> 和 <code>$main()</code> 在 <a href="#12-项目系统与-packagetoml">12-projects-and-package.md</a> 里详细说明。</p>
 <h2 id="下一章-2"><a class="header" href="#下一章-2">下一章</a></h2>
 <p>继续看 <a href="#4-基本语法-1">04-basic-syntax.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -916,7 +948,7 @@ $&gt;&gt; [1, 2, 3].len();
 <li>比较运算在算术运算之后</li>
 <li>方法调用与索引访问会紧跟在主表达式后面继续解析</li>
 </ul>
-<h2 id="迁移期参考-2"><a class="header" href="#迁移期参考-2">迁移期参考</a></h2>
+<h2 id="迁移期参考-1"><a class="header" href="#迁移期参考-1">迁移期参考</a></h2>
 <ul>
 <li><code>docs/reference/syntax.md</code></li>
 <li><code>docs/spec/lexical.md</code></li>
@@ -1045,7 +1077,7 @@ $&gt;&gt; count;
 count += 1;
 $&gt;&gt; count;
 </code></pre>
-<h2 id="迁移期参考-3"><a class="header" href="#迁移期参考-3">迁移期参考</a></h2>
+<h2 id="迁移期参考-2"><a class="header" href="#迁移期参考-2">迁移期参考</a></h2>
 <ul>
 <li><a href="#实用示例">examples.md</a></li>
 <li><a href="#类型注解">types.md</a></li>
@@ -1210,7 +1242,7 @@ $&gt;&gt; total;
 <p>继续看 <a href="#7-函数-1">07-functions.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="7-函数-1"><a class="header" href="#7-函数-1">7. 函数</a></h1>
-<p>函数是 Dolang 组织逻辑、消除重复、拆分模块的主要方式。</p>
+<p>函数是 Dolang 组织逻辑、消除重复、拆模块的主要方式。</p>
 <h2 id="定义函数"><a class="header" href="#定义函数">定义函数</a></h2>
 <pre><code class="language-dol">$fn greet(name) -&gt; String {
     $# f"Hello, {name}";
@@ -1219,23 +1251,45 @@ $&gt;&gt; total;
 <p>调用：</p>
 <pre><code class="language-dol">$&gt;&gt; greet("World");
 </code></pre>
-<p>函数名后面是参数列表，函数体放在 <code>{ ... }</code> 里。</p>
-<h2 id="返回值"><a class="header" href="#返回值">返回值</a></h2>
+<h2 id="返回值和返回类型"><a class="header" href="#返回值和返回类型">返回值和返回类型</a></h2>
 <p>使用 <code>$#</code> 返回：</p>
 <pre><code class="language-dol">$fn add(a, b) -&gt; Int {
     $# a + b;
 }
 </code></pre>
-<p>调用：</p>
-<pre><code class="language-dol">$&gt;&gt; add(1, 2);
-</code></pre>
-<p>没有显式 <code>$#</code> 的函数会返回 <code>Null</code>。</p>
+<p>没有显式 <code>$#</code> 的函数会返回 <code>Null</code>：</p>
 <pre><code class="language-dol">$fn log(msg) {
     $&gt;&gt; msg;
 }
 </code></pre>
+<p>当前主线可稳定讲解的返回类型包括：</p>
+<ul>
+<li><code>Int</code></li>
+<li><code>Float</code></li>
+<li><code>String</code></li>
+<li><code>Bool</code></li>
+<li><code>List</code></li>
+<li><code>Map</code></li>
+<li><code>JSON</code></li>
+<li><code>HTML</code></li>
+<li><code>Response</code></li>
+<li><code>List&lt;T&gt;</code>，其中 <code>T</code> 可以是内建类型或已定义的用户类型</li>
+</ul>
+<p>需要注意的是，当前主线只把 <code>List&lt;T&gt;</code> 当作可教学的泛型返回写法，不把 <code>JSON&lt;T&gt;</code> 当作同级语法来承诺。</p>
+<h2 id="参数目前怎么写"><a class="header" href="#参数目前怎么写">参数目前怎么写</a></h2>
+<p>当前主线<strong>不承诺函数参数类型注解是可用语法</strong>。也就是说，这一版文档统一只教下面这种签名：</p>
+<pre><code class="language-dol">$fn add(a, b) -&gt; Int {
+    $# a + b;
+}
+</code></pre>
+<p>如果你需要约束输入，当前推荐做法是：</p>
+<ul>
+<li>用返回类型约束输出</li>
+<li>在函数体内用 <code>.type()</code>、条件判断或断言做输入检查</li>
+<li>在对外接口层用更小的函数拆分而不是依赖参数注解</li>
+</ul>
 <h2 id="可变参数"><a class="header" href="#可变参数">可变参数</a></h2>
-<pre><code class="language-dol">$fn sum(...nums) {
+<pre><code class="language-dol">$fn sum(...nums) -&gt; Int {
     $ total = 0;
     $for n in nums {
         total += n;
@@ -1243,11 +1297,8 @@ $&gt;&gt; total;
     $# total;
 }
 </code></pre>
-<p>调用时，多余参数会被收集进 <code>nums</code>：</p>
-<pre><code class="language-dol">$&gt;&gt; sum(1, 2, 3, 4);
-</code></pre>
 <h2 id="递归"><a class="header" href="#递归">递归</a></h2>
-<pre><code class="language-dol">$fn factorial(n) {
+<pre><code class="language-dol">$fn factorial(n) -&gt; Int {
     $if n &lt;= 1 {
         $# 1;
     } $else {
@@ -1255,14 +1306,7 @@ $&gt;&gt; total;
     }
 }
 </code></pre>
-<p>递归函数最重要的是要有终止条件，否则会无限调用自身。</p>
 <h2 id="私有函数"><a class="header" href="#私有函数">私有函数</a></h2>
-<pre><code class="language-dol">_$fn helper(x) {
-    $# x * 2;
-}
-</code></pre>
-<p><code>_$fn</code> 主要用于模块内部实现细节。</p>
-<p>例如：</p>
 <pre><code class="language-dol">_$fn normalize(name) -&gt; String {
     $# name.trim().lower();
 }
@@ -1271,40 +1315,14 @@ $fn public_name(name) -&gt; String {
     $# normalize(name);
 }
 </code></pre>
+<p><code>_$fn</code> 只给当前模块内部使用。</p>
 <h2 id="匿名函数"><a class="header" href="#匿名函数">匿名函数</a></h2>
-<p>当前实现支持匿名函数字面量：</p>
 <pre><code class="language-dol">$ double = $fn(x) {
     $# x * 2;
 };
 
 $&gt;&gt; double(5);
 </code></pre>
-<p>如果你需要把函数当作值传来传去，匿名函数会很有用。</p>
-<h2 id="返回类型注解"><a class="header" href="#返回类型注解">返回类型注解</a></h2>
-<p>当前返回类型注解是运行时检查的一部分。常见类型包括：</p>
-<ul>
-<li><code>Int</code></li>
-<li><code>Float</code></li>
-<li><code>String</code></li>
-<li><code>Bool</code></li>
-<li><code>JSON</code></li>
-</ul>
-<p>例如：</p>
-<pre><code class="language-dol">$fn classify(n) -&gt; String {
-    $if n &gt; 5 {
-        $# "pass";
-    } $else {
-        $# "fail";
-    }
-}
-</code></pre>
-<h2 id="参数目前怎么写"><a class="header" href="#参数目前怎么写">参数目前怎么写</a></h2>
-<p>当前主线文档里，函数参数先按“无参数类型注解”来教：</p>
-<pre><code class="language-dol">$fn add(a, b) -&gt; Int {
-    $# a + b;
-}
-</code></pre>
-<p>也就是说，先把参数当作普通形参使用，不在这里引入未稳定的参数类型语法。</p>
 <h2 id="一个完整例子-2"><a class="header" href="#一个完整例子-2">一个完整例子</a></h2>
 <pre><code class="language-dol">_$fn twice(x) -&gt; Int {
     $# x * 2;
@@ -1317,125 +1335,107 @@ $fn compute(n) -&gt; Int {
 
 $&gt;&gt; compute(10);
 </code></pre>
-<h2 id="什么时候该把逻辑抽成函数"><a class="header" href="#什么时候该把逻辑抽成函数">什么时候该把逻辑抽成函数</a></h2>
-<p>出现以下情况时，通常就该抽函数了：</p>
-<ul>
-<li>同样逻辑重复两次以上</li>
-<li>一段代码太长，不容易一眼看懂</li>
-<li>你准备把逻辑导出到模块里复用</li>
-</ul>
 <h2 id="下一章-6"><a class="header" href="#下一章-6">下一章</a></h2>
 <p>继续看 <a href="#8-集合与常用方法-1">08-collections-and-methods.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="8-集合与常用方法-1"><a class="header" href="#8-集合与常用方法-1">8. 集合与常用方法</a></h1>
-<p>这一章集中讲三类最常用的值：字符串、列表、map。每一类都给出“创建、读取、修改、查询”的基本方式。</p>
+<p>这一章集中讲三类最常用的值：字符串、列表、Map。重点是“创建、读取、修改、查询”和“什么时候该去 <code>std.*</code>”。</p>
 <h2 id="字符串-1"><a class="header" href="#字符串-1">字符串</a></h2>
-<pre><code class="language-dol">$ s = "hello";
-$&gt;&gt; s.len();
-$&gt;&gt; s.contains("ell");
-$&gt;&gt; s.starts_with("he");
-$&gt;&gt; s.ends_with("lo");
-$&gt;&gt; s.slice(1, 3);
+<pre><code class="language-dol">$ text = "  hello,world  ";
+$&gt;&gt; text.trim();
+$&gt;&gt; text.upper();
+$&gt;&gt; text.split(",");
+$&gt;&gt; text.contains("hello");
 </code></pre>
-<p>再看几个常用方法：</p>
-<pre><code class="language-dol">$ s = "  Hello, World  ";
-$&gt;&gt; s.trim();
-$&gt;&gt; s.upper();
-$&gt;&gt; s.lower();
-$&gt;&gt; s.replace("World", "Dolang");
-$&gt;&gt; s.split(",");
-$&gt;&gt; "42".to_int();
-$&gt;&gt; "3.14".to_float();
-$&gt;&gt; "true".to_bool();
+<p><code>split()</code> 返回 <code>List</code>，所以可以继续接列表处理：</p>
+<pre><code class="language-dol">$ parts = "a,b,c".split(",");
+$&gt;&gt; parts.len();
+$&gt;&gt; parts.join("-");
 </code></pre>
-<p>字符串方法适合“当前值本身”的直接处理。</p>
 <h2 id="列表-1"><a class="header" href="#列表-1">列表</a></h2>
-<pre><code class="language-dol">$ nums = [3, 1, 4];
-$&gt;&gt; nums.len();
-nums.push(5);
-$&gt;&gt; nums.pop();
-$&gt;&gt; nums.contains(1);
-</code></pre>
-<p>如果你希望变量在后续赋值时继续保持列表类型，也可以显式声明：</p>
-<pre><code class="language-dol">$ nums: List = [3, 1, 4];
-</code></pre>
-<p>更多常用方法：</p>
 <pre><code class="language-dol">$ nums = [3, 1, 4, 1, 5];
+$&gt;&gt; nums.len();
+$&gt;&gt; nums.contains(4);
 $&gt;&gt; nums.index_of(4);
-$&gt;&gt; nums.last_index_of(1);
-$&gt;&gt; nums.slice(1, 4);
-$&gt;&gt; nums.first();
-$&gt;&gt; nums.last();
-$&gt;&gt; nums.is_empty();
-$&gt;&gt; nums.unique();
 $&gt;&gt; nums.count(1);
-$&gt;&gt; nums.join("-");
+$&gt;&gt; nums.slice(1, 4);
 </code></pre>
-<p>可变方法：</p>
-<pre><code class="language-dol">$ nums = [3, 1, 4];
-nums.push(5);
-nums.insert(1, 9);
-nums.remove_at(0);
-nums.reverse();
+<p>常用原地修改方法：</p>
+<pre><code class="language-dol">nums.push(9);
 nums.sort();
-$&gt;&gt; nums;
+nums.sort_desc();
+nums.reverse();
+</code></pre>
+<p>常见读法：</p>
+<pre><code class="language-dol">$&gt;&gt; nums.first();
+$&gt;&gt; nums.last();
+$&gt;&gt; nums.unique();
+$&gt;&gt; [[1, 2], [3, 4]].flatten();
+</code></pre>
+<h3 id="索引越界"><a class="header" href="#索引越界">索引越界</a></h3>
+<p>当前实现里，列表索引越界会报运行时错误，不会返回 <code>null</code>。</p>
+<p>例如下面这种写法不应作为主线常规用法：</p>
+<pre><code class="language-dol">$ items = [1, 2, 3];
+$&gt;&gt; items[10];
+</code></pre>
+<p>更安全的写法是先看长度：</p>
+<pre><code class="language-dol">$if nums.len() &gt; 2 {
+    $&gt;&gt; nums[2];
+}
 </code></pre>
 <h2 id="map-1"><a class="header" href="#map-1">Map</a></h2>
 <pre><code class="language-dol">$ user = {"name": "Tom", "age": 25};
 $&gt;&gt; user["name"];
+$&gt;&gt; user.len();
 $&gt;&gt; user.keys();
 $&gt;&gt; user.values();
 $&gt;&gt; user.contains_key("age");
 </code></pre>
-<p>同样可以显式声明：</p>
-<pre><code class="language-dol">$ user: Map = {"name": "Tom", "age": 25};
-</code></pre>
-<p>还可以删除 key：</p>
-<pre><code class="language-dol">$ user = {"name": "Tom", "age": 25};
-user.remove("age");
-$&gt;&gt; user;
-</code></pre>
-<h2 id="索引访问"><a class="header" href="#索引访问">索引访问</a></h2>
-<pre><code class="language-dol">$ items = ["a", "b", "c"];
-$&gt;&gt; items[0];
-</code></pre>
-<p>map 也可以通过 key 访问：</p>
+<h3 id="map-写入"><a class="header" href="#map-写入">Map 写入</a></h3>
+<p>当前主线写法直接使用索引赋值：</p>
 <pre><code class="language-dol">$ user = {"name": "Tom"};
-$&gt;&gt; user["name"];
+user["email"] = "tom@example.com";
+user["age"] = 25;
+$&gt;&gt; user["email"];
 </code></pre>
-<h2 id="方法和标准库的区别"><a class="header" href="#方法和标准库的区别">方法和标准库的区别</a></h2>
-<p>两类能力都会出现：</p>
+<p>删除键：</p>
+<pre><code class="language-dol">user.remove("age");
+</code></pre>
+<h3 id="什么时候改用-stdjson"><a class="header" href="#什么时候改用-stdjson">什么时候改用 <code>std.json</code></a></h3>
+<p>如果你操作的是通用 JSON 结构，或者想做“按路径更新、合并、格式化”，优先用 <code>std.json</code>：</p>
+<pre><code class="language-dol">$mod std.json;
+
+$ obj = {"name": "Tom"};
+$ obj = json.set(obj, "email", "tom@example.com");
+$&gt;&gt; json.stringify(obj);
+</code></pre>
+<p>可以把两者这样区分：</p>
 <ul>
-<li>值方法：<code>"hello".len()</code>、<code>nums.push(1)</code></li>
-<li>标准库函数：<code>str.trim("  hi  ")</code>、<code>math.sqrt(9.0)</code></li>
+<li><code>Map</code> 原生操作：当前变量上的直接读写</li>
+<li><code>std.json</code>：更偏通用 JSON 工具和转换函数</li>
 </ul>
-<p>值方法适合日常直接操作，<code>std.*</code> 模块适合整理通用函数。</p>
-<p>一个最直观的对比：</p>
-<pre><code class="language-dol">$mod std.str;
-
-$ text = "  hello  ";
-$&gt;&gt; text.trim();
-$&gt;&gt; str.trim(text);
-</code></pre>
-<p>这两种写法都能表达“去空白”，只是组织方式不同。</p>
-<h2 id="链式调用"><a class="header" href="#链式调用">链式调用</a></h2>
-<p>当前不少表达式都可以直接链起来写：</p>
-<pre><code class="language-dol">$&gt;&gt; "a,b,c".split(",").len();
-$&gt;&gt; "  hello  ".trim().upper();
-</code></pre>
-<p>这种写法适合短链路处理，但链太长时仍然建议拆成中间变量。</p>
-<h2 id="一个完整例子-3"><a class="header" href="#一个完整例子-3">一个完整例子</a></h2>
-<pre><code class="language-dol">$ user = {"name": "Alice", "tags": ["lang", "tool", "lang"]};
-$ tags = user["tags"];
-
-$&gt;&gt; user["name"].upper();
-$&gt;&gt; tags.unique();
-$&gt;&gt; tags.join(", ");
-</code></pre>
-<h2 id="迁移期参考-4"><a class="header" href="#迁移期参考-4">迁移期参考</a></h2>
+<h2 id="值方法和标准库的区别"><a class="header" href="#值方法和标准库的区别">值方法和标准库的区别</a></h2>
 <ul>
-<li><a href="#标准库参考">stdlib.md</a></li>
-<li><a href="#实用示例">examples.md</a></li>
+<li>值方法：<code>nums.push(1)</code>、<code>user.keys()</code>、<code>"a,b".split(",")</code></li>
+<li>标准库：<code>str.trim(text)</code>、<code>json.set(obj, key, value)</code>、<code>math.sqrt(9.0)</code></li>
+</ul>
+<p>如果只是处理当前值本身，先选值方法；如果要做通用转换或组合工具，再去 <code>std.*</code>。</p>
+<h2 id="一个完整例子-3"><a class="header" href="#一个完整例子-3">一个完整例子</a></h2>
+<pre><code class="language-dol">$ raw = "alice,bob,bob,carol";
+$ names = raw.split(",");
+names.sort_desc();
+
+$ stats = {"count": names.len()};
+stats["unique_count"] = names.unique().len();
+
+$&gt;&gt; names;
+$&gt;&gt; stats["count"];
+$&gt;&gt; stats["unique_count"];
+</code></pre>
+<h2 id="继续查表"><a class="header" href="#继续查表">继续查表</a></h2>
+<ul>
+<li>值方法与模块索引：<a href="#13-标准库总览-1">13-stdlib-overview.md</a></li>
+<li>完整 API：<a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a></li>
 </ul>
 <h2 id="下一章-7"><a class="header" href="#下一章-7">下一章</a></h2>
 <p>继续看 <a href="#9-渐进类型-1">09-gradual-typing.md</a>。</p>
@@ -1448,18 +1448,6 @@ $&gt;&gt; tags.join(", ");
 x = "hello";
 x = true;
 </code></pre>
-<p>这表示：</p>
-<ul>
-<li>不写类型注解时，Dolang 不把变量锁死在某一个类型上</li>
-<li>这对快速脚本和原型开发很方便</li>
-</ul>
-<p>例如：</p>
-<pre><code class="language-dol">$ value = 1;
-$&gt;&gt; value.type();
-
-value = "done";
-$&gt;&gt; value.type();
-</code></pre>
 <h2 id="显式类型注解"><a class="header" href="#显式类型注解">显式类型注解</a></h2>
 <pre><code class="language-dol">$ count: Int = 0;
 $ name: String = "Alice";
@@ -1470,21 +1458,7 @@ $ config: Map = {"name": "demo"};
 <p>常量也支持类型注解：</p>
 <pre><code class="language-dol">$@ MAX: Int = 100;
 </code></pre>
-<p>这类注解的作用是：</p>
-<ul>
-<li>声明时检查右值类型</li>
-<li>后续赋值时继续检查</li>
-</ul>
-<p>例如：</p>
-<pre><code class="language-dol">$ count: Int = 1;
-count = 2;
-</code></pre>
-<p>下面这种写法会报错：</p>
-<pre><code class="language-dol">$ count: Int = 1;
-count = "two";
-</code></pre>
-<h2 id="当前可依赖的声明类型名"><a class="header" href="#当前可依赖的声明类型名">当前可依赖的声明类型名</a></h2>
-<p>按当前实现，变量/常量声明里稳定可写入主线文档的类型名包括：</p>
+<p>当前主线可依赖的声明类型名：</p>
 <ul>
 <li><code>Int</code></li>
 <li><code>Float</code></li>
@@ -1495,156 +1469,146 @@ count = "two";
 <li><code>List</code></li>
 <li><code>Map</code></li>
 </ul>
-<p>我实际验证过这组声明在三种入口都能工作：</p>
-<ul>
-<li>REPL</li>
-<li>文件模式：<code>cargo run -- run xxx.dol</code></li>
-<li>serve 模式：<code>cargo run -- serve .</code></li>
-</ul>
-<p>例如：</p>
-<pre><code class="language-dol">$ items: List = [1, 2, 3];
-$ config: Map = {"name": "demo", "ok": true};
-
-$&gt;&gt; items.type();
-$&gt;&gt; config.type();
-$&gt;&gt; items[0];
-$&gt;&gt; config["name"];
-</code></pre>
-<p>仍然不要把下面这些提前写成“变量/常量声明已稳定支持”的类型名：</p>
-<ul>
-<li><code>Json</code></li>
-<li><code>Response</code></li>
-</ul>
-<h2 id="函数返回类型"><a class="header" href="#函数返回类型">函数返回类型</a></h2>
-<pre><code class="language-dol">$fn greet(name) -&gt; String {
-    $# f"Hello, {name}";
+<p>当前不要把 <code>Json</code>、<code>Response</code> 写成“变量/常量声明可稳定使用”的类型名。</p>
+<h2 id="函数参数类型注解的态度"><a class="header" href="#函数参数类型注解的态度">函数参数类型注解的态度</a></h2>
+<p>当前主线文档统一采用保守口径：<strong>不教学、不承诺参数类型注解语法</strong>。</p>
+<p>也就是说，这一版只写：</p>
+<pre><code class="language-dol">$fn add(a, b) -&gt; Int {
+    $# a + b;
 }
 </code></pre>
-<p>函数返回类型会做运行时检查。</p>
-<p>另一个例子：</p>
-<pre><code class="language-dol">$fn is_even(n) -&gt; Bool {
-    $# n % 2 == 0;
-}
-</code></pre>
-<h2 id="type-与-jsonuser"><a class="header" href="#type-与-jsonuser"><code>$Type</code> 与 <code>JSON&lt;User&gt;</code></a></h2>
-<p>当前实现支持 <code>$Type</code> 声明形状，也支持 <code>JSON&lt;User&gt;</code> 这样的返回标注语法。</p>
-<p>最小例子：</p>
+<p>如果你需要更强约束，优先使用：</p>
+<ul>
+<li>返回类型</li>
+<li>局部变量显式声明</li>
+<li><code>.type()</code> / <code>std.core.check</code></li>
+<li><a href="#10-错误处理-1">10-error-handling.md</a> 里的错误处理方式</li>
+</ul>
+<h2 id="返回类型和-listt"><a class="header" href="#返回类型和-listt">返回类型和 <code>List&lt;T&gt;</code></a></h2>
+<p>返回类型是这一章最重要的稳定能力之一。</p>
+<h3 id="正确写法"><a class="header" href="#正确写法">正确写法</a></h3>
 <pre><code class="language-dol">$Type User {
     id: Int
     name: Str
 }
+
+$fn list_users() -&gt; List&lt;User&gt; {
+    $# [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"}
+    ];
+}
 </code></pre>
-<p>更完整一点的写法：</p>
+<p>这里要记住两条：</p>
+<ul>
+<li><code>List&lt;T&gt;</code> 是当前主线可用写法</li>
+<li>裸 <code>List</code> 不应再作为返回类型写法来教学</li>
+</ul>
+<p><code>T</code> 可以是内建类型，也可以是先定义好的用户类型。</p>
+<h2 id="type"><a class="header" href="#type"><code>$Type</code></a></h2>
+<p><code>$Type</code> 用来描述结构，不等于 class：</p>
 <pre><code class="language-dol">$Type User {
     id: Int
     name: Str
     email: Str?
-    age: Int?
 }
 </code></pre>
-<p>这里可以先记住这些规则：</p>
-<ul>
-<li>字段类型通常写成首字母大写的类型名</li>
-<li>类型后加 <code>?</code> 表示可选字段</li>
-<li><code>$Type</code> 用来描述结构，不等于 class</li>
-<li>当前主线文档不把它讲成带 getter / setter / 方法的对象系统</li>
-</ul>
-<h3 id="和函数返回结合"><a class="header" href="#和函数返回结合">和函数返回结合</a></h3>
-<pre><code class="language-dol">$fn get_user(id) -&gt; JSON&lt;User&gt; {
-    $# $JSON { "id": id, "name": "Alice" };
+<p>它最适合和 <code>List&lt;T&gt;</code>、接口返回说明、阅读文档时的结构表达配合使用。</p>
+<h2 id="http-返回里的-listt"><a class="header" href="#http-返回里的-listt">HTTP 返回里的 <code>List&lt;T&gt;</code></a></h2>
+<p>在 HTTP 章节里同样推荐这样写：</p>
+<pre><code class="language-dol">$Type User {
+    id: Int
+    name: Str
+}
+
+$GET("/users") list_users() -&gt; List&lt;User&gt; {
+    $# [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"}
+    ];
 }
 </code></pre>
-<h3 id="和-http-handler-结合"><a class="header" href="#和-http-handler-结合">和 HTTP handler 结合</a></h3>
-<pre><code class="language-dol">$GET("/users/:id") get_user(id) -&gt; JSON&lt;User&gt; {
-    $# $JSON { "id": id, "name": "Alice" };
-}
-</code></pre>
-<p><code>JSON&lt;User&gt;</code> 更适合先理解成“返回值想表达的是 <code>User</code> 形状的 JSON”。</p>
-<p>这能帮助你把数据结构写得更清楚，但不要把它误解成已经等同于成熟静态类型系统或完整强校验模型。</p>
-<p>推荐阅读方式：</p>
-<ol>
-<li>在这一章先知道 <code>$Type</code> 是什么</li>
-<li>到 HTTP 章节再看 <code>JSON&lt;User&gt;</code> 的接口写法</li>
-</ol>
+<p>如果类型或返回校验失败，它会表现为用户可见错误；如何排查请继续看 <a href="#10-错误处理-1">10-error-handling.md</a>。</p>
 <h2 id="运行时类型查询"><a class="header" href="#运行时类型查询">运行时类型查询</a></h2>
-<p>除了类型注解，Dolang 还支持在运行时查询值类型：</p>
 <pre><code class="language-dol">$&gt;&gt; 42.type();
-$&gt;&gt; 3.14.type();
 $&gt;&gt; "hello".type();
-$&gt;&gt; true.type();
 $&gt;&gt; [1, 2].type();
 $&gt;&gt; {"a": 1}.type();
-$&gt;&gt; null.type();
-</code></pre>
-<p>这在调试动态值时很有用。</p>
-<p>对 <code>List</code> 和 <code>Map</code> 来说，显式声明与运行时类型查询可以直接配合：</p>
-<pre><code class="language-dol">$ items: List = [1, 2, 3];
-$ config: Map = {"name": "demo"};
-
-$&gt;&gt; items.type();
-$&gt;&gt; config.type();
-</code></pre>
-<p>例如：</p>
-<pre><code class="language-dol">$fn describe(val) -&gt; String {
-    $ t = val.type();
-    $if t == "Int" {
-        $# "这是整数";
-    } $elif t == "String" {
-        $# "这是字符串";
-    } $else {
-        $# f"类型: {t}";
-    }
-}
 </code></pre>
 <h2 id="stdcorecheck"><a class="header" href="#stdcorecheck"><code>std.core.check</code></a></h2>
-<p>如果你想把类型判断和简单断言写得更清楚，可以用 <code>std.core.check</code>：</p>
 <pre><code class="language-dol">$mod std.core.check;
 
 $&gt;&gt; check.type_of(42);
-$&gt;&gt; check.is_null(null);
 check.assert(1 + 1 == 2, "math broken");
 </code></pre>
-<p>它适合：</p>
-<ul>
-<li>小型断言</li>
-<li>调试时检查值类型</li>
-<li>写更清晰的工具函数</li>
-</ul>
-<h2 id="什么时候该加类型"><a class="header" href="#什么时候该加类型">什么时候该加类型</a></h2>
-<p>比较适合优先加类型注解的地方：</p>
-<ul>
-<li>计数器</li>
-<li>金额</li>
-<li>状态值</li>
-<li>配置项</li>
-<li>对外返回值</li>
-</ul>
-<p>不需要一上来给所有变量都加类型，Dolang 的设计也不是鼓励你这么做。</p>
-<h2 id="迁移期参考-5"><a class="header" href="#迁移期参考-5">迁移期参考</a></h2>
-<ul>
-<li><a href="#类型注解">types.md</a></li>
-<li><code>docs/spec/semantics.md</code></li>
-</ul>
 <h2 id="下一章-8"><a class="header" href="#下一章-8">下一章</a></h2>
 <p>继续看 <a href="#10-错误处理-1">10-error-handling.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="10-错误处理-1"><a class="header" href="#10-错误处理-1">10. 错误处理</a></h1>
 <p>Dolang 当前同时有解析错误、运行时错误和显式抛出的异常。</p>
-<p>可以先把它们粗分成三类：</p>
+<h2 id="三类错误先怎么分"><a class="header" href="#三类错误先怎么分">三类错误先怎么分</a></h2>
 <ul>
-<li>代码还没跑起来就出错：解析错误</li>
+<li>代码还没跑起来就出错：词法 / 语法错误</li>
 <li>跑到一半因为值或环境问题出错：运行时错误</li>
 <li>代码里主动抛出：<code>$throw</code></li>
 </ul>
-<h2 id="try--catch"><a class="header" href="#try--catch">try / catch</a></h2>
+<h2 id="try--catch"><a class="header" href="#try--catch"><code>$try / $catch</code></a></h2>
 <pre><code class="language-dol">$try {
     $throw "oops";
 } $catch err {
     $&gt;&gt; err;
 }
 </code></pre>
-<p>如果 <code>try</code> 块内部出错，就会进入 <code>catch</code> 块。</p>
-<p>还可以把“可能失败的宿主能力调用”包起来：</p>
+<p>如果 <code>try</code> 块内部抛错，就会进入 <code>catch</code> 块。</p>
+<h2 id="err-到底是什么"><a class="header" href="#err-到底是什么"><code>err</code> 到底是什么</a></h2>
+<p>在主线文档里，可以先把 <code>err</code> 理解成“可打印、可比较、可继续传递的错误值”。</p>
+<p>安全做法：</p>
+<ul>
+<li>直接打印 <code>err</code></li>
+<li>把 <code>err</code> 拼进日志字符串</li>
+<li>用 <code>err.type()</code> 看当前值类型</li>
+<li>根据上下文返回默认值或改写响应</li>
+</ul>
+<p>例如：</p>
+<pre><code class="language-dol">$mod std.fs;
+
+$try {
+    $ content = fs.read_text("missing.txt");
+    $&gt;&gt; content;
+} $catch err {
+    $&gt;&gt;ERR(f"read failed: {err}");
+}
+</code></pre>
+<p>主线不把 <code>err</code> 讲成运行时内部结构体，也不承诺固定字段集合。</p>
+<h2 id="throw"><a class="header" href="#throw"><code>$throw</code></a></h2>
+<pre><code class="language-dol">$throw "bad input";
+</code></pre>
+<p>适合：</p>
+<ul>
+<li>主动拒绝非法输入</li>
+<li>在工具函数里显式抛出失败</li>
+<li>提前终止一条不该继续的路径</li>
+</ul>
+<h2 id="可捕获性速查"><a class="header" href="#可捕获性速查">可捕获性速查</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>场景</th><th>能否被 <code>$catch</code> 捕获</th><th>备注</th></tr>
+</thead>
+<tbody>
+<tr><td><code>$throw "oops"</code></td><td>可以</td><td>最直接的用法</td></tr>
+<tr><td>除零</td><td>可以</td><td>运行时错误</td></tr>
+<tr><td>未定义变量</td><td>可以</td><td>运行时错误</td></tr>
+<tr><td>类型不匹配</td><td>可以</td><td>运行时错误</td></tr>
+<tr><td>文件读取失败</td><td>可以</td><td>例如 <code>std.fs.read_text(...)</code></td></tr>
+<tr><td>模块加载失败</td><td>不作为主线承诺</td><td>通常发生在装载阶段，优先先修模块路径</td></tr>
+<tr><td>语法错误</td><td>不可以</td><td>程序尚未进入执行阶段</td></tr>
+</tbody>
+</table>
+</div>
+<p>查表版说明见 <a href="../reference/errors.html">../reference/errors.md</a>。</p>
+<h2 id="常见例子"><a class="header" href="#常见例子">常见例子</a></h2>
+<h3 id="文件读取失败"><a class="header" href="#文件读取失败">文件读取失败</a></h3>
 <pre><code class="language-dol">$mod std.fs;
 $try {
     $ content = fs.read_text("missing.txt");
@@ -1653,62 +1617,7 @@ $try {
     $&gt;&gt; "caught!";
 }
 </code></pre>
-<h2 id="throw"><a class="header" href="#throw">throw</a></h2>
-<pre><code class="language-dol">$throw "bad input";
-</code></pre>
-<p>如果没有被捕获，会变成未捕获错误。</p>
-<p>它适合：</p>
-<ul>
-<li>主动拒绝非法输入</li>
-<li>在工具函数里显式抛出失败</li>
-<li>配合 <code>check.assert(...)</code> 之类的封装</li>
-</ul>
-<p>例如：</p>
-<pre><code class="language-dol">$fn must_positive(n) {
-    $if n &lt;= 0 {
-        $throw "n must be positive";
-    }
-    $# n;
-}
-</code></pre>
-<h2 id="常见错误来源"><a class="header" href="#常见错误来源">常见错误来源</a></h2>
-<ul>
-<li>未定义变量</li>
-<li>类型不匹配</li>
-<li>模块找不到</li>
-<li>文件读取失败</li>
-<li>JSON 解析失败</li>
-</ul>
-<h3 id="1-未定义变量"><a class="header" href="#1-未定义变量">1. 未定义变量</a></h3>
-<pre><code class="language-dol">$&gt;&gt; missing;
-</code></pre>
-<h3 id="2-类型不匹配"><a class="header" href="#2-类型不匹配">2. 类型不匹配</a></h3>
-<pre><code class="language-dol">$ value: Int = "text";
-</code></pre>
-<h3 id="3-模块找不到"><a class="header" href="#3-模块找不到">3. 模块找不到</a></h3>
-<pre><code class="language-dol">$mod missing.module;
-</code></pre>
-<h3 id="4-文件不存在"><a class="header" href="#4-文件不存在">4. 文件不存在</a></h3>
-<pre><code class="language-dol">$mod std.fs;
-$ content = fs.read_text("missing.txt");
-</code></pre>
-<h2 id="如何阅读错误"><a class="header" href="#如何阅读错误">如何阅读错误</a></h2>
-<p>排查时建议按这个顺序看：</p>
-<ol>
-<li>是 parse error 还是 runtime error</li>
-<li>出错的是哪一行</li>
-<li>是语法问题、值类型问题，还是模块/文件问题</li>
-<li>能否先在 REPL 或最小 <code>.dol</code> 文件里复现</li>
-</ol>
-<h2 id="trycatch-的实际价值"><a class="header" href="#trycatch-的实际价值">try/catch 的实际价值</a></h2>
-<p>如果你不捕获错误，程序会直接失败。</p>
-<p>如果你捕获错误，就可以：</p>
-<ul>
-<li>输出更友好的消息</li>
-<li>给默认值</li>
-<li>跳过失败分支继续执行</li>
-</ul>
-<p>例如环境变量读取失败时：</p>
+<h3 id="环境变量失败"><a class="header" href="#环境变量失败">环境变量失败</a></h3>
 <pre><code class="language-dol">$mod std.env;
 $try {
     $ token = env.get("APP_TOKEN");
@@ -1717,70 +1626,60 @@ $try {
     $&gt;&gt; "env error caught";
 }
 </code></pre>
-<h2 id="一个完整例子-4"><a class="header" href="#一个完整例子-4">一个完整例子</a></h2>
-<pre><code class="language-dol">$mod std.json;
-
-$fn parse_or_default(raw) -&gt; String {
-    $try {
-        $ value = json.parse(raw);
-        $# json.stringify(value);
-    } $catch err {
-        $# "{}";
+<h3 id="主动抛错"><a class="header" href="#主动抛错">主动抛错</a></h3>
+<pre><code class="language-dol">$fn must_positive(n) -&gt; Int {
+    $if n &lt;= 0 {
+        $throw "n must be positive";
     }
+    $# n;
 }
-
-$&gt;&gt; parse_or_default("{\"ok\":true}");
 </code></pre>
-<h2 id="进一步参考"><a class="header" href="#进一步参考">进一步参考</a></h2>
-<ul>
-<li><code>docs/reference/errors.md</code></li>
-<li><a href="#common-errors">common-errors.md</a></li>
-</ul>
+<h2 id="怎么排查"><a class="header" href="#怎么排查">怎么排查</a></h2>
+<ol>
+<li>先分清是 parse error 还是 runtime error</li>
+<li>再看出错位置</li>
+<li>看是语法、值类型、模块、文件还是环境问题</li>
+<li>尽量把问题缩成最小 <code>.dol</code> 文件</li>
+</ol>
 <h2 id="下一章-9"><a class="header" href="#下一章-9">下一章</a></h2>
 <p>继续看 <a href="#11-模块系统-1">11-modules.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="11-模块系统-1"><a class="header" href="#11-模块系统-1">11. 模块系统</a></h1>
-<p>Dolang 通过 <code>$mod</code> 组织可复用代码。只要脚本开始变大，你几乎一定会进入模块拆分。</p>
-<h2 id="导入模块"><a class="header" href="#导入模块">导入模块</a></h2>
+<p>Dolang 通过 <code>$mod</code> 组织可复用代码。脚本一旦开始变大，就应该进入模块拆分。</p>
+<h2 id="导入单个模块"><a class="header" href="#导入单个模块">导入单个模块</a></h2>
 <pre><code class="language-dol">$mod shared.helper;
 $&gt;&gt; helper.answer();
 </code></pre>
-<p>模块路径使用点号分隔，对应文件系统中的 <code>.dol</code> 文件。</p>
-<p>例如下面的目录：</p>
-<pre><code class="language-text">app/
-├── main.dol
-└── shared/
-    └── helper.dol
-</code></pre>
-<p><code>main.dol</code>：</p>
-<pre><code class="language-dol">$mod shared.helper;
-$&gt;&gt; helper.answer();
-</code></pre>
-<p><code>shared/helper.dol</code>：</p>
-<pre><code class="language-dol">$fn answer() -&gt; Int {
-    $# 42;
-}
-</code></pre>
+<p>模块路径使用点号分隔，对应 <code>.dol</code> 文件路径。</p>
 <h2 id="命名空间访问"><a class="header" href="#命名空间访问">命名空间访问</a></h2>
-<p>导入后，不会把函数直接铺平到全局；通常通过模块命名空间访问：</p>
+<p>导入后，通过文件名命名空间访问：</p>
 <pre><code class="language-dol">$mod helper;
 $&gt;&gt; helper.answer();
 </code></pre>
-<p>也就是说，<code>$mod helper;</code> 导入后，你写的是 <code>helper.answer()</code>，而不是直接写 <code>answer()</code>。</p>
-<h2 id="通配符模块导入"><a class="header" href="#通配符模块导入">通配符模块导入</a></h2>
+<p>重点是：<strong>不会把函数直接铺平到当前作用域。</strong></p>
+<h2 id="通配符导入mod-math"><a class="header" href="#通配符导入mod-math">通配符导入：<code>$mod math.*;</code></a></h2>
 <p>当前实现支持：</p>
 <pre><code class="language-dol">$mod math.*;
 </code></pre>
-<p>它表示导入某个模块目录下的直接子模块。</p>
-<p>例如目录：</p>
+<p>它的含义是：</p>
+<ul>
+<li>导入 <code>math/</code> 目录下的直接子模块</li>
+<li>把这些子模块注册成命名空间</li>
+<li>不会把子模块函数直接平铺到当前作用域</li>
+</ul>
+<p>例如：</p>
 <pre><code class="language-text">math/
 ├── add.dol
-└── mul.dol
+└── calc.dol
 </code></pre>
-<p>导入：</p>
 <pre><code class="language-dol">$mod math.*;
+$&gt;&gt; add.answer();
+$&gt;&gt; calc.square(3);
 </code></pre>
-<p>这时会把 <code>math/</code> 目录下的直接子模块注册为命名空间，而不是把函数平铺进当前文件。</p>
+<p>不要把它理解成下面这种旧预期：</p>
+<pre><code class="language-dol">$mod math.*;
+$&gt;&gt; answer();      // 旧预期，当前主线不这样讲
+</code></pre>
 <h2 id="公有函数与私有函数"><a class="header" href="#公有函数与私有函数">公有函数与私有函数</a></h2>
 <pre><code class="language-dol">$fn public_api() -&gt; Int {
     $# 1;
@@ -1790,45 +1689,31 @@ _$fn hidden() -&gt; Int {
     $# 2;
 }
 </code></pre>
-<p><code>$mod</code> 只暴露公开函数。</p>
-<p>可以把规则记成：</p>
+<p>规则：</p>
 <ul>
 <li><code>$fn</code> 默认公开</li>
 <li><code>_$fn</code> 默认私有</li>
-<li>私有函数只给当前模块内部使用</li>
+<li><code>$mod</code> 只暴露公开函数</li>
 </ul>
-<p>例如：</p>
-<pre><code class="language-dol">_$fn twice(x) -&gt; Int {
-    $# x * 2;
-}
-
-$fn calc(x) -&gt; Int {
-    $# twice(x) + 1;
-}
-</code></pre>
 <h2 id="std-命名空间"><a class="header" href="#std-命名空间"><code>std.*</code> 命名空间</a></h2>
 <p>标准库模块也通过 <code>$mod</code> 导入：</p>
-<pre><code class="language-dol">$mod std.math;
-$mod std.str;
-</code></pre>
-<p>但 <code>std.*</code> 是保留命名空间，它的解析规则和普通项目模块不同。</p>
-<p>常见写法：</p>
 <pre><code class="language-dol">$mod std.math;
 $mod std.str;
 
 $&gt;&gt; math.sqrt(16.0);
 $&gt;&gt; str.trim("  hello  ");
 </code></pre>
+<p><code>std.*</code> 是保留命名空间，只走标准库解析，不和普通项目模块混用。</p>
 <h2 id="当前模块解析顺序"><a class="header" href="#当前模块解析顺序">当前模块解析顺序</a></h2>
-<p>普通模块的主顺序可以先记成：</p>
+<p>普通模块的主顺序：</p>
 <ol>
 <li>当前文件所在目录</li>
 <li>当前项目根目录</li>
 <li>项目根目录下的 <code>modules/</code></li>
 <li>如果声明了依赖，再查 <code>deps/</code></li>
 </ol>
-<p><code>std.*</code> 则只走标准库解析，不和普通项目模块混用。</p>
-<h2 id="一个完整例子-5"><a class="header" href="#一个完整例子-5">一个完整例子</a></h2>
+<p><code>std.*</code> 则只走标准库解析。</p>
+<h2 id="一个完整例子-4"><a class="header" href="#一个完整例子-4">一个完整例子</a></h2>
 <p>目录：</p>
 <pre><code class="language-text">demo/
 ├── main.dol
@@ -1848,10 +1733,10 @@ $fn answer() -&gt; Int {
 <pre><code class="language-dol">$mod shared.helper;
 $&gt;&gt; helper.answer();
 </code></pre>
-<h2 id="迁移期参考-6"><a class="header" href="#迁移期参考-6">迁移期参考</a></h2>
+<h2 id="继续查边界"><a class="header" href="#继续查边界">继续查边界</a></h2>
 <ul>
-<li><a href="#模块系统">modules.md</a></li>
-<li><code>docs/spec/modules.md</code></li>
+<li>主线废弃说明：<a href="#模块系统">modules.md</a></li>
+<li>行为边界：<a href="../spec/modules.html">../spec/modules.md</a></li>
 </ul>
 <h2 id="下一章-10"><a class="header" href="#下一章-10">下一章</a></h2>
 <p>继续看 <a href="#12-项目系统与-packagetoml">12-projects-and-package.md</a>。</p>
@@ -1877,7 +1762,6 @@ port = 8080
 [env]
 APP_NAME = "My App"
 </code></pre>
-<p>这是一个“当前可用字段都比较明确”的最小项目配置。</p>
 <h2 id="当前重要字段"><a class="header" href="#当前重要字段">当前重要字段</a></h2>
 <ul>
 <li><code>name</code></li>
@@ -1887,52 +1771,65 @@ APP_NAME = "My App"
 <li><code>[env]</code></li>
 <li><code>[dependencies]</code></li>
 </ul>
-<p>其中 <code>[dependencies]</code> 当前更适合理解为“模块解析边界的一部分”，不要直接写成成熟包管理工作流。</p>
-<h2 id="一个最小项目示例"><a class="header" href="#一个最小项目示例">一个最小项目示例</a></h2>
-<p><code>package.toml</code>：</p>
-<pre><code class="language-toml">name = "project-config"
-version = "0.1.0"
-entry = "main.dol"
-
-[env]
-APP_NAME = "Dolang"
-</code></pre>
-<p><code>main.dol</code>：</p>
-<pre><code class="language-dol">$ app = $&lt;&lt;CONFIG("APP_NAME");
-$&gt;&gt; app;
-</code></pre>
-<h2 id="运行项目"><a class="header" href="#运行项目">运行项目</a></h2>
-<pre><code class="language-bash">dolang run main.dol
-dolang serve .
-</code></pre>
-<p>当前 CLI 中：</p>
+<p>其中 <code>[dependencies]</code> 当前更适合理解为模块解析边界的一部分，而不是成熟包管理工作流。</p>
+<h2 id="入口文件和-entry"><a class="header" href="#入口文件和-entry">入口文件和 <code>entry</code></a></h2>
+<p>当 CLI 传入目录时：</p>
+<ol>
+<li>先定位项目根</li>
+<li>读取 <code>package.toml</code></li>
+<li>使用 <code>entry</code> 指定的入口文件</li>
+<li>如果没有 manifest，则默认尝试 <code>main.dol</code></li>
+</ol>
+<p>所以：</p>
 <ul>
-<li><code>run</code> 运行的是明确的 <code>.dol</code> 文件</li>
-<li><code>serve</code> 可以直接接项目目录</li>
+<li><code>entry</code> 决定“从哪个文件启动项目”</li>
+<li>它不等于 <code>$main()</code></li>
 </ul>
-<p>当 <code>serve</code> 接收目录时，会先定位项目根，再读取 <code>package.toml</code> 的 <code>entry</code>。</p>
-<p>如果没有 manifest，则会退回到默认入口逻辑。</p>
-<h2 id="配置读取"><a class="header" href="#配置读取">配置读取</a></h2>
+<h2 id="main-什么时候需要"><a class="header" href="#main-什么时候需要"><code>$main()</code> 什么时候需要</a></h2>
+<p><code>$main()</code> 是 serve 模式下的顶层入口，用来放全局初始化逻辑。</p>
+<p>例如：</p>
+<pre><code class="language-dol">@CORS("*")
+$main() {
+    $&gt;&gt; "[INFO] server starting";
+}
+
+$GET("/health") health() -&gt; String {
+    $# "ok";
+}
+</code></pre>
+<p>可以这样理解：</p>
+<ul>
+<li>只需要一个简单路由时，可以不写 <code>$main()</code></li>
+<li>需要全局 <code>@CORS</code>、启动日志、启动前准备动作时，再写 <code>$main()</code></li>
+<li><code>entry</code> 负责选入口文件，<code>$main()</code> 负责该文件里的服务入口逻辑</li>
+</ul>
+<h2 id="config-的使用边界"><a class="header" href="#config-的使用边界"><code>$&lt;&lt;CONFIG(...)</code> 的使用边界</a></h2>
 <p><code>[env]</code> 中的值可以通过 <code>$&lt;&lt;CONFIG(...)</code> 读取：</p>
 <pre><code class="language-dol">$ app = $&lt;&lt;CONFIG("APP_NAME");
+</code></pre>
+<p>但要记住：</p>
+<ul>
+<li>它依赖项目配置上下文</li>
+<li>当前实现里只在 <code>serve</code> 模式下可用</li>
+<li>不应把它当成 <code>run</code> 模式下的通用配置入口</li>
+</ul>
+<p>推荐的跨模式兜底写法是优先读环境变量，把 <code>CONFIG</code> 留给 serve 项目：</p>
+<pre><code class="language-dol">$mod std.env;
+
+$ app = env.get_or("APP_NAME", "My App");
 $&gt;&gt; app;
 </code></pre>
-<p>这适合读取：</p>
-<ul>
-<li>应用名</li>
-<li>环境标记</li>
-<li>默认端口相关配置</li>
-</ul>
+<p>如果你明确只在 <code>serve</code> 项目里运行，再使用 <code>$&lt;&lt;CONFIG(...)</code>。</p>
 <h2 id="server-配置"><a class="header" href="#server-配置"><code>server</code> 配置</a></h2>
-<p>服务模式会用到 <code>[server]</code>：</p>
+<p>服务模式会读取 <code>[server]</code>：</p>
 <pre><code class="language-toml">[server]
 host = "0.0.0.0"
 port = 8080
 </code></pre>
-<p>当你执行：</p>
+<p>执行：</p>
 <pre><code class="language-bash">dolang serve .
 </code></pre>
-<p>CLI 会加载项目配置，并据此启动服务。</p>
+<p>时，CLI 会加载这部分配置。</p>
 <h2 id="项目和单文件的区别"><a class="header" href="#项目和单文件的区别">项目和单文件的区别</a></h2>
 <p>单文件适合：</p>
 <ul>
@@ -1947,28 +1844,24 @@ port = 8080
 <li>服务模式</li>
 <li>后续继续扩展</li>
 </ul>
-<h2 id="一个推荐的起步目录"><a class="header" href="#一个推荐的起步目录">一个推荐的起步目录</a></h2>
-<pre><code class="language-text">my-app/
-├── package.toml
-├── main.dol
-└── shared/
-    └── helper.dol
-</code></pre>
-<h2 id="进一步参考-1"><a class="header" href="#进一步参考-1">进一步参考</a></h2>
+<h2 id="进一步参考"><a class="header" href="#进一步参考">进一步参考</a></h2>
 <ul>
-<li><code>docs/reference/project-system.md</code></li>
+<li><a href="#14-io环境变量与配置-1">14-io-env-config.md</a></li>
+<li><a href="#16-http-组织方式-1">16-http-organization.md</a></li>
+<li><a href="../reference/project-system.html">../reference/project-system.md</a></li>
 </ul>
 <h2 id="下一章-11"><a class="header" href="#下一章-11">下一章</a></h2>
 <p>继续看 <a href="#13-标准库总览-1">13-stdlib-overview.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="13-标准库总览-1"><a class="header" href="#13-标准库总览-1">13. 标准库总览</a></h1>
-<p>Dolang 当前的标准库分成两类：</p>
+<p>这一章只回答一个问题：<strong>某个能力应该去哪里找。</strong></p>
+<p>完整 API 查表不在这里，请直接看 <a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a>。</p>
+<h2 id="标准库分两类"><a class="header" href="#标准库分两类">标准库分两类</a></h2>
 <ul>
 <li>native 模块：由 Rust 实现并注册到 runtime</li>
 <li>纯 <code>.dol</code> 模块：放在 <code>stdlib/</code> 中</li>
 </ul>
-<p>如果你想快速判断“某个能力应该去哪里找”，这一章先给你一个总地图。</p>
-<h2 id="当前可见的主要模块"><a class="header" href="#当前可见的主要模块">当前可见的主要模块</a></h2>
+<h2 id="当前常见模块"><a class="header" href="#当前常见模块">当前常见模块</a></h2>
 <p>native 模块：</p>
 <ul>
 <li><code>std.env</code></li>
@@ -1990,269 +1883,137 @@ port = 8080
 <li><code>std.math.trig</code></li>
 <li><code>std.path</code></li>
 </ul>
-<h2 id="按用途理解标准库"><a class="header" href="#按用途理解标准库">按用途理解标准库</a></h2>
-<h3 id="字符串与文本"><a class="header" href="#字符串与文本">字符串与文本</a></h3>
+<h2 id="先判断是值方法还是模块函数"><a class="header" href="#先判断是值方法还是模块函数">先判断是“值方法”还是“模块函数”</a></h2>
+<h3 id="值方法"><a class="header" href="#值方法">值方法</a></h3>
+<p>这些直接挂在值上：</p>
 <ul>
-<li><code>std.str</code></li>
-<li><code>std.str.check</code></li>
-<li><code>std.str.fmt</code></li>
+<li><code>"a,b".split(",")</code></li>
+<li><code>[1, 2, 3].len()</code></li>
+<li><code>user.keys()</code></li>
 </ul>
+<p>适合当前值本身的直接处理。</p>
+<h3 id="模块函数"><a class="header" href="#模块函数">模块函数</a></h3>
+<p>这些来自 <code>std.*</code>：</p>
 <pre><code class="language-dol">$mod std.str;
-$mod std.str.fmt;
-
-$&gt;&gt; str.trim("  hello  ");
-$&gt;&gt; fmt.pad_left("42", 5, "0");
-</code></pre>
-<h3 id="数学与数值"><a class="header" href="#数学与数值">数学与数值</a></h3>
-<ul>
-<li><code>std.math</code></li>
-<li><code>std.math.stats</code></li>
-<li><code>std.math.trig</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.math;
-$mod std.math.stats;
-
-$&gt;&gt; math.sqrt(16.0);
-$&gt;&gt; stats.mean([1, 2, 3, 4, 5]);
-</code></pre>
-<h3 id="json-与数据处理"><a class="header" href="#json-与数据处理">JSON 与数据处理</a></h3>
-<ul>
-<li><code>std.json</code></li>
-<li><code>std.path</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.json;
-$mod std.path;
-
-$ obj = json.parse("{\"name\":\"dolang\"}");
-$&gt;&gt; json.get(obj, "name");
-$&gt;&gt; path.basename("/usr/local/bin");
-</code></pre>
-<h3 id="文件与环境变量"><a class="header" href="#文件与环境变量">文件与环境变量</a></h3>
-<ul>
-<li><code>std.fs</code></li>
-<li><code>std.env</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.env;
-$mod std.fs;
-
-$&gt;&gt; env.get_or("APP_ENV", "dev");
-$&gt;&gt; fs.exists("README.md");
-</code></pre>
-<h3 id="时间唯一-id-与服务调用"><a class="header" href="#时间唯一-id-与服务调用">时间、唯一 ID 与服务调用</a></h3>
-<ul>
-<li><code>std.time</code></li>
-<li><code>std.uuid</code></li>
-<li><code>std.http</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.time;
-$mod std.uuid;
-$mod std.http;
-
-$&gt;&gt; time.format(0, "%Y-%m-%d");
-$&gt;&gt; uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
-</code></pre>
-<h3 id="基础工具"><a class="header" href="#基础工具">基础工具</a></h3>
-<ul>
-<li><code>std.core.iter</code></li>
-<li><code>std.core.check</code></li>
-</ul>
-<pre><code class="language-dol">$mod std.core.iter;
-$mod std.core.check;
-
-$&gt;&gt; iter.range(0, 5);
-$&gt;&gt; check.type_of(42);
-</code></pre>
-<h2 id="更细一点的模块地图"><a class="header" href="#更细一点的模块地图">更细一点的模块地图</a></h2>
-<p>如果你已经学到这里，可以把常见模块先这样记：</p>
-<ul>
-<li>文本处理：<code>std.str</code>、<code>std.str.check</code>、<code>std.str.fmt</code></li>
-<li>数学计算：<code>std.math</code>、<code>std.math.stats</code>、<code>std.math.trig</code></li>
-<li>JSON 处理：<code>std.json</code></li>
-<li>路径处理：<code>std.path</code></li>
-<li>文件和目录：<code>std.fs</code></li>
-<li>环境变量：<code>std.env</code></li>
-<li>时间处理：<code>std.time</code></li>
-<li>唯一 ID：<code>std.uuid</code></li>
-<li>HTTP 客户端：<code>std.http</code></li>
-<li>通用工具：<code>std.core.iter</code>、<code>std.core.check</code></li>
-</ul>
-<p>例如 <code>std.path</code> 里除了 <code>basename</code>，还可以继续留意：</p>
-<ul>
-<li><code>join</code></li>
-<li><code>dirname</code></li>
-<li><code>ext</code></li>
-</ul>
-<p>例如 <code>std.json</code> 里除了 <code>parse</code> / <code>stringify</code>，还可以继续留意：</p>
-<ul>
-<li><code>get</code></li>
-<li><code>has</code></li>
-<li><code>keys</code></li>
-<li><code>values</code></li>
-<li><code>set</code></li>
-<li><code>delete</code></li>
-<li><code>pretty</code></li>
-<li><code>merge</code></li>
-</ul>
-<h2 id="一个最小例子"><a class="header" href="#一个最小例子">一个最小例子</a></h2>
-<pre><code class="language-dol">$mod std.math;
-$mod std.str;
-
-$&gt;&gt; math.sqrt(16.0);
-$&gt;&gt; str.trim("  hello  ");
-</code></pre>
-<h2 id="什么时候用标准库"><a class="header" href="#什么时候用标准库">什么时候用标准库</a></h2>
-<p>建议把标准库理解成三层用途：</p>
-<ul>
-<li>基础字符串、数学、JSON、文件、环境变量、时间、UUID、HTTP</li>
-<li>一些以 <code>.dol</code> 编写的组合工具</li>
-<li>未来继续扩展的公共模块入口</li>
-</ul>
-<h2 id="第一次学时怎么用"><a class="header" href="#第一次学时怎么用">第一次学时怎么用</a></h2>
-<p>建议第一次先掌握这几个模块：</p>
-<ol>
-<li><code>std.str</code></li>
-<li><code>std.math</code></li>
-<li><code>std.json</code></li>
-<li><code>std.fs</code></li>
-<li><code>std.env</code></li>
-</ol>
-<p>然后再补：</p>
-<ul>
-<li><code>std.time</code></li>
-<li><code>std.uuid</code></li>
-<li><code>std.http</code></li>
-<li><code>std.core.iter</code></li>
-<li><code>std.core.check</code></li>
-<li><code>std.str.fmt</code></li>
-<li><code>std.path</code></li>
-</ul>
-<h2 id="一个更完整的标准库组合例子"><a class="header" href="#一个更完整的标准库组合例子">一个更完整的标准库组合例子</a></h2>
-<pre><code class="language-dol">$mod std.fs;
 $mod std.json;
-$mod std.path;
-$mod std.time;
-$mod std.uuid;
 
-$ raw = fs.read_text("tests/fixtures/stdlib/hello.txt");
-$&gt;&gt; raw;
-$&gt;&gt; path.basename("/usr/local/bin");
-$&gt;&gt; time.year(0);
-$&gt;&gt; uuid.is_valid("550e8400-e29b-41d4-a716-446655440000");
-$&gt;&gt; json.stringify({"ok": true});
+$&gt;&gt; str.trim("  hello  ");
+$ obj = json.set({"name": "Tom"}, "age", 25);
 </code></pre>
-<h2 id="迁移期参考-7"><a class="header" href="#迁移期参考-7">迁移期参考</a></h2>
+<p>适合：</p>
 <ul>
-<li><a href="#标准库参考">stdlib.md</a></li>
-<li><code>docs/stdlib/README.md</code></li>
+<li>工具函数</li>
+<li>JSON 通用处理</li>
+<li>宿主能力</li>
+<li>不方便做成值方法的能力</li>
+</ul>
+<h2 id="按用途找"><a class="header" href="#按用途找">按用途找</a></h2>
+<h3 id="文本与字符串"><a class="header" href="#文本与字符串">文本与字符串</a></h3>
+<ul>
+<li>值方法：<code>trim</code>、<code>split</code>、<code>contains</code></li>
+<li>模块：<code>std.str</code>、<code>std.str.check</code>、<code>std.str.fmt</code></li>
+</ul>
+<h3 id="集合与-json"><a class="header" href="#集合与-json">集合与 JSON</a></h3>
+<ul>
+<li>值方法：<code>len</code>、<code>keys</code>、<code>values</code>、<code>flatten</code>、<code>sort_desc</code></li>
+<li>模块：<code>std.json</code></li>
+</ul>
+<h3 id="文件环境与配置"><a class="header" href="#文件环境与配置">文件、环境与配置</a></h3>
+<ul>
+<li>模块：<code>std.fs</code>、<code>std.env</code></li>
+<li>章节入口：<a href="#14-io环境变量与配置-1">14-io-env-config.md</a></li>
+</ul>
+<h3 id="http"><a class="header" href="#http">HTTP</a></h3>
+<ul>
+<li>服务端语法：第 15、16 章</li>
+<li>客户端模块：<code>std.http</code></li>
+</ul>
+<h2 id="查表去哪里"><a class="header" href="#查表去哪里">查表去哪里</a></h2>
+<ul>
+<li>完整 stdlib API：<a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a></li>
+<li>旧迁移页：<a href="#标准库参考">stdlib.md</a></li>
 </ul>
 <h2 id="下一章-12"><a class="header" href="#下一章-12">下一章</a></h2>
 <p>继续看 <a href="#14-io环境变量与配置-1">14-io-env-config.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="14-io环境变量与配置-1"><a class="header" href="#14-io环境变量与配置-1">14. I/O、环境变量与配置</a></h1>
-<p>这一章把和宿主环境直接交互的能力收在一起。</p>
-<p>这一类能力和“纯表达式计算”不同，因为它们会读取操作系统、项目配置或文件系统。</p>
+<p>这一章把和宿主环境直接交互的能力收在一起：环境变量、项目配置、文件系统。</p>
 <h2 id="环境变量"><a class="header" href="#环境变量">环境变量</a></h2>
 <h3 id="语言表面env"><a class="header" href="#语言表面env">语言表面：<code>$&lt;&lt;ENV(...)</code></a></h3>
 <pre><code class="language-dol">$ home = $&lt;&lt;ENV("HOME");
 </code></pre>
-<p>如果环境变量不存在，这类调用会失败，因此实际脚本里常常需要配合错误处理。</p>
+<p>如果环境变量不存在，这类调用会失败。</p>
 <h3 id="标准库stdenv"><a class="header" href="#标准库stdenv">标准库：<code>std.env</code></a></h3>
 <pre><code class="language-dol">$mod std.env;
 $&gt;&gt; env.get_or("APP_ENV", "dev");
 </code></pre>
-<p>当前 <code>std.env</code> 还包括：</p>
-<ul>
-<li><code>get</code></li>
-<li><code>get_or</code></li>
-<li><code>has</code></li>
-<li><code>all</code></li>
-<li><code>set</code></li>
-<li><code>remove</code></li>
-</ul>
-<p>其中 <code>set</code> 和 <code>remove</code> 在 serve 模式下受限制。</p>
-<h3 id="常见写法"><a class="header" href="#常见写法">常见写法</a></h3>
-<pre><code class="language-dol">$mod std.env;
-
-$&gt;&gt; env.has("HOME");
-$&gt;&gt; env.get_or("APP_ENV", "dev");
-</code></pre>
-<h2 id="项目配置"><a class="header" href="#项目配置">项目配置</a></h2>
+<p>当你需要兜底值时，优先选 <code>env.get_or(...)</code>。</p>
+<h2 id="项目配置config"><a class="header" href="#项目配置config">项目配置：<code>$&lt;&lt;CONFIG(...)</code></a></h2>
 <pre><code class="language-dol">$ app = $&lt;&lt;CONFIG("APP_NAME");
 </code></pre>
-<p><code>$&lt;&lt;CONFIG(...)</code> 依赖项目配置，并且只在 serve 模式下可用。</p>
-<p>也就是说，如果你只是执行一个普通文件而没有对应项目上下文，不要把它当成通用配置读取方式。</p>
-<h2 id="文件读写"><a class="header" href="#文件读写">文件读写</a></h2>
-<h3 id="语言表面"><a class="header" href="#语言表面">语言表面</a></h3>
-<pre><code class="language-dol">$ content = $&lt;&lt;FILE("data.txt");
-$&gt;&gt;FILE("out.txt", "hello");
-</code></pre>
-<p>这是语言层面的直接文件入口。</p>
-<h3 id="标准库"><a class="header" href="#标准库">标准库</a></h3>
-<pre><code class="language-dol">$mod std.fs;
-fs.write_text("/tmp/demo.txt", "ok");
-$&gt;&gt; fs.read_text("/tmp/demo.txt");
-</code></pre>
-<p>当前 <code>std.fs</code> 常用函数包括：</p>
+<p>当前实现里，它有两个重要边界：</p>
 <ul>
-<li><code>read_text</code></li>
-<li><code>read_lines</code></li>
-<li><code>write_text</code></li>
-<li><code>append_text</code></li>
-<li><code>delete</code></li>
-<li><code>exists</code></li>
-<li><code>size</code></li>
-<li><code>is_dir</code></li>
-<li><code>list</code></li>
-<li><code>mkdir</code></li>
-<li><code>mkdir_all</code></li>
-<li><code>rmdir</code></li>
-<li><code>copy</code></li>
-<li><code>rename</code></li>
+<li>依赖项目配置上下文</li>
+<li>只在 <code>serve</code> 模式下可用</li>
 </ul>
-<h3 id="读取文本"><a class="header" href="#读取文本">读取文本</a></h3>
+<p>也就是说，在 <code>run</code> 模式里把它当成通用配置读取入口会直接报错。</p>
+<h3 id="推荐的跨模式写法"><a class="header" href="#推荐的跨模式写法">推荐的跨模式写法</a></h3>
+<p>如果你希望脚本和服务都能运行，先用环境变量作为兜底主路径：</p>
+<pre><code class="language-dol">$mod std.env;
+
+$ app = env.get_or("APP_NAME", "My App");
+$&gt;&gt; app;
+</code></pre>
+<p>如果某段代码只在服务项目里运行，再使用 <code>$&lt;&lt;CONFIG(...)</code>。</p>
+<h2 id="文件读取file"><a class="header" href="#文件读取file">文件读取：<code>$&lt;&lt;FILE(...)</code></a></h2>
+<p>当前语言层面可写的形式是：</p>
+<pre><code class="language-dol">$ text = $&lt;&lt;FILE("notes.txt");
+$ lines = $&lt;&lt;FILE("notes.txt", "LINES");
+</code></pre>
+<p>口径统一如下：</p>
+<ul>
+<li><code>$&lt;&lt;FILE(path)</code>：读取全文，结果按文本处理</li>
+<li><code>$&lt;&lt;FILE(path, "LINES")</code>：按行读取</li>
+<li>第二个参数当前主线只写 <code>"LINES"</code>，不继续扩展旧文档里的其他模式字符串</li>
+</ul>
+<h2 id="stdfs-和-file-怎么选"><a class="header" href="#stdfs-和-file-怎么选"><code>std.fs</code> 和 <code>$&lt;&lt;FILE(...)</code> 怎么选</a></h2>
+<p>如果你只是想在一行里读一次文件，<code>$&lt;&lt;FILE(...)</code> 足够直观。</p>
+<p>如果你需要：</p>
+<ul>
+<li>更明确的 API</li>
+<li>写入、追加、删除</li>
+<li><code>exists</code>、<code>is_dir</code>、<code>list</code> 这类能力</li>
+</ul>
+<p>优先用 <code>std.fs</code>：</p>
 <pre><code class="language-dol">$mod std.fs;
+
 $ content = fs.read_text("tests/fixtures/stdlib/hello.txt");
-$&gt;&gt; content;
-</code></pre>
-<h3 id="按行读取"><a class="header" href="#按行读取">按行读取</a></h3>
-<pre><code class="language-dol">$mod std.fs;
 $ lines = fs.read_lines("tests/fixtures/stdlib/lines.txt");
-$for line in lines {
-    $&gt;&gt; line;
-}
 </code></pre>
-<h3 id="写入再读取"><a class="header" href="#写入再读取">写入再读取</a></h3>
+<p>可以把两者这样区分：</p>
+<ul>
+<li><code>$&lt;&lt;FILE(...)</code>：语言层面的简写入口</li>
+<li><code>std.fs.read_text/read_lines(...)</code>：脚本和项目里的主推荐写法</li>
+</ul>
+<h2 id="文件写入"><a class="header" href="#文件写入">文件写入</a></h2>
 <pre><code class="language-dol">$mod std.fs;
+
 fs.write_text("/tmp/dolang-demo.txt", "hello");
 $&gt;&gt; fs.read_text("/tmp/dolang-demo.txt");
 fs.delete("/tmp/dolang-demo.txt");
 </code></pre>
-<h2 id="推荐用法"><a class="header" href="#推荐用法">推荐用法</a></h2>
-<p>如果只是偶尔读一行输入，用 <code>$&lt;&lt;LINE(...)</code>。</p>
-<p>如果是脚本和系统交互，优先考虑：</p>
-<ul>
-<li><code>std.env</code></li>
-<li><code>std.fs</code></li>
-<li><code>$&lt;&lt;CONFIG(...)</code></li>
-</ul>
 <h2 id="常见坑"><a class="header" href="#常见坑">常见坑</a></h2>
 <ul>
-<li>缺失环境变量会报错，除非你用 <code>get_or</code></li>
-<li><code>$&lt;&lt;CONFIG(...)</code> 不是随时都能用</li>
+<li>环境变量不存在会抛错，除非你用 <code>get_or</code></li>
+<li><code>$&lt;&lt;CONFIG(...)</code> 不是跨模式通用入口</li>
 <li>文件路径错误会导致运行时错误</li>
 <li>有副作用的能力最好配合 <code>$try / $catch</code></li>
-</ul>
-<h2 id="进一步参考-2"><a class="header" href="#进一步参考-2">进一步参考</a></h2>
-<ul>
-<li><code>docs/runtime/intrinsics.md</code></li>
-<li><code>docs/spec/security-model.md</code></li>
 </ul>
 <h2 id="下一章-13"><a class="header" href="#下一章-13">下一章</a></h2>
 <p>继续看 <a href="#15-http-基础-1">15-http-basics.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="15-http-基础-1"><a class="header" href="#15-http-基础-1">15. HTTP 基础</a></h1>
-<p>Dolang 当前内置了 HTTP 路由定义能力，可以直接和 <code>dolang serve</code> 配合使用。
-除此之外，也已经有 <code>std.http</code> 原生模块，可以在脚本或 handler 内主动发出同步 HTTP 请求。</p>
+<p>Dolang 当前内置了 HTTP 路由定义能力，可以直接和 <code>dolang serve</code> 配合使用。</p>
 <h2 id="定义路由"><a class="header" href="#定义路由">定义路由</a></h2>
 <pre><code class="language-dol">$GET("/hello") hello() -&gt; String {
     $# "world";
@@ -2261,61 +2022,7 @@ fs.delete("/tmp/dolang-demo.txt");
 <p>启动：</p>
 <pre><code class="language-bash">dolang serve main.dol
 </code></pre>
-<p>如果是项目目录，也可以：</p>
-<pre><code class="language-bash">dolang serve .
-</code></pre>
-<p>默认监听配置会受项目里的 <code>[server]</code> 影响。</p>
-<p>支持的方法：</p>
-<ul>
-<li><code>$GET</code></li>
-<li><code>$POST</code></li>
-<li><code>$PUT</code></li>
-<li><code>$DEL</code></li>
-<li><code>$PATCH</code></li>
-</ul>
-<h2 id="stdhttp-客户端"><a class="header" href="#stdhttp-客户端"><code>std.http</code> 客户端</a></h2>
-<p>如果你不是在“接收请求”，而是要“调用别的服务”，用 <code>std.http</code>：</p>
-<pre><code class="language-dol">$mod std.http;
-
-$ res = http.get("https://example.com");
-$&gt;&gt; res["status"];
-$&gt;&gt; res["body"];
-</code></pre>
-<p>返回值统一是一个 <code>Map</code>：</p>
-<pre><code class="language-text">{
-  "status": Int,
-  "body": String,
-  "headers": Map
-}
-</code></pre>
-<p>也可以传请求头：</p>
-<pre><code class="language-dol">$mod std.http;
-
-$ res = http.get("https://example.com", {
-    "Authorization": "Bearer demo-token"
-});
-$&gt;&gt; res["status"];
-</code></pre>
-<p>POST / PUT 请求用于发送 JSON 风格的 <code>Map</code>：</p>
-<pre><code class="language-dol">$mod std.http;
-
-$ created = http.post("https://example.com/users", {
-    "name": "Alice",
-    "role": "admin"
-});
-$&gt;&gt; created["status"];
-</code></pre>
-<p>如果 URL 不合法、连接失败或超时，错误会作为普通运行时错误抛出，可以配合 <code>$try / $catch</code>：</p>
-<pre><code class="language-dol">$mod std.http;
-
-$try {
-    $ res = http.get("not-a-url");
-    $&gt;&gt; res["status"];
-} $catch err {
-    $&gt;&gt; "request failed";
-}
-</code></pre>
-<h2 id="handler-长什么样"><a class="header" href="#handler-长什么样">handler 长什么样</a></h2>
+<h2 id="handler-的基本形状"><a class="header" href="#handler-的基本形状">handler 的基本形状</a></h2>
 <p>一个 handler 一般包含四部分：</p>
 <ol>
 <li>HTTP 方法关键字</li>
@@ -2333,217 +2040,88 @@ $try {
 <li><code>String</code></li>
 <li><code>JSON</code></li>
 <li><code>HTML</code></li>
+<li><code>List&lt;T&gt;</code></li>
 </ul>
-<pre><code class="language-dol">$GET("/health") health() -&gt; String {
-    $# "ok";
-}
-</code></pre>
-<p>可以把它理解成“告诉运行时该怎么把返回值变成 HTTP 响应”。</p>
-<h2 id="json-返回"><a class="header" href="#json-返回">JSON 返回</a></h2>
-<pre><code class="language-dol">$GET("/user") get_user() -&gt; JSON {
-    $# $JSON { "name": "Alice", "age": 30 };
-}
-</code></pre>
-<p><code>$JSON { ... }</code> 是最直接的 JSON 构造方式。</p>
-<h2 id="type-和-jsonuser"><a class="header" href="#type-和-jsonuser"><code>$Type</code> 和 <code>JSON&lt;User&gt;</code></a></h2>
-<p>如果你前面已经看过类型章节，这里就可以把 <code>$Type</code> 和 HTTP 返回放在一起使用。</p>
+<h3 id="listt-返回例子"><a class="header" href="#listt-返回例子"><code>List&lt;T&gt;</code> 返回例子</a></h3>
 <pre><code class="language-dol">$Type User {
     id: Int
     name: Str
-    email: Str?
 }
 
-$GET("/users/:id") get_user(id) -&gt; JSON&lt;User&gt; {
-    $# $JSON {
-        "id": id,
-        "name": "Alice"
-    };
+$GET("/users") list_users() -&gt; List&lt;User&gt; {
+    $# [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"}
+    ];
 }
 </code></pre>
-<p>这种写法的价值主要在于文档性和可读性：</p>
-<ul>
-<li>路由明确返回 JSON</li>
-<li>这个 JSON 想表达的是 <code>User</code> 结构</li>
-<li>阅读接口时更容易理解返回体大概长什么样</li>
-</ul>
-<p>当前这层先按“结构意图声明”理解，不把它讲成完整的强校验系统。</p>
-<h2 id="html-返回"><a class="header" href="#html-返回">HTML 返回</a></h2>
-<pre><code class="language-dol">$GET("/") index() -&gt; HTML {
-    $# $HTML("&lt;h1&gt;Welcome&lt;/h1&gt;");
-}
-</code></pre>
-<p>如果返回类型是 <code>HTML</code>，运行时会按 HTML 响应处理。</p>
-<h2 id="路径参数"><a class="header" href="#路径参数">路径参数</a></h2>
+<p>这里同样遵守类型章节的口径：返回集合时优先写 <code>List&lt;T&gt;</code>，不要再教学裸 <code>List</code>。</p>
+<h2 id="路径参数与-query-参数"><a class="header" href="#路径参数与-query-参数">路径参数与 query 参数</a></h2>
 <pre><code class="language-dol">$GET("/users/:id") get_user(id) -&gt; JSON {
     $# $JSON { "id": id };
 }
 </code></pre>
-<p>当请求路径是 <code>/users/42</code> 时，<code>id</code> 会被注入为 <code>"42"</code>。</p>
-<h2 id="query-参数"><a class="header" href="#query-参数">query 参数</a></h2>
-<p>当前 runtime 会把 query string 注入为同名变量：</p>
+<p>query string 会按同名变量注入：</p>
 <pre><code class="language-dol">$GET("/search") search() -&gt; JSON {
     $# $JSON { "q": q, "limit": limit };
 }
 </code></pre>
-<p>例如访问：</p>
-<pre><code class="language-text">/search?q=hello&amp;limit=10
-</code></pre>
-<p>这时 <code>q</code> 和 <code>limit</code> 可直接读取。</p>
 <h2 id="header-读取"><a class="header" href="#header-读取">Header 读取</a></h2>
 <pre><code class="language-dol">$GET("/whoami") whoami() -&gt; JSON {
     $ token = $HDR("Authorization");
     $# $JSON { "token": token };
 }
 </code></pre>
-<p><code>$HDR(...)</code> 适合取：</p>
+<h2 id="body-注入"><a class="header" href="#body-注入">body 注入</a></h2>
+<p>当前主线明确这条规则：</p>
 <ul>
-<li><code>Authorization</code></li>
-<li><code>Content-Type</code></li>
-<li>自定义请求头</li>
+<li><code>POST</code>、<code>PUT</code>、<code>PATCH</code> 会把请求体注入到 <code>body</code></li>
+<li><code>GET</code>、<code>DELETE</code> 不把 <code>body</code> 当作主线能力来承诺</li>
 </ul>
-<h2 id="set_hdr-响应头注解"><a class="header" href="#set_hdr-响应头注解"><code>@SET_HDR(...)</code> 响应头注解</a></h2>
-<p>如果你要给响应统一附加静态 header，用 <code>@SET_HDR(...)</code>，而不是在 handler 里手工拼接。</p>
-<pre><code class="language-dol">@SET_HDR({
-    "X-Frame-Options": "DENY",
-    "Cache-Control": "max-age=3600"
-})
-$GET("/health") health() -&gt; String {
-    $# "ok";
-}
-</code></pre>
-<p>要点：</p>
-<ul>
-<li><code>@SET_HDR(...)</code> 只接受一个对象字面量</li>
-<li>key 必须是字符串 header 名</li>
-<li>value 也必须是字符串字面量</li>
-<li>一个注解里可以声明多个 header</li>
-</ul>
-<p>不符合这个形态会直接报解析错误，例如：</p>
-<pre><code class="language-dol">@SET_HDR("X-Frame-Options", "DENY")     // 非法
-@SET_HDR({ name: "X-Frame-Options" })   // 非法
-</code></pre>
-<p>如果没有写 <code>@SET_HDR(...)</code>，响应不会额外注入这些自定义 header。</p>
-<h2 id="cors"><a class="header" href="#cors"><code>@CORS(...)</code></a></h2>
-<p>如果服务需要浏览器跨域访问，可以直接在路由前或 HTTP 组织节点前写 <code>@CORS(...)</code>。</p>
-<p>最简单的写法是允许所有来源：</p>
-<pre><code class="language-dol">@CORS("*")
-$GET("/public") public_data() -&gt; JSON {
-    $# $JSON { "ok": true };
-}
-</code></pre>
-<p>需要更细的配置时，用单个对象字面量：</p>
-<pre><code class="language-dol">@CORS({
-    origins: ["https://app.example.com"],
-    methods: ["GET", "POST"],
-    headers: ["Authorization", "Content-Type"],
-    max_age: 600,
-    credentials: true
-})
-$GET("/profile") profile() -&gt; JSON {
-    $# $JSON { "ok": true };
-}
-</code></pre>
-<p>要点：</p>
-<ul>
-<li><code>@CORS("*")</code> 适合公开接口</li>
-<li><code>@CORS({ ... })</code> 适合白名单接口</li>
-<li>对象字段当前支持 <code>origins</code>、<code>methods</code>、<code>headers</code>、<code>max_age</code>、<code>credentials</code></li>
-<li>这些参数都必须是静态字面量，不能传变量或运行时表达式</li>
-</ul>
-<p>如果没有写 <code>@CORS(...)</code>，服务不会额外返回 <code>Access-Control-Allow-*</code> 响应头。</p>
-<h2 id="body"><a class="header" href="#body">body</a></h2>
-<p>当前 runtime 会把请求体放进 <code>body</code> 变量。</p>
-<p>在真实服务模式下，JSON body 会被解析后注入；在 <code>dolang test --body ...</code> 里，body 的输入路径和服务模式略有差异，因此写文档时最好先用“读取 body 并回显”的最小例子说明：</p>
+<p>最小例子：</p>
 <pre><code class="language-dol">$POST("/echo") echo() -&gt; JSON {
     $# $JSON { "body": body };
 }
 </code></pre>
-<p>如果你想从 body 中取字段，可以继续往下读：</p>
-<pre><code class="language-dol">$POST("/users") create_user() -&gt; JSON {
+<p>继续取字段：</p>
+<pre><code class="language-dol">$PATCH("/users") patch_user() -&gt; JSON {
     $ name = body["name"];
-    $ age = body["age"];
-    $# $JSON {
-        "created": true,
-        "name": name,
-        "age": age
-    };
+    $# $JSON { "updated": true, "name": name };
 }
 </code></pre>
-<p>在 handler 内部也可以直接使用 <code>List</code> / <code>Map</code> 显式声明：</p>
-<pre><code class="language-dol">$GET("/check") check() -&gt; JSON {
-    $ items: List = [1, 2, 3];
-    $ config: Map = {"name": "demo", "ok": true};
-    $# $JSON {
-        "items_type": items.type(),
-        "config_type": config.type(),
-        "second": items[1],
-        "ok": config["ok"]
-    };
+<h2 id="html-返回"><a class="header" href="#html-返回">HTML 返回</a></h2>
+<h3 id="直接内联"><a class="header" href="#直接内联">直接内联</a></h3>
+<pre><code class="language-dol">$GET("/") index() -&gt; HTML {
+    $# $HTML("&lt;h1&gt;Welcome&lt;/h1&gt;");
 }
 </code></pre>
-<p>这类写法在 <code>serve</code> 模式下可以正常注册并返回结果。</p>
-<h2 id="读取项目配置"><a class="header" href="#读取项目配置">读取项目配置</a></h2>
-<p>HTTP 服务里也经常会用到项目配置：</p>
-<pre><code class="language-dol">$GET("/config") show_config() -&gt; JSON {
-    $ app = $&lt;&lt;CONFIG("APP_NAME");
-    $# $JSON { "app": app };
+<h3 id="链接外部文件htmllink"><a class="header" href="#链接外部文件htmllink">链接外部文件：<code>$HTML().link(...)</code></a></h3>
+<pre><code class="language-dol">$GET("/") index() -&gt; HTML {
+    $# $HTML().link("pages.index");
 }
 </code></pre>
-<p>这要求你在项目配置里已经写好了对应的 <code>[env]</code> 字段。</p>
-<h2 id="返回指定状态码"><a class="header" href="#返回指定状态码">返回指定状态码</a></h2>
-<pre><code class="language-dol">$GET("/users/:id") get_user(id) -&gt; JSON {
-    $# $RES(200, {"id": id});
-}
-</code></pre>
-<p><code>$RES(status, body)</code> 用来显式返回指定 HTTP 状态码。</p>
-<p>另一个常见例子：</p>
-<pre><code class="language-dol">$POST("/users") create_user() -&gt; JSON {
-    $# $RES(201, {"created": true});
-}
-</code></pre>
-<h2 id="路由里的错误处理"><a class="header" href="#路由里的错误处理">路由里的错误处理</a></h2>
-<p>HTTP handler 里也可以配合 <code>$try / $catch</code> 和 <code>$throw</code>：</p>
-<pre><code class="language-dol">$GET("/safe") safe() -&gt; JSON {
-    $try {
-        $throw "inner error";
-    } $catch err {
-        $# $JSON { "caught": err };
-    }
-}
-</code></pre>
-<p><code>$&gt;&gt;ERR(...)</code> 也可以用于打印服务端日志，而不影响正常响应：</p>
-<pre><code class="language-dol">$GET("/debug") debug() -&gt; JSON {
-    $&gt;&gt;ERR("debug info");
-    $# $JSON { "ok": true };
-}
-</code></pre>
-<h2 id="一个完整例子-6"><a class="header" href="#一个完整例子-6">一个完整例子</a></h2>
-<pre><code class="language-dol">$GET("/users/:id") get_user(id) -&gt; JSON {
-    $ token = $HDR("Authorization");
-    $# $RES(200, {
-        "id": id,
-        "token": token
-    });
-}
-</code></pre>
-<h2 id="迁移期参考-8"><a class="header" href="#迁移期参考-8">迁移期参考</a></h2>
+<p>记法：</p>
 <ul>
-<li><a href="#web-服务">web.md</a></li>
-<li><code>docs/reference/http.md</code></li>
+<li>使用模块式路径，如 <code>"pages.index"</code></li>
+<li>它对应外部页面资源，而不是 URL path</li>
+<li>当前主线把它当作链接外部 HTML/CSS/JS/XML 文件的入口</li>
 </ul>
+<p>如果你已经在组织多文件页面或路由模块，继续看 <a href="#16-http-组织方式-1">16-http-organization.md</a>。</p>
+<h2 id="stdhttp-客户端"><a class="header" href="#stdhttp-客户端"><code>std.http</code> 客户端</a></h2>
+<p>如果你不是在“接收请求”，而是要“调用别的服务”，用 <code>std.http</code>：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$ res = http.get("https://example.com");
+$&gt;&gt; res["status"];
+$&gt;&gt; res["body"];
+</code></pre>
+<p>如果 URL 不合法、连接失败或超时，错误会作为普通运行时错误抛出，可以配合 <code>$try / $catch</code>。</p>
 <h2 id="下一章-14"><a class="header" href="#下一章-14">下一章</a></h2>
 <p>继续看 <a href="#16-http-组织方式-1">16-http-organization.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="16-http-组织方式-1"><a class="header" href="#16-http-组织方式-1">16. HTTP 组织方式</a></h1>
 <p>当路由开始增多时，就需要把 HTTP 代码组织起来。</p>
 <h2 id="http---"><a class="header" href="#http---"><code>$HTTP { ... }</code></a></h2>
-<pre><code class="language-dol">$HTTP {
-    $GET("/ping") ping() -&gt; String {
-        $# "pong";
-    }
-}
-</code></pre>
-<p>适合把同一个文件里的多条路由聚到一起：</p>
 <pre><code class="language-dol">$HTTP {
     $GET("/ping") ping() -&gt; String {
         $# "pong";
@@ -2561,9 +2139,30 @@ $GET("/profile") profile() -&gt; JSON {
     }
 }
 </code></pre>
-<p>这样可以少写重复前缀，适合按版本或按业务域组织路由。</p>
-<h2 id="在块上挂-set_hdr"><a class="header" href="#在块上挂-set_hdr">在块上挂 <code>@SET_HDR(...)</code></a></h2>
-<p>块级 <code>@SET_HDR(...)</code> 适合写整个路由组都要带上的静态响应头：</p>
+<h2 id="main-的位置"><a class="header" href="#main-的位置"><code>$main()</code> 的位置</a></h2>
+<p><code>$main()</code> 适合放全局初始化逻辑：</p>
+<pre><code class="language-dol">@CORS("*")
+$main() {
+    $&gt;&gt; "[INFO] server starting";
+}
+</code></pre>
+<p>什么时候需要：</p>
+<ul>
+<li>需要全局 <code>@CORS</code></li>
+<li>需要启动日志或初始化动作</li>
+<li>想把“启动阶段逻辑”和“路由定义”显式分开</li>
+</ul>
+<p>什么时候可以省略：</p>
+<ul>
+<li>只有少量路由</li>
+<li>没有全局初始化逻辑</li>
+</ul>
+<p>它和 <code>entry</code> 的关系是：</p>
+<ul>
+<li><code>entry</code> 选入口文件</li>
+<li><code>$main()</code> 定义该文件里的 serve 入口逻辑</li>
+</ul>
+<h2 id="组织-set_hdr"><a class="header" href="#组织-set_hdr">组织 <code>@SET_HDR(...)</code></a></h2>
 <pre><code class="language-dol">@SET_HDR({
     "X-Frame-Options": "DENY",
     "Cache-Control": "no-cache"
@@ -2574,92 +2173,49 @@ $HTTP("/api") {
     }
 }
 </code></pre>
-<p>路由级也可以继续声明：</p>
-<pre><code class="language-dol">@SET_HDR({ "Cache-Control": "no-store" })
-$GET("/admin") admin() -&gt; String {
-    $# "ok";
-}
-</code></pre>
-<p>合并规则：</p>
+<p>规则：</p>
 <ul>
 <li>块级 header 会传给块内路由</li>
 <li>同名 header 由更靠近路由的声明覆盖</li>
-<li>不同名 header 会一起保留</li>
 </ul>
 <h2 id="组织-cors"><a class="header" href="#组织-cors">组织 <code>@CORS(...)</code></a></h2>
 <p><code>@CORS(...)</code> 可以放在三个层级：</p>
 <ul>
-<li><code>$main() {}</code> 前，表示全局默认策略</li>
-<li><code>$HTTP(...)</code> 前，表示某个路由组的策略</li>
-<li>具体路由前，表示单条路由策略</li>
+<li><code>$main()</code> 前：全局默认策略</li>
+<li><code>$HTTP(...)</code> 前：路由组策略</li>
+<li>具体路由前：单条路由策略</li>
 </ul>
-<p>例如：</p>
-<pre><code class="language-dol">@CORS("*")
-$main() {}
-
-@CORS({
-    origins: ["https://api.example.com"],
-    methods: ["GET", "POST"]
-})
-$HTTP("/api") {
-    $GET("/users") users() -&gt; JSON {
-        $# $JSON { "ok": true };
-    }
-}
-</code></pre>
-<p>优先级是：</p>
+<p>优先级：</p>
 <ul>
-<li>路由级 <code>@CORS</code> 覆盖块级</li>
-<li>块级 <code>@CORS</code> 覆盖全局</li>
-<li>这里是整份配置替换，不做字段级合并</li>
+<li>路由级覆盖块级</li>
+<li>块级覆盖全局</li>
 </ul>
 <h2 id="链接外部路由模块"><a class="header" href="#链接外部路由模块">链接外部路由模块</a></h2>
 <pre><code class="language-dol">$HTTP("/v1/api").link("routers.api");
 </code></pre>
 <p><code>.link()</code> 只用于挂载 HTTP 路由，不等于普通 <code>$mod</code> 导入。</p>
-<p>可以把它理解成：</p>
-<ul>
-<li><code>$mod</code> 导入普通模块函数</li>
-<li><code>$HTTP(...).link(...)</code> 挂载路由定义</li>
-</ul>
-<p>例如：</p>
-<p><code>routers/api.dol</code>：</p>
-<pre><code class="language-dol">$GET("/status") status() -&gt; String {
-    $# "running";
-}
-</code></pre>
-<p><code>main.dol</code>：</p>
-<pre><code class="language-dol">$HTTP("/v1/api").link("routers.api");
-</code></pre>
-<h2 id="静态资源"><a class="header" href="#静态资源">静态资源</a></h2>
+<h2 id="静态资源和-html-文件"><a class="header" href="#静态资源和-html-文件">静态资源和 HTML 文件</a></h2>
 <pre><code class="language-dol">$STATIC("/static", "static");
-</code></pre>
-<p>也支持单参数形式：</p>
-<pre><code class="language-dol">$STATIC("static");
-</code></pre>
-<p>它适合把某个目录作为静态文件入口暴露出去。</p>
-<h2 id="html-外部文件链接"><a class="header" href="#html-外部文件链接">HTML 外部文件链接</a></h2>
-<pre><code class="language-dol">$GET("/") index() -&gt; HTML {
+
+$GET("/") index() -&gt; HTML {
     $# $HTML().link("pages.index");
 }
 </code></pre>
-<p>这适合：</p>
-<ul>
-<li>首页 HTML</li>
-<li>简单静态页面</li>
-<li>把 HTML/CSS/JS 作为文件组织而不是全部写进字符串</li>
-</ul>
-<h2 id="路由拆分建议"><a class="header" href="#路由拆分建议">路由拆分建议</a></h2>
-<p>当项目开始变大时，可以按这个顺序组织：</p>
+<h2 id="路由冲突怎么处理"><a class="header" href="#路由冲突怎么处理">路由冲突怎么处理</a></h2>
+<p>当前仓库没有把“同路径同方法重复注册”的底层策略写成稳定主线规则，因此这一章只给出安全建议，不虚构实现细节。</p>
+<p>推荐做法：</p>
 <ol>
-<li>先把多个路由放进 <code>$HTTP { ... }</code></li>
-<li>再把业务域拆到不同文件</li>
-<li>在入口文件里用 <code>.link()</code> 挂载</li>
-<li>静态资源单独交给 <code>$STATIC(...)</code></li>
+<li>同一个路径只在一个文件里定义一次</li>
+<li>先按业务域拆路由，再用 <code>.link()</code> 汇总</li>
+<li>启动时打开 <code>--routertab</code> 或最小化路由文件确认最终注册结果</li>
+<li>排查顺序先看入口文件、再看 <code>.link()</code>、最后看重复路径</li>
 </ol>
-<h2 id="一个完整例子-7"><a class="header" href="#一个完整例子-7">一个完整例子</a></h2>
+<p>如果你怀疑冲突，先把可疑路由缩成最小例子再排查。</p>
+<h2 id="一个完整例子-5"><a class="header" href="#一个完整例子-5">一个完整例子</a></h2>
 <pre><code class="language-dol">@CORS("*")
-$main() {}
+$main() {
+    $&gt;&gt; "[INFO] server starting";
+}
 
 @SET_HDR({ "X-Frame-Options": "DENY" })
 $HTTP("/api") {
@@ -2671,97 +2227,157 @@ $HTTP("/api") {
 $HTTP("/site").link("routers.site");
 $STATIC("/static", "static");
 </code></pre>
-<h2 id="进一步参考-3"><a class="header" href="#进一步参考-3">进一步参考</a></h2>
-<ul>
-<li><code>docs/reference/http.md</code></li>
-<li><code>docs/spec/modules.md</code></li>
-</ul>
 <h2 id="下一章-15"><a class="header" href="#下一章-15">下一章</a></h2>
 <p>继续看 <a href="#17-测试与调试-1">17-testing-and-debugging.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="17-测试与调试-1"><a class="header" href="#17-测试与调试-1">17. 测试与调试</a></h1>
-<p>这一章介绍当前最实用的调试路径。</p>
-<h2 id="用-dolang-test-跑路由"><a class="header" href="#用-dolang-test-跑路由">用 <code>dolang test</code> 跑路由</a></h2>
+<p>这一章给一条最实用的工作流：先验证最小功能，再缩小问题面，再做最小复现。</p>
+<h2 id="1-断言与基本验证"><a class="header" href="#1-断言与基本验证">1. 断言与基本验证</a></h2>
+<p>最轻量的验证方式仍然是直接运行并看输出：</p>
+<pre><code class="language-dol">$fn add(a, b) -&gt; Int {
+    $# a + b;
+}
+
+$&gt;&gt; add(1, 2);
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run main.dol
+</code></pre>
+<p>预期看到：</p>
+<pre><code class="language-text">3
+</code></pre>
+<p>对脚本逻辑来说，先把“输入是什么、输出是什么”写清楚，比一开始就堆复杂测试框架更重要。</p>
+<p>如果你想把“预期必须成立”写进代码里，优先用 <code>std.core.check.assert</code>：</p>
+<pre><code class="language-dol">$mod std.core.check;
+
+check.assert(1 + 1 == 2, "基础算术失败");
+check.assert("hello".len() == 5, "字符串长度失败");
+$&gt;&gt; "checks passed";
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run test_math.dol
+</code></pre>
+<p>通过时，你会看到：</p>
+<pre><code class="language-text">checks passed
+</code></pre>
+<p>断言失败时，程序会直接报错并停止，这很适合写最小脚本验证。</p>
+<h2 id="2-测试文件组织建议"><a class="header" href="#2-测试文件组织建议">2. 测试文件组织建议</a></h2>
+<p>当例子开始变大，推荐直接使用 <code>.dol</code> 测试脚本：</p>
+<pre><code class="language-text">my-app/
+├── main.dol
+├── shared/
+│   └── helper.dol
+└── tests/
+    ├── test_math.dol
+    └── test_users.dol
+</code></pre>
+<p>例如 <code>tests/test_math.dol</code>：</p>
+<pre><code class="language-dol">$mod std.core.check;
+
+check.assert(1 + 1 == 2, "1 + 1 应该等于 2");
+check.assert([1, 2, 2].count(2) == 2, "count(2) 应该等于 2");
+$&gt;&gt; "test_math ok";
+</code></pre>
+<p>当前仓库也可以直接参考：</p>
+<ul>
+<li><code>tests/spec/valid/</code></li>
+<li><code>tests/spec/invalid/</code></li>
+<li><code>tests/fixtures/</code></li>
+</ul>
+<p>这些目录最适合看两件事：</p>
+<ul>
+<li>最小正确写法是什么</li>
+<li>最小错误复现应该缩到多小</li>
+</ul>
+<h2 id="3-用-dolang-test-验证-http"><a class="header" href="#3-用-dolang-test-验证-http">3. 用 <code>dolang test</code> 验证 HTTP</a></h2>
+<p>最常用命令：</p>
 <pre><code class="language-bash">dolang test
 dolang test main.dol
 dolang test --route GET /hello
+dolang test --route POST /echo --body '{"name":"Tom"}'
 </code></pre>
-<p>带请求体：</p>
-<pre><code class="language-bash">dolang test --route POST /echo --body '{"name":"Tom"}'
-</code></pre>
-<p>你可以先把它理解成“对当前 HTTP 路由做最小验证”的入口。</p>
-<h2 id="推荐测试顺序"><a class="header" href="#推荐测试顺序">推荐测试顺序</a></h2>
-<p>建议按这个顺序排查问题：</p>
+<h3 id="脚本验证路径"><a class="header" href="#脚本验证路径">脚本验证路径</a></h3>
+<p>对纯脚本逻辑，推荐顺序：</p>
 <ol>
-<li>先跑 <code>dolang run file.dol</code></li>
-<li>HTTP 场景再跑 <code>dolang serve</code> 或 <code>dolang test</code></li>
-<li>最后把问题缩成最小样例</li>
+<li>先 <code>dolang run tests/test_xxx.dol</code></li>
+<li>必要时拆成更小函数</li>
+<li>再把问题缩成最小文件</li>
 </ol>
-<h2 id="用---route-缩小问题面"><a class="header" href="#用---route-缩小问题面">用 <code>--route</code> 缩小问题面</a></h2>
-<p>如果一个文件里有多条路由，优先只测出问题的那一条：</p>
-<pre><code class="language-bash">dolang test --route GET /hello
+<h3 id="http-验证路径"><a class="header" href="#http-验证路径">HTTP 验证路径</a></h3>
+<p>对 HTTP handler，推荐顺序：</p>
+<ol>
+<li>先 <code>dolang test --route ...</code></li>
+<li>再 <code>dolang serve ...</code> 做真实请求验证</li>
+<li>只在需要时再扩到完整项目路径</li>
+</ol>
+<h2 id="4-终端输出怎么看"><a class="header" href="#4-终端输出怎么看">4. 终端输出怎么看</a></h2>
+<h3 id="一个通过的例子"><a class="header" href="#一个通过的例子">一个通过的例子</a></h3>
+<pre><code class="language-text">$ dolang test --route GET /hello
+[OK] GET /hello
 </code></pre>
-<p>这样比一次性跑全部路由更容易定位问题。</p>
-<p>如果你的路由定义本身带参数，占位匹配要按“已注册路由路径”理解，而不是先把它当成完整集成测试工具。</p>
-<h2 id="用-repl-做最小复现"><a class="header" href="#用-repl-做最小复现">用 REPL 做最小复现</a></h2>
+<h3 id="一个失败的例子"><a class="header" href="#一个失败的例子">一个失败的例子</a></h3>
+<pre><code class="language-text">$ dolang run bad.dol
+[ERROR] runtime error: variable 'x' not found
+</code></pre>
+<p>遇到失败时，先做三件事：</p>
+<ol>
+<li>看错误类别</li>
+<li>看报错位置</li>
+<li>看是语法、类型、模块、文件还是 HTTP 路由问题</li>
+</ol>
+<h2 id="5-调试工作流"><a class="header" href="#5-调试工作流">5. 调试工作流</a></h2>
+<h3 id="用-repl-做最小复现"><a class="header" href="#用-repl-做最小复现">用 REPL 做最小复现</a></h3>
 <p>REPL 适合：</p>
 <ul>
 <li>试表达式</li>
 <li>试类型行为</li>
 <li>试字符串和列表方法</li>
 </ul>
-<h2 id="用打印定位问题"><a class="header" href="#用打印定位问题">用打印定位问题</a></h2>
+<h3 id="用打印定位问题"><a class="header" href="#用打印定位问题">用打印定位问题</a></h3>
 <pre><code class="language-dol">$&gt;&gt; "debug";
 $&gt;&gt; value;
 $&gt;&gt;ERR(f"unexpected: {value}");
 </code></pre>
-<p>打印最适合放在：</p>
+<p>最适合放打印的位置：</p>
 <ul>
 <li>分支判断前后</li>
 <li>文件读取之后</li>
 <li>返回之前</li>
-<li>catch 块里</li>
+<li><code>catch</code> 块里</li>
 </ul>
-<h2 id="用-trycatch-包住不稳定点"><a class="header" href="#用-trycatch-包住不稳定点">用 try/catch 包住不稳定点</a></h2>
-<p>例如文件读取：</p>
+<h3 id="用-try--catch-包住不稳定点"><a class="header" href="#用-try--catch-包住不稳定点">用 <code>$try / $catch</code> 包住不稳定点</a></h3>
 <pre><code class="language-dol">$mod std.fs;
 $try {
     $ content = fs.read_text("missing.txt");
     $&gt;&gt; content;
 } $catch err {
-    $&gt;&gt;ERR(err);
+    $&gt;&gt;ERR(f"read failed: {err}");
 }
 </code></pre>
-<h2 id="用最小文件定位问题"><a class="header" href="#用最小文件定位问题">用最小文件定位问题</a></h2>
-<p>当问题不明显时，建议新建一个最小 <code>.dol</code> 文件，只保留：</p>
+<h2 id="6-常见排障配方"><a class="header" href="#6-常见排障配方">6. 常见排障配方</a></h2>
+<h3 id="handler-返回空-body"><a class="header" href="#handler-返回空-body">handler 返回空 body</a></h3>
 <ul>
-<li>触发问题的最短输入</li>
-<li>一到两个函数</li>
-<li>一次运行命令</li>
+<li>现象：请求成功，但没有你预期的响应体</li>
+<li>检查点：handler 是否真的执行到 <code>$#</code></li>
+<li>推荐动作：先改成最小固定返回，例如 <code># "ok"</code> 或固定 JSON</li>
 </ul>
-<p>例如不要一上来就在完整项目里查问题，先缩成：</p>
-<pre><code class="language-dol">$ value: Int = "text";
-</code></pre>
-<p>或者：</p>
-<pre><code class="language-dol">$mod missing.module;
-</code></pre>
-<h2 id="参考测试资产"><a class="header" href="#参考测试资产">参考测试资产</a></h2>
-<p>仓库里已有很多可参考样例：</p>
+<h3 id="模块函数没被调用"><a class="header" href="#模块函数没被调用">模块函数没被调用</a></h3>
 <ul>
-<li><code>tests/spec/valid/</code></li>
-<li><code>tests/spec/invalid/</code></li>
-<li><code>tests/fixtures/</code></li>
+<li>现象：程序能跑，但结果像是走了旧逻辑</li>
+<li>检查点：是否写了正确的 <code>$mod</code> 路径，是否通过命名空间调用</li>
+<li>推荐动作：先在入口处打印模块调用结果，确认不是旧页面里的平铺导入预期</li>
 </ul>
-<p>这些目录最适合拿来做两件事：</p>
+<h3 id="类型注解相关报错"><a class="header" href="#类型注解相关报错">类型注解相关报错</a></h3>
 <ul>
-<li>看“正确写法”长什么样</li>
-<li>看“错误最小复现”应该缩到什么程度</li>
+<li>现象：声明或返回时提示类型不匹配</li>
+<li>检查点：变量注解是否与实际值一致，返回值是否用了 <code>List&lt;T&gt;</code></li>
+<li>推荐动作：先缩成最小函数，再回看 <a href="#9-渐进类型-1">09-gradual-typing.md</a> 和 <a href="#10-错误处理-1">10-error-handling.md</a></li>
 </ul>
 <h2 id="下一章-16"><a class="header" href="#下一章-16">下一章</a></h2>
 <p>继续看 <a href="#18-模式与实战配方-1">18-patterns-and-recipes.md</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="18-模式与实战配方-1"><a class="header" href="#18-模式与实战配方-1">18. 模式与实战配方</a></h1>
-<p>这一章收集“怎么组合使用 Dolang”的实际路径。</p>
+<p>这一章给的是可复制的起步配方，而不是零散片段。</p>
 <h2 id="配方-1单文件脚本"><a class="header" href="#配方-1单文件脚本">配方 1：单文件脚本</a></h2>
 <p>适合：</p>
 <ul>
@@ -2769,7 +2385,7 @@ $try {
 <li>小工具</li>
 <li>一次性脚本</li>
 </ul>
-<p>一个最小例子：</p>
+<p>文件：<code>sum.dol</code></p>
 <pre><code class="language-dol">$ nums = [1, 2, 3, 4, 5];
 $ total = 0;
 
@@ -2779,81 +2395,152 @@ $for n in nums {
 
 $&gt;&gt; total;
 </code></pre>
-<h2 id="配方-2标准库驱动的小工具"><a class="header" href="#配方-2标准库驱动的小工具">配方 2：标准库驱动的小工具</a></h2>
-<p>典型组合：</p>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run sum.dol
+</code></pre>
+<p>预期输出：</p>
+<pre><code class="language-text">15
+</code></pre>
+<p>回看章节：</p>
 <ul>
-<li><code>std.str</code></li>
-<li><code>std.json</code></li>
-<li><code>std.path</code></li>
-<li><code>std.fs</code></li>
+<li><a href="#7-函数-1">07-functions.md</a></li>
+<li><a href="#8-集合与常用方法-1">08-collections-and-methods.md</a></li>
 </ul>
-<p>例如：</p>
+<h2 id="配方-2读取并处理-json-文件"><a class="header" href="#配方-2读取并处理-json-文件">配方 2：读取并处理 JSON 文件</a></h2>
+<p>目录：</p>
+<pre><code class="language-text">json-tool/
+├── main.dol
+└── data.json
+</code></pre>
+<p><code>data.json</code></p>
+<pre><code class="language-json">{"name":"dolang","tags":["lang","tool","lang"]}
+</code></pre>
+<p><code>main.dol</code></p>
 <pre><code class="language-dol">$mod std.fs;
 $mod std.json;
 
 $ raw = fs.read_text("data.json");
 $ obj = json.parse(raw);
-$&gt;&gt; json.stringify(obj);
+$ tags = obj["tags"];
+
+$&gt;&gt; obj["name"];
+$&gt;&gt; tags.unique().len();
 </code></pre>
-<h2 id="配方-3带-package-的小项目"><a class="header" href="#配方-3带-package-的小项目">配方 3：带 package 的小项目</a></h2>
-<p>适合：</p>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run main.dol
+</code></pre>
+<p>预期输出：</p>
+<pre><code class="language-text">dolang
+2
+</code></pre>
+<p>回看章节：</p>
 <ul>
-<li>有配置项</li>
-<li>有多个模块</li>
-<li>需要服务模式</li>
+<li><a href="#8-集合与常用方法-1">08-collections-and-methods.md</a></li>
+<li><a href="#13-标准库总览-1">13-stdlib-overview.md</a></li>
+<li><a href="#14-io环境变量与配置-1">14-io-env-config.md</a></li>
 </ul>
-<p>最小结构：</p>
+<h2 id="配方-3带-packagetoml-的小项目"><a class="header" href="#配方-3带-packagetoml-的小项目">配方 3：带 <code>package.toml</code> 的小项目</a></h2>
+<p>目录：</p>
 <pre><code class="language-text">my-app/
 ├── package.toml
 ├── main.dol
 └── shared/
     └── helper.dol
 </code></pre>
-<h2 id="配方-4拆模块的-http-服务"><a class="header" href="#配方-4拆模块的-http-服务">配方 4：拆模块的 HTTP 服务</a></h2>
-<p>推荐组合：</p>
-<ul>
-<li><code>package.toml</code></li>
-<li><code>$mod</code> 普通模块</li>
-<li><code>$HTTP(...).link(...)</code></li>
-</ul>
-<p>入口文件可以像这样：</p>
-<pre><code class="language-dol">$HTTP("/api").link("routers.api");
-$STATIC("/static", "static");
+<p><code>package.toml</code></p>
+<pre><code class="language-toml">name = "my-app"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
 </code></pre>
-<h2 id="配方-5从脚本迁移到服务"><a class="header" href="#配方-5从脚本迁移到服务">配方 5：从脚本迁移到服务</a></h2>
-<p>常见演进顺序：</p>
-<ol>
-<li>从单文件脚本开始</li>
-<li>抽出模块</li>
-<li>引入 <code>package.toml</code></li>
-<li>暴露 HTTP 路由</li>
-<li>用 <code>dolang test</code> 验证路由</li>
-</ol>
-<h2 id="一套实用的成长路径"><a class="header" href="#一套实用的成长路径">一套实用的成长路径</a></h2>
-<p>如果你是第一次系统写 Dolang，建议按这个顺序练习：</p>
-<ol>
-<li>先写只包含变量、循环、函数的脚本</li>
-<li>再引入 <code>std.str</code>、<code>std.math</code>、<code>std.json</code></li>
-<li>再把脚本拆成两个模块</li>
-<li>再加 <code>package.toml</code></li>
-<li>最后再进入 HTTP 服务</li>
-</ol>
-<h2 id="这一章后续会继续扩写什么"><a class="header" href="#这一章后续会继续扩写什么">这一章后续会继续扩写什么</a></h2>
-<p>优先级最高的补充方向：</p>
+<p><code>shared/helper.dol</code></p>
+<pre><code class="language-dol">$fn greeting() -&gt; String {
+    $# "hello from helper";
+}
+</code></pre>
+<p><code>main.dol</code></p>
+<pre><code class="language-dol">$mod shared.helper;
+$&gt;&gt; helper.greeting();
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash">dolang run main.dol
+</code></pre>
+<p>预期输出：</p>
+<pre><code class="language-text">hello from helper
+</code></pre>
+<p>回看章节：</p>
 <ul>
-<li>文件处理脚本实战</li>
-<li>JSON API 小项目</li>
-<li>多模块目录组织模板</li>
-<li>服务入口与路由拆分模板</li>
+<li><a href="#11-模块系统-1">11-modules.md</a></li>
+<li><a href="#12-项目系统与-packagetoml">12-projects-and-package.md</a></li>
 </ul>
+<h2 id="配方-4模块化-http-服务"><a class="header" href="#配方-4模块化-http-服务">配方 4：模块化 HTTP 服务</a></h2>
+<p>目录：</p>
+<pre><code class="language-text">http-app/
+├── package.toml
+├── main.dol
+└── routers/
+    └── api.dol
+</code></pre>
+<p><code>package.toml</code></p>
+<pre><code class="language-toml">name = "http-app"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+</code></pre>
+<p><code>routers/api.dol</code></p>
+<pre><code class="language-dol">$GET("/status") status() -&gt; JSON {
+    $# $JSON { "ok": true };
+}
+</code></pre>
+<p><code>main.dol</code></p>
+<pre><code class="language-dol">@CORS("*")
+$main() {
+    $&gt;&gt; "[INFO] server starting";
+}
+
+$HTTP("/api").link("routers.api");
+</code></pre>
+<p>运行：</p>
+<pre><code class="language-bash">dolang serve .
+</code></pre>
+<p>验证：</p>
+<pre><code class="language-bash">curl http://127.0.0.1:8080/api/status
+</code></pre>
+<p>预期结果：</p>
+<pre><code class="language-text">{"ok":true}
+</code></pre>
+<p>回看章节：</p>
+<ul>
+<li><a href="#12-项目系统与-packagetoml">12-projects-and-package.md</a></li>
+<li><a href="#15-http-基础-1">15-http-basics.md</a></li>
+<li><a href="#16-http-组织方式-1">16-http-organization.md</a></li>
+</ul>
+<h2 id="迁移说明"><a class="header" href="#迁移说明">迁移说明</a></h2>
+<p>旧的零散示例页仍在 <a href="#实用示例">examples.md</a>，但主线示例职责已经迁到本章。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="syntax-cheatsheet"><a class="header" href="#syntax-cheatsheet">Syntax Cheatsheet</a></h1>
-<h2 id="声明"><a class="header" href="#声明">声明</a></h2>
+<p>只放最小可识别片段，不展开成长教程。</p>
+<h2 id="声明与赋值"><a class="header" href="#声明与赋值">声明与赋值</a></h2>
 <pre><code class="language-dol">$ value = 1;
+$ value: Int = 1;
 $@ NAME = "dolang";
-$fn greet(name) -&gt; String {
-    $# name;
-}
+value = 2;
+value += 1;
+</code></pre>
+<h2 id="输入与输出"><a class="header" href="#输入与输出">输入与输出</a></h2>
+<pre><code class="language-dol">$&gt;&gt; "hello";
+$&gt;&gt;ERR("bad input");
+$&gt;&gt;FILE("out.txt", "hello");
+$ name = $&lt;&lt;LINE();
+$ home = $&lt;&lt;ENV("HOME");
+$ text = $&lt;&lt;FILE("notes.txt");
+$ lines = $&lt;&lt;FILE("notes.txt", "LINES");
 </code></pre>
 <h2 id="控制流"><a class="header" href="#控制流">控制流</a></h2>
 <pre><code class="language-dol">$if cond {
@@ -2869,16 +2556,84 @@ $loop {
 }
 
 $for item in items {
+    $continue;
+}
+
+$for i = 0; i &lt; 10; i = i + 1 {
+}
+</code></pre>
+<h2 id="函数"><a class="header" href="#函数">函数</a></h2>
+<pre><code class="language-dol">$fn greet(name) -&gt; String {
+    $# name;
+}
+
+_$fn helper(x) -&gt; Int {
+    $# x * 2;
+}
+
+$ anon = $fn(x) {
+    $# x + 1;
+};
+</code></pre>
+<h2 id="错误处理"><a class="header" href="#错误处理">错误处理</a></h2>
+<pre><code class="language-dol">$try {
+    $throw "oops";
+} $catch err {
+    $&gt;&gt;ERR(err);
 }
 </code></pre>
 <h2 id="模块"><a class="header" href="#模块">模块</a></h2>
 <pre><code class="language-dol">$mod helper;
+$mod shared.tool;
+$mod math.*;
 $mod std.math;
 </code></pre>
-<h2 id="http"><a class="header" href="#http">HTTP</a></h2>
+<h2 id="类型系统"><a class="header" href="#类型系统">类型系统</a></h2>
+<pre><code class="language-dol">$ items: List = [1, 2, 3];
+$Type User {
+    id: Int
+    name: Str
+}
+
+$fn list_users() -&gt; List&lt;User&gt; {
+    $# [{"id": 1, "name": "Alice"}];
+}
+</code></pre>
+<h2 id="http-handler"><a class="header" href="#http-handler">HTTP handler</a></h2>
 <pre><code class="language-dol">$GET("/hello") hello() -&gt; String {
     $# "world";
 }
+
+$POST("/echo") echo() -&gt; JSON {
+    $# $JSON { "body": body };
+}
+</code></pre>
+<h2 id="http-组织"><a class="header" href="#http-组织">HTTP 组织</a></h2>
+<pre><code class="language-dol">$HTTP("/api") {
+    $GET("/ping") ping() -&gt; JSON {
+        $# $JSON { "ok": true };
+    }
+}
+
+$HTTP("/api").link("routers.api");
+$STATIC("/static", "static");
+</code></pre>
+<h2 id="构造器"><a class="header" href="#构造器">构造器</a></h2>
+<pre><code class="language-dol">$# $JSON { "ok": true };
+$# $HTML("&lt;h1&gt;Hello&lt;/h1&gt;");
+$# $HTML().link("pages.index");
+$# $RES(201, {"created": true});
+</code></pre>
+<h2 id="注解"><a class="header" href="#注解">注解</a></h2>
+<pre><code class="language-dol">@SET_HDR({ "Cache-Control": "no-store" })
+@CORS("*")
+</code></pre>
+<h2 id="程序入口与退出"><a class="header" href="#程序入口与退出">程序入口与退出</a></h2>
+<pre><code class="language-dol">$main() {
+    $&gt;&gt; "starting";
+}
+
+exit;
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="cli-cheatsheet"><a class="header" href="#cli-cheatsheet">CLI Cheatsheet</a></h1>
@@ -2909,29 +2664,42 @@ dolang test --route POST /echo --body '{"name":"Tom"}'
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="common-errors"><a class="header" href="#common-errors">Common Errors</a></h1>
-<h2 id="解析错误"><a class="header" href="#解析错误">解析错误</a></h2>
+<h2 id="解析阶段"><a class="header" href="#解析阶段">解析阶段</a></h2>
 <ul>
 <li>缺少分号</li>
 <li>表达式右侧缺失</li>
 <li>括号或大括号不匹配</li>
+<li>语法还没进入执行阶段，因此不能靠 <code>$catch</code> 处理</li>
 </ul>
-<h2 id="运行时错误"><a class="header" href="#运行时错误">运行时错误</a></h2>
+<h2 id="运行阶段"><a class="header" href="#运行阶段">运行阶段</a></h2>
 <ul>
 <li>未定义变量</li>
 <li>类型不匹配</li>
 <li>模块未找到</li>
 <li>文件读取失败</li>
-<li>JSON 解析失败</li>
+<li>环境变量不存在</li>
+<li>HTTP handler 返回类型不匹配</li>
 </ul>
-<h2 id="排查建议"><a class="header" href="#排查建议">排查建议</a></h2>
+<h2 id="快速排查顺序"><a class="header" href="#快速排查顺序">快速排查顺序</a></h2>
 <ol>
-<li>先看错误类别</li>
-<li>再看文件位置</li>
-<li>把问题缩小到最小 <code>.dol</code> 文件</li>
-<li>需要时在 REPL 里验证</li>
+<li>先看是 parse error 还是 runtime error</li>
+<li>再看报错位置</li>
+<li>缩成最小 <code>.dol</code> 文件</li>
+<li>用 REPL 或 <code>dolang test --route ...</code> 复现</li>
 </ol>
+<h2 id="交叉阅读"><a class="header" href="#交叉阅读">交叉阅读</a></h2>
+<ul>
+<li>主线说明：<a href="#10-错误处理-1">../10-error-handling.md</a></li>
+<li>查表说明：<a href="../reference/errors.html">../../reference/errors.md</a></li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="核心概念"><a class="header" href="#核心概念">核心概念</a></h1>
+<blockquote>
+<p><strong>Status: Supplemental</strong></p>
+<p>这是一页迁移期补充材料，不再作为学习主线入口。
+主线请先读 <a href="#1-认识-dolang-1">01-introduction.md</a> 和 <a href="README.html">guide/README.md</a>。
+本页仍保留的独特价值是背景动机、设计口号和产品定位表述。</p>
+</blockquote>
 <p>本文档介绍 Dolang 的设计理念和核心概念。</p>
 <h2 id="-符号哲学"><a class="header" href="#-符号哲学">$ 符号哲学</a></h2>
 <h3 id="起源"><a class="header" href="#起源">起源</a></h3>
@@ -3002,6 +2770,12 @@ $&gt;&gt; a;         // 打印输出
 <p>写代码，就是赚钱。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="快速开始"><a class="header" href="#快速开始">快速开始</a></h1>
+<blockquote>
+<p><strong>Status: Supplemental</strong></p>
+<p>这是一页迁移期补充材料。
+如果你要走当前主线，请改读 <a href="#2-安装与-cli-1">02-installation-and-cli.md</a> 和 <a href="#3-第一个程序-1">03-first-program.md</a>。
+本页仍保留的独特价值是“一页式上手”节奏，适合快速预览，但不再承担完整教学职责。</p>
+</blockquote>
 <p>本指南帮助你在 5 分钟内上手 Dolang。</p>
 <hr>
 <h2 id="安装-1"><a class="header" href="#安装-1">安装</a></h2>
@@ -3067,7 +2841,7 @@ $&gt;&gt; name;
 <h3 id="注释-1"><a class="header" href="#注释-1">注释</a></h3>
 <pre><code class="language-dolang">// 这是单行注释
 </code></pre>
-<h3 id="函数"><a class="header" href="#函数">函数</a></h3>
+<h3 id="函数-1"><a class="header" href="#函数-1">函数</a></h3>
 <pre><code class="language-dolang">$fn add(a, b) {
     $# a + b;            // $# 是 return
 }
@@ -3100,13 +2874,19 @@ $while i &lt; 3 {
 <hr>
 <h2 id="下一步"><a class="header" href="#下一步">下一步</a></h2>
 <ul>
-<li><a href="#实用示例">实用示例</a> — 更多代码示例</li>
-<li><a href="#标准库参考">标准库参考</a> — 内置方法与标准库模块</li>
-<li><a href="#模块系统">模块系统</a> — 导入和组织代码</li>
-<li><a href="#web-服务">Web 服务</a> — 构建 HTTP API</li>
+<li><a href="#18-模式与实战配方-1">18-patterns-and-recipes.md</a> — 现行可运行配方</li>
+<li><a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a> — 标准库与值方法查表</li>
+<li><a href="#11-模块系统-1">11-modules.md</a> — 当前模块系统主线</li>
+<li><a href="#15-http-基础-1">15-http-basics.md</a> / <a href="#16-http-组织方式-1">16-http-organization.md</a> — 当前 HTTP 主线</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="实用示例"><a class="header" href="#实用示例">实用示例</a></h1>
+<blockquote>
+<p><strong>Status: Migration Source</strong></p>
+<p>这页不再承担“主线示例集”职责。
+当前可运行配方请改读 <a href="#18-模式与实战配方-1">18-patterns-and-recipes.md</a>。
+本页仅保留零散旧示例和迁移线索；遇到和主线冲突的写法，应以编号章节、reference 和 spec 为准。</p>
+</blockquote>
 <p>本章节提供真实使用场景的示例，帮助你快速上手 Dolang。</p>
 <hr>
 <h2 id="1-基础计算"><a class="header" href="#1-基础计算">1. 基础计算</a></h2>
@@ -3230,6 +3010,7 @@ $fn compute(n) {
 </code></pre>
 <hr>
 <h2 id="6-列表操作"><a class="header" href="#6-列表操作">6. 列表操作</a></h2>
+<p>主线去向：<a href="#8-集合与常用方法-1">08-collections-and-methods.md</a></p>
 <pre><code class="language-dolang">$ nums = [3, 1, 4, 1, 5, 9, 2, 6];
 
 $&gt;&gt; nums.len();           // 8
@@ -3249,6 +3030,7 @@ $&gt;&gt; nums.is_empty();      // false
 </code></pre>
 <hr>
 <h2 id="7-map-操作"><a class="header" href="#7-map-操作">7. Map 操作</a></h2>
+<p>主线去向：<a href="#8-集合与常用方法-1">08-collections-and-methods.md</a></p>
 <pre><code class="language-dolang">$ user = {"name": "Tom", "age": 25};
 
 $&gt;&gt; user["name"];              // Tom
@@ -3268,6 +3050,8 @@ $for key in user {
 } $catch err {
     $&gt;&gt; f"Error: {err}";
 }
+
+主线去向：[10-error-handling.md](10-error-handling.md)
 </code></pre>
 <p><strong>主动抛出异常</strong></p>
 <pre><code class="language-dolang">$fn divide(a, b) {
@@ -3339,9 +3123,15 @@ $&gt;&gt; "  hello  ".trim().upper();        // HELLO
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="模块系统"><a class="header" href="#模块系统">模块系统</a></h1>
+<blockquote>
+<p><strong>Status: Deprecated</strong></p>
+<p>这是一页已废弃的旧版模块文档。
+当前主线请改读 <a href="#11-模块系统-1">11-modules.md</a> 和 <a href="../spec/modules.html">../spec/modules.md</a>。
+本页保留仅用于迁移追溯；其中关于通配符导入会把函数平铺到当前作用域的说法已经失效，不能再作为当前语义依据。</p>
+</blockquote>
 <p>Dolang 的模块系统分为三层：<strong>native 内置模块</strong>、<strong>纯 .dol 标准库模块</strong>、<strong>项目自定义模块</strong>。</p>
 <hr>
-<h2 id="导入模块-1"><a class="header" href="#导入模块-1">导入模块</a></h2>
+<h2 id="导入模块"><a class="header" href="#导入模块">导入模块</a></h2>
 <h3 id="导入标准库模块"><a class="header" href="#导入标准库模块">导入标准库模块</a></h3>
 <pre><code class="language-dolang">$mod std.math;
 $mod std.fs;
@@ -3445,15 +3235,22 @@ dolang serve .
 </code></pre>
 <hr>
 <h2 id="通配符导入"><a class="header" href="#通配符导入">通配符导入</a></h2>
-<p>使用 <code>.*</code> 导入模块中所有公有函数到当前命名空间（不带前缀）：</p>
+<p>以下示例属于旧写法说明，勿作为当前主线语义：</p>
 <pre><code class="language-dolang">$mod std.core.iter.*;
 
-$for i in range(0, 3) {    // 直接使用 range，无需 iter. 前缀
+$for i in range(0, 3) {    // 旧写法示例
     $&gt;&gt; i;
 }
 </code></pre>
+<p>当前实现中，<code>$mod a.*;</code> 导入的是直接子模块命名空间，不会把函数平铺到当前作用域。请以 <a href="#11-模块系统-1">11-modules.md</a> 为准。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="标准库参考"><a class="header" href="#标准库参考">标准库参考</a></h1>
+<blockquote>
+<p><strong>Status: Migration Source</strong></p>
+<p>这是一页迁移期旧参考文档。
+当前主线的总览请读 <a href="#13-标准库总览-1">13-stdlib-overview.md</a>，完整查表请读 <a href="../reference/stdlib-api.html">../reference/stdlib-api.md</a>。
+本页仍保留的独特价值是旧版 API 罗列，可作为迁移素材，但不应继续作为主线入口。</p>
+</blockquote>
 <p>Dolang 的标准库分为两层：</p>
 <ul>
 <li><strong>内置方法</strong>：所有值都自带的方法，无需 import</li>
@@ -3879,12 +3676,13 @@ $for i in range(0, 3) {    // 直接使用 range，无需 iter. 前缀
 </div>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="类型注解"><a class="header" href="#类型注解">类型注解</a></h1>
-<p>Dolang 支持<strong>渐进类型注解</strong>：注解完全可选，不影响程序运行，但能提升代码可读性。</p>
 <blockquote>
-<p>迁移说明</p>
-<p>本页属于旧 guide 页面。
-<code>List</code> / <code>Map</code> 显式声明现在已经可用，但主线说明以 <a href="#9-渐进类型-1">09-gradual-typing.md</a> 为准。</p>
+<p><strong>Status: Migration Source</strong></p>
+<p>这是一页迁移期旧类型文档。
+当前主线请改读 <a href="#9-渐进类型-1">09-gradual-typing.md</a>。
+本页仍保留的独特价值是旧版示例集合，但其中参数类型注解、<code>JSON&lt;User&gt;</code> 等写法不应视为当前主线承诺。</p>
 </blockquote>
+<p>Dolang 支持<strong>渐进类型注解</strong>：注解完全可选，不影响程序运行，但能提升代码可读性。</p>
 <hr>
 <h2 id="变量类型注解"><a class="header" href="#变量类型注解">变量类型注解</a></h2>
 <p>在变量名后加 <code>: 类型</code> 进行注解：</p>
@@ -3951,18 +3749,15 @@ $fn is_even(n) -&gt; Bool {
 <li>可选字段：在类型后加 <code>?</code></li>
 <li>无 getter / setter，无私有字段，无方法</li>
 </ul>
-<h3 id="与函数返回类型结合"><a class="header" href="#与函数返回类型结合">与函数返回类型结合</a></h3>
-<pre><code class="language-dolang">$fn getUser(id) -&gt; JSON&lt;User&gt; {
-    $# {"id": id, "name": "Alice"};
-}
-</code></pre>
-<p><code>JSON&lt;User&gt;</code> 表示“返回符合 User 形状的 JSON“，运行时不做强制校验。</p>
-<p>HTTP handler 同样支持：</p>
-<pre><code class="language-dolang">$GET("/users/:id") get_user(id) -&gt; JSON&lt;User&gt; {
-    $# {"id": id, "name": "Alice"};
-}
-</code></pre>
-<p>建议把 <code>$Type</code> 定义集中放在 <code>models/</code> 目录，函数和路由引用。</p>
+<h3 id="与返回类型相关的迁移提醒"><a class="header" href="#与返回类型相关的迁移提醒">与返回类型相关的迁移提醒</a></h3>
+<p>旧文档里曾经把 <code>$Type</code> 和 <code>JSON&lt;User&gt;</code> 放在一起讲解。</p>
+<p>这一轮主线已经不再把 <code>JSON&lt;User&gt;</code> 当作稳定教学写法，所以这里不要继续照抄旧签名。当前阅读方式是：</p>
+<ul>
+<li>结构说明看 <code>$Type</code></li>
+<li>普通 JSON 返回看 <code>-&gt; JSON</code></li>
+<li>集合返回看 <code>-&gt; List&lt;T&gt;</code></li>
+</ul>
+<p>主线说明以 <a href="#9-渐进类型-1">09-gradual-typing.md</a> 为准。</p>
 <hr>
 <h2 id="运行时类型查询-1"><a class="header" href="#运行时类型查询-1">运行时类型查询</a></h2>
 <p>通过 <code>.type()</code> 方法在运行时获取值的类型名：</p>
@@ -4018,6 +3813,12 @@ check.assert(false, "断言失败");           // 抛出异常
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="web-服务"><a class="header" href="#web-服务">Web 服务</a></h1>
+<blockquote>
+<p><strong>Status: Migration Source</strong></p>
+<p>这是一页迁移期旧 Web 文档。
+当前主线请改读 <a href="#15-http-基础-1">15-http-basics.md</a> 和 <a href="#16-http-组织方式-1">16-http-organization.md</a>。
+本页仍保留的独特价值是把 serve 启动、路由、CORS、静态资源放在同一页浏览，但不再作为主线入口。</p>
+</blockquote>
 <p>Dolang 内置 HTTP 服务支持，通过 <code>dolang serve</code> 启动，使用声明式语法定义路由。</p>
 <hr>
 <h2 id="启动服务"><a class="header" href="#启动服务">启动服务</a></h2>
@@ -4085,7 +3886,7 @@ $GET("/ping") ping() -&gt; String {
 }
 </code></pre>
 <hr>
-<h2 id="路径参数-1"><a class="header" href="#路径参数-1">路径参数</a></h2>
+<h2 id="路径参数"><a class="header" href="#路径参数">路径参数</a></h2>
 <p>在路径中使用 <code>:param</code> 定义动态参数，参数值自动注入为同名变量：</p>
 <pre><code class="language-dolang">$GET("/users/:id") get_user(id) -&gt; JSON {
     $# {"id": id, "name": "User " + id};
@@ -4221,7 +4022,7 @@ $STATIC("static");
         └── app.js
 </code></pre>
 <hr>
-<h2 id="读取项目配置-1"><a class="header" href="#读取项目配置-1">读取项目配置</a></h2>
+<h2 id="读取项目配置"><a class="header" href="#读取项目配置">读取项目配置</a></h2>
 <p>通过 <code>$&lt;&lt;CONFIG("KEY")</code> 读取 <code>package.toml</code> 的 <code>[env]</code> 配置：</p>
 <pre><code class="language-toml"># package.toml
 [env]
@@ -4260,7 +4061,7 @@ $POST("/users") create_user() -&gt; JSON {
 </table>
 </div>
 <hr>
-<h2 id="错误处理"><a class="header" href="#错误处理">错误处理</a></h2>
+<h2 id="错误处理-1"><a class="header" href="#错误处理-1">错误处理</a></h2>
 <h3 id="throw--代码级错误传播"><a class="header" href="#throw--代码级错误传播">$throw — 代码级错误传播</a></h3>
 <p><code>$throw</code> 用于终止执行并传播错误，可配合 <code>$try/$catch</code> 捕获：</p>
 <p><strong>未捕获 → HTTP 500 + 终端打印错误：</strong></p>

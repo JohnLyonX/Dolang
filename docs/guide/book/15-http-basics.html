@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -175,8 +175,7 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="15-http-基础"><a class="header" href="#15-http-基础">15. HTTP 基础</a></h1>
-<p>Dolang 当前内置了 HTTP 路由定义能力，可以直接和 <code>dolang serve</code> 配合使用。
-除此之外，也已经有 <code>std.http</code> 原生模块，可以在脚本或 handler 内主动发出同步 HTTP 请求。</p>
+<p>Dolang 当前内置了 HTTP 路由定义能力，可以直接和 <code>dolang serve</code> 配合使用。</p>
 <h2 id="定义路由"><a class="header" href="#定义路由">定义路由</a></h2>
 <pre><code class="language-dol">$GET("/hello") hello() -&gt; String {
     $# "world";
@@ -185,61 +184,7 @@
 <p>启动：</p>
 <pre><code class="language-bash">dolang serve main.dol
 </code></pre>
-<p>如果是项目目录，也可以：</p>
-<pre><code class="language-bash">dolang serve .
-</code></pre>
-<p>默认监听配置会受项目里的 <code>[server]</code> 影响。</p>
-<p>支持的方法：</p>
-<ul>
-<li><code>$GET</code></li>
-<li><code>$POST</code></li>
-<li><code>$PUT</code></li>
-<li><code>$DEL</code></li>
-<li><code>$PATCH</code></li>
-</ul>
-<h2 id="stdhttp-客户端"><a class="header" href="#stdhttp-客户端"><code>std.http</code> 客户端</a></h2>
-<p>如果你不是在“接收请求”，而是要“调用别的服务”，用 <code>std.http</code>：</p>
-<pre><code class="language-dol">$mod std.http;
-
-$ res = http.get("https://example.com");
-$&gt;&gt; res["status"];
-$&gt;&gt; res["body"];
-</code></pre>
-<p>返回值统一是一个 <code>Map</code>：</p>
-<pre><code class="language-text">{
-  "status": Int,
-  "body": String,
-  "headers": Map
-}
-</code></pre>
-<p>也可以传请求头：</p>
-<pre><code class="language-dol">$mod std.http;
-
-$ res = http.get("https://example.com", {
-    "Authorization": "Bearer demo-token"
-});
-$&gt;&gt; res["status"];
-</code></pre>
-<p>POST / PUT 请求用于发送 JSON 风格的 <code>Map</code>：</p>
-<pre><code class="language-dol">$mod std.http;
-
-$ created = http.post("https://example.com/users", {
-    "name": "Alice",
-    "role": "admin"
-});
-$&gt;&gt; created["status"];
-</code></pre>
-<p>如果 URL 不合法、连接失败或超时，错误会作为普通运行时错误抛出，可以配合 <code>$try / $catch</code>：</p>
-<pre><code class="language-dol">$mod std.http;
-
-$try {
-    $ res = http.get("not-a-url");
-    $&gt;&gt; res["status"];
-} $catch err {
-    $&gt;&gt; "request failed";
-}
-</code></pre>
-<h2 id="handler-长什么样"><a class="header" href="#handler-长什么样">handler 长什么样</a></h2>
+<h2 id="handler-的基本形状"><a class="header" href="#handler-的基本形状">handler 的基本形状</a></h2>
 <p>一个 handler 一般包含四部分：</p>
 <ol>
 <li>HTTP 方法关键字</li>
@@ -257,204 +202,82 @@ $try {
 <li><code>String</code></li>
 <li><code>JSON</code></li>
 <li><code>HTML</code></li>
+<li><code>List&lt;T&gt;</code></li>
 </ul>
-<pre><code class="language-dol">$GET("/health") health() -&gt; String {
-    $# "ok";
-}
-</code></pre>
-<p>可以把它理解成“告诉运行时该怎么把返回值变成 HTTP 响应”。</p>
-<h2 id="json-返回"><a class="header" href="#json-返回">JSON 返回</a></h2>
-<pre><code class="language-dol">$GET("/user") get_user() -&gt; JSON {
-    $# $JSON { "name": "Alice", "age": 30 };
-}
-</code></pre>
-<p><code>$JSON { ... }</code> 是最直接的 JSON 构造方式。</p>
-<h2 id="type-和-jsonuser"><a class="header" href="#type-和-jsonuser"><code>$Type</code> 和 <code>JSON&lt;User&gt;</code></a></h2>
-<p>如果你前面已经看过类型章节，这里就可以把 <code>$Type</code> 和 HTTP 返回放在一起使用。</p>
+<h3 id="listt-返回例子"><a class="header" href="#listt-返回例子"><code>List&lt;T&gt;</code> 返回例子</a></h3>
 <pre><code class="language-dol">$Type User {
     id: Int
     name: Str
-    email: Str?
 }
 
-$GET("/users/:id") get_user(id) -&gt; JSON&lt;User&gt; {
-    $# $JSON {
-        "id": id,
-        "name": "Alice"
-    };
+$GET("/users") list_users() -&gt; List&lt;User&gt; {
+    $# [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"}
+    ];
 }
 </code></pre>
-<p>这种写法的价值主要在于文档性和可读性：</p>
-<ul>
-<li>路由明确返回 JSON</li>
-<li>这个 JSON 想表达的是 <code>User</code> 结构</li>
-<li>阅读接口时更容易理解返回体大概长什么样</li>
-</ul>
-<p>当前这层先按“结构意图声明”理解，不把它讲成完整的强校验系统。</p>
-<h2 id="html-返回"><a class="header" href="#html-返回">HTML 返回</a></h2>
-<pre><code class="language-dol">$GET("/") index() -&gt; HTML {
-    $# $HTML("&lt;h1&gt;Welcome&lt;/h1&gt;");
-}
-</code></pre>
-<p>如果返回类型是 <code>HTML</code>，运行时会按 HTML 响应处理。</p>
-<h2 id="路径参数"><a class="header" href="#路径参数">路径参数</a></h2>
+<p>这里同样遵守类型章节的口径：返回集合时优先写 <code>List&lt;T&gt;</code>，不要再教学裸 <code>List</code>。</p>
+<h2 id="路径参数与-query-参数"><a class="header" href="#路径参数与-query-参数">路径参数与 query 参数</a></h2>
 <pre><code class="language-dol">$GET("/users/:id") get_user(id) -&gt; JSON {
     $# $JSON { "id": id };
 }
 </code></pre>
-<p>当请求路径是 <code>/users/42</code> 时，<code>id</code> 会被注入为 <code>"42"</code>。</p>
-<h2 id="query-参数"><a class="header" href="#query-参数">query 参数</a></h2>
-<p>当前 runtime 会把 query string 注入为同名变量：</p>
+<p>query string 会按同名变量注入：</p>
 <pre><code class="language-dol">$GET("/search") search() -&gt; JSON {
     $# $JSON { "q": q, "limit": limit };
 }
 </code></pre>
-<p>例如访问：</p>
-<pre><code class="language-text">/search?q=hello&amp;limit=10
-</code></pre>
-<p>这时 <code>q</code> 和 <code>limit</code> 可直接读取。</p>
 <h2 id="header-读取"><a class="header" href="#header-读取">Header 读取</a></h2>
 <pre><code class="language-dol">$GET("/whoami") whoami() -&gt; JSON {
     $ token = $HDR("Authorization");
     $# $JSON { "token": token };
 }
 </code></pre>
-<p><code>$HDR(...)</code> 适合取：</p>
+<h2 id="body-注入"><a class="header" href="#body-注入">body 注入</a></h2>
+<p>当前主线明确这条规则：</p>
 <ul>
-<li><code>Authorization</code></li>
-<li><code>Content-Type</code></li>
-<li>自定义请求头</li>
+<li><code>POST</code>、<code>PUT</code>、<code>PATCH</code> 会把请求体注入到 <code>body</code></li>
+<li><code>GET</code>、<code>DELETE</code> 不把 <code>body</code> 当作主线能力来承诺</li>
 </ul>
-<h2 id="set_hdr-响应头注解"><a class="header" href="#set_hdr-响应头注解"><code>@SET_HDR(...)</code> 响应头注解</a></h2>
-<p>如果你要给响应统一附加静态 header，用 <code>@SET_HDR(...)</code>，而不是在 handler 里手工拼接。</p>
-<pre><code class="language-dol">@SET_HDR({
-    "X-Frame-Options": "DENY",
-    "Cache-Control": "max-age=3600"
-})
-$GET("/health") health() -&gt; String {
-    $# "ok";
-}
-</code></pre>
-<p>要点：</p>
-<ul>
-<li><code>@SET_HDR(...)</code> 只接受一个对象字面量</li>
-<li>key 必须是字符串 header 名</li>
-<li>value 也必须是字符串字面量</li>
-<li>一个注解里可以声明多个 header</li>
-</ul>
-<p>不符合这个形态会直接报解析错误，例如：</p>
-<pre><code class="language-dol">@SET_HDR("X-Frame-Options", "DENY")     // 非法
-@SET_HDR({ name: "X-Frame-Options" })   // 非法
-</code></pre>
-<p>如果没有写 <code>@SET_HDR(...)</code>，响应不会额外注入这些自定义 header。</p>
-<h2 id="cors"><a class="header" href="#cors"><code>@CORS(...)</code></a></h2>
-<p>如果服务需要浏览器跨域访问，可以直接在路由前或 HTTP 组织节点前写 <code>@CORS(...)</code>。</p>
-<p>最简单的写法是允许所有来源：</p>
-<pre><code class="language-dol">@CORS("*")
-$GET("/public") public_data() -&gt; JSON {
-    $# $JSON { "ok": true };
-}
-</code></pre>
-<p>需要更细的配置时，用单个对象字面量：</p>
-<pre><code class="language-dol">@CORS({
-    origins: ["https://app.example.com"],
-    methods: ["GET", "POST"],
-    headers: ["Authorization", "Content-Type"],
-    max_age: 600,
-    credentials: true
-})
-$GET("/profile") profile() -&gt; JSON {
-    $# $JSON { "ok": true };
-}
-</code></pre>
-<p>要点：</p>
-<ul>
-<li><code>@CORS("*")</code> 适合公开接口</li>
-<li><code>@CORS({ ... })</code> 适合白名单接口</li>
-<li>对象字段当前支持 <code>origins</code>、<code>methods</code>、<code>headers</code>、<code>max_age</code>、<code>credentials</code></li>
-<li>这些参数都必须是静态字面量，不能传变量或运行时表达式</li>
-</ul>
-<p>如果没有写 <code>@CORS(...)</code>，服务不会额外返回 <code>Access-Control-Allow-*</code> 响应头。</p>
-<h2 id="body"><a class="header" href="#body">body</a></h2>
-<p>当前 runtime 会把请求体放进 <code>body</code> 变量。</p>
-<p>在真实服务模式下，JSON body 会被解析后注入；在 <code>dolang test --body ...</code> 里，body 的输入路径和服务模式略有差异，因此写文档时最好先用“读取 body 并回显”的最小例子说明：</p>
+<p>最小例子：</p>
 <pre><code class="language-dol">$POST("/echo") echo() -&gt; JSON {
     $# $JSON { "body": body };
 }
 </code></pre>
-<p>如果你想从 body 中取字段，可以继续往下读：</p>
-<pre><code class="language-dol">$POST("/users") create_user() -&gt; JSON {
+<p>继续取字段：</p>
+<pre><code class="language-dol">$PATCH("/users") patch_user() -&gt; JSON {
     $ name = body["name"];
-    $ age = body["age"];
-    $# $JSON {
-        "created": true,
-        "name": name,
-        "age": age
-    };
+    $# $JSON { "updated": true, "name": name };
 }
 </code></pre>
-<p>在 handler 内部也可以直接使用 <code>List</code> / <code>Map</code> 显式声明：</p>
-<pre><code class="language-dol">$GET("/check") check() -&gt; JSON {
-    $ items: List = [1, 2, 3];
-    $ config: Map = {"name": "demo", "ok": true};
-    $# $JSON {
-        "items_type": items.type(),
-        "config_type": config.type(),
-        "second": items[1],
-        "ok": config["ok"]
-    };
+<h2 id="html-返回"><a class="header" href="#html-返回">HTML 返回</a></h2>
+<h3 id="直接内联"><a class="header" href="#直接内联">直接内联</a></h3>
+<pre><code class="language-dol">$GET("/") index() -&gt; HTML {
+    $# $HTML("&lt;h1&gt;Welcome&lt;/h1&gt;");
 }
 </code></pre>
-<p>这类写法在 <code>serve</code> 模式下可以正常注册并返回结果。</p>
-<h2 id="读取项目配置"><a class="header" href="#读取项目配置">读取项目配置</a></h2>
-<p>HTTP 服务里也经常会用到项目配置：</p>
-<pre><code class="language-dol">$GET("/config") show_config() -&gt; JSON {
-    $ app = $&lt;&lt;CONFIG("APP_NAME");
-    $# $JSON { "app": app };
+<h3 id="链接外部文件htmllink"><a class="header" href="#链接外部文件htmllink">链接外部文件：<code>$HTML().link(...)</code></a></h3>
+<pre><code class="language-dol">$GET("/") index() -&gt; HTML {
+    $# $HTML().link("pages.index");
 }
 </code></pre>
-<p>这要求你在项目配置里已经写好了对应的 <code>[env]</code> 字段。</p>
-<h2 id="返回指定状态码"><a class="header" href="#返回指定状态码">返回指定状态码</a></h2>
-<pre><code class="language-dol">$GET("/users/:id") get_user(id) -&gt; JSON {
-    $# $RES(200, {"id": id});
-}
-</code></pre>
-<p><code>$RES(status, body)</code> 用来显式返回指定 HTTP 状态码。</p>
-<p>另一个常见例子：</p>
-<pre><code class="language-dol">$POST("/users") create_user() -&gt; JSON {
-    $# $RES(201, {"created": true});
-}
-</code></pre>
-<h2 id="路由里的错误处理"><a class="header" href="#路由里的错误处理">路由里的错误处理</a></h2>
-<p>HTTP handler 里也可以配合 <code>$try / $catch</code> 和 <code>$throw</code>：</p>
-<pre><code class="language-dol">$GET("/safe") safe() -&gt; JSON {
-    $try {
-        $throw "inner error";
-    } $catch err {
-        $# $JSON { "caught": err };
-    }
-}
-</code></pre>
-<p><code>$&gt;&gt;ERR(...)</code> 也可以用于打印服务端日志，而不影响正常响应：</p>
-<pre><code class="language-dol">$GET("/debug") debug() -&gt; JSON {
-    $&gt;&gt;ERR("debug info");
-    $# $JSON { "ok": true };
-}
-</code></pre>
-<h2 id="一个完整例子"><a class="header" href="#一个完整例子">一个完整例子</a></h2>
-<pre><code class="language-dol">$GET("/users/:id") get_user(id) -&gt; JSON {
-    $ token = $HDR("Authorization");
-    $# $RES(200, {
-        "id": id,
-        "token": token
-    });
-}
-</code></pre>
-<h2 id="迁移期参考"><a class="header" href="#迁移期参考">迁移期参考</a></h2>
+<p>记法：</p>
 <ul>
-<li><a href="web.html">web.md</a></li>
-<li><code>docs/reference/http.md</code></li>
+<li>使用模块式路径，如 <code>"pages.index"</code></li>
+<li>它对应外部页面资源，而不是 URL path</li>
+<li>当前主线把它当作链接外部 HTML/CSS/JS/XML 文件的入口</li>
 </ul>
+<p>如果你已经在组织多文件页面或路由模块，继续看 <a href="16-http-organization.html">16-http-organization.md</a>。</p>
+<h2 id="stdhttp-客户端"><a class="header" href="#stdhttp-客户端"><code>std.http</code> 客户端</a></h2>
+<p>如果你不是在“接收请求”，而是要“调用别的服务”，用 <code>std.http</code>：</p>
+<pre><code class="language-dol">$mod std.http;
+
+$ res = http.get("https://example.com");
+$&gt;&gt; res["status"];
+$&gt;&gt; res["body"];
+</code></pre>
+<p>如果 URL 不合法、连接失败或超时，错误会作为普通运行时错误抛出，可以配合 <code>$try / $catch</code>。</p>
 <h2 id="下一章"><a class="header" href="#下一章">下一章</a></h2>
 <p>继续看 <a href="16-http-organization.html">16-http-organization.md</a>。</p>
 

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -175,6 +175,12 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="模块系统"><a class="header" href="#模块系统">模块系统</a></h1>
+<blockquote>
+<p><strong>Status: Deprecated</strong></p>
+<p>这是一页已废弃的旧版模块文档。
+当前主线请改读 <a href="11-modules.html">11-modules.md</a> 和 <a href="../spec/modules.html">../spec/modules.md</a>。
+本页保留仅用于迁移追溯；其中关于通配符导入会把函数平铺到当前作用域的说法已经失效，不能再作为当前语义依据。</p>
+</blockquote>
 <p>Dolang 的模块系统分为三层：<strong>native 内置模块</strong>、<strong>纯 .dol 标准库模块</strong>、<strong>项目自定义模块</strong>。</p>
 <hr>
 <h2 id="导入模块"><a class="header" href="#导入模块">导入模块</a></h2>
@@ -281,13 +287,14 @@ dolang serve .
 </code></pre>
 <hr>
 <h2 id="通配符导入"><a class="header" href="#通配符导入">通配符导入</a></h2>
-<p>使用 <code>.*</code> 导入模块中所有公有函数到当前命名空间（不带前缀）：</p>
+<p>以下示例属于旧写法说明，勿作为当前主线语义：</p>
 <pre><code class="language-dolang">$mod std.core.iter.*;
 
-$for i in range(0, 3) {    // 直接使用 range，无需 iter. 前缀
+$for i in range(0, 3) {    // 旧写法示例
     $&gt;&gt; i;
 }
 </code></pre>
+<p>当前实现中，<code>$mod a.*;</code> 导入的是直接子模块命名空间，不会把函数平铺到当前作用域。请以 <a href="11-modules.html">11-modules.md</a> 为准。</p>
 
                     </main>
 

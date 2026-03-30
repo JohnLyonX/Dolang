@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -175,7 +175,7 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="3-第一个程序"><a class="header" href="#3-第一个程序">3. 第一个程序</a></h1>
-<p>这一章用三个最短例子建立对 Dolang 的第一印象：脚本、REPL、HTTP。</p>
+<p>这一章只做三件事：跑第一个脚本、试一次 REPL、起第一个 HTTP 路由。</p>
 <h2 id="第一个脚本"><a class="header" href="#第一个脚本">第一个脚本</a></h2>
 <p>创建 <code>hello.dol</code>：</p>
 <pre><code class="language-dol">$&gt;&gt; "Hello, Dolang!";
@@ -183,6 +183,12 @@
 <p>运行：</p>
 <pre><code class="language-bash">dolang run hello.dol
 </code></pre>
+<h3 id="怎么确认成功"><a class="header" href="#怎么确认成功">怎么确认成功</a></h3>
+<ul>
+<li>终端应该输出 <code>Hello, Dolang!</code></li>
+<li>如果没有输出，先检查语句末尾是否有分号</li>
+<li>如果提示找不到文件，确认你在 <code>hello.dol</code> 所在目录执行命令</li>
+</ul>
 <h2 id="第一个-repl-交互"><a class="header" href="#第一个-repl-交互">第一个 REPL 交互</a></h2>
 <p>进入 REPL：</p>
 <pre><code class="language-bash">dolang
@@ -194,8 +200,8 @@ hello, builder
 </code></pre>
 <p>REPL 适合做这些事情：</p>
 <ul>
-<li>试验表达式</li>
-<li>试验字符串与列表方法</li>
+<li>试表达式</li>
+<li>试字符串与列表方法</li>
 <li>快速复现小问题</li>
 </ul>
 <h2 id="第一个-http-路由"><a class="header" href="#第一个-http-路由">第一个 HTTP 路由</a></h2>
@@ -207,8 +213,17 @@ hello, builder
 <p>启动：</p>
 <pre><code class="language-bash">dolang serve main.dol
 </code></pre>
-<p>这个例子说明 Dolang 当前不仅能跑脚本，也能直接定义并运行简单 HTTP 路由。</p>
-<h2 id="单文件与项目目录"><a class="header" href="#单文件与项目目录">单文件与项目目录</a></h2>
+<h3 id="怎么确认成功-1"><a class="header" href="#怎么确认成功-1">怎么确认成功</a></h3>
+<p>先看终端没有报错，再用浏览器或 <code>curl</code> 验证：</p>
+<pre><code class="language-bash">curl http://127.0.0.1:8080/hello
+</code></pre>
+<p>预期结果：</p>
+<ul>
+<li>响应体是 <code>world</code></li>
+<li>如果你改了 <code>[server]</code> 端口，就把 <code>8080</code> 换成对应端口</li>
+<li>浏览器直接访问 <code>http://127.0.0.1:8080/hello</code> 也应看到同样结果</li>
+</ul>
+<h2 id="单文件和项目目录的区别"><a class="header" href="#单文件和项目目录的区别">单文件和项目目录的区别</a></h2>
 <p>单文件适合：</p>
 <ul>
 <li>小脚本</li>
@@ -221,9 +236,7 @@ hello, builder
 <li>需要多个模块</li>
 <li>需要统一 server 配置</li>
 </ul>
-<p>项目目录的例子可以参考 <a href="12-projects-and-package.html">12-projects-and-package.md</a>。</p>
-<h2 id="迁移期参考"><a class="header" href="#迁移期参考">迁移期参考</a></h2>
-<p>旧版快速开始仍保留在 <a href="getting-started.html">getting-started.md</a>。</p>
+<p>项目目录的入口、<code>entry</code> 和 <code>$main()</code> 在 <a href="12-projects-and-package.html">12-projects-and-package.md</a> 里详细说明。</p>
 <h2 id="下一章"><a class="header" href="#下一章">下一章</a></h2>
 <p>继续看 <a href="04-basic-syntax.html">04-basic-syntax.md</a>。</p>
 

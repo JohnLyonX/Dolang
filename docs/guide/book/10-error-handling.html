@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2a36c70e.js";
+            window.path_to_searchindex_js = "searchindex-c015aa2b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f522da52.js"></script>
@@ -176,21 +176,69 @@
                     <main>
                         <h1 id="10-错误处理"><a class="header" href="#10-错误处理">10. 错误处理</a></h1>
 <p>Dolang 当前同时有解析错误、运行时错误和显式抛出的异常。</p>
-<p>可以先把它们粗分成三类：</p>
+<h2 id="三类错误先怎么分"><a class="header" href="#三类错误先怎么分">三类错误先怎么分</a></h2>
 <ul>
-<li>代码还没跑起来就出错：解析错误</li>
+<li>代码还没跑起来就出错：词法 / 语法错误</li>
 <li>跑到一半因为值或环境问题出错：运行时错误</li>
 <li>代码里主动抛出：<code>$throw</code></li>
 </ul>
-<h2 id="try--catch"><a class="header" href="#try--catch">try / catch</a></h2>
+<h2 id="try--catch"><a class="header" href="#try--catch"><code>$try / $catch</code></a></h2>
 <pre><code class="language-dol">$try {
     $throw "oops";
 } $catch err {
     $&gt;&gt; err;
 }
 </code></pre>
-<p>如果 <code>try</code> 块内部出错，就会进入 <code>catch</code> 块。</p>
-<p>还可以把“可能失败的宿主能力调用”包起来：</p>
+<p>如果 <code>try</code> 块内部抛错，就会进入 <code>catch</code> 块。</p>
+<h2 id="err-到底是什么"><a class="header" href="#err-到底是什么"><code>err</code> 到底是什么</a></h2>
+<p>在主线文档里，可以先把 <code>err</code> 理解成“可打印、可比较、可继续传递的错误值”。</p>
+<p>安全做法：</p>
+<ul>
+<li>直接打印 <code>err</code></li>
+<li>把 <code>err</code> 拼进日志字符串</li>
+<li>用 <code>err.type()</code> 看当前值类型</li>
+<li>根据上下文返回默认值或改写响应</li>
+</ul>
+<p>例如：</p>
+<pre><code class="language-dol">$mod std.fs;
+
+$try {
+    $ content = fs.read_text("missing.txt");
+    $&gt;&gt; content;
+} $catch err {
+    $&gt;&gt;ERR(f"read failed: {err}");
+}
+</code></pre>
+<p>主线不把 <code>err</code> 讲成运行时内部结构体，也不承诺固定字段集合。</p>
+<h2 id="throw"><a class="header" href="#throw"><code>$throw</code></a></h2>
+<pre><code class="language-dol">$throw "bad input";
+</code></pre>
+<p>适合：</p>
+<ul>
+<li>主动拒绝非法输入</li>
+<li>在工具函数里显式抛出失败</li>
+<li>提前终止一条不该继续的路径</li>
+</ul>
+<h2 id="可捕获性速查"><a class="header" href="#可捕获性速查">可捕获性速查</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>场景</th><th>能否被 <code>$catch</code> 捕获</th><th>备注</th></tr>
+</thead>
+<tbody>
+<tr><td><code>$throw "oops"</code></td><td>可以</td><td>最直接的用法</td></tr>
+<tr><td>除零</td><td>可以</td><td>运行时错误</td></tr>
+<tr><td>未定义变量</td><td>可以</td><td>运行时错误</td></tr>
+<tr><td>类型不匹配</td><td>可以</td><td>运行时错误</td></tr>
+<tr><td>文件读取失败</td><td>可以</td><td>例如 <code>std.fs.read_text(...)</code></td></tr>
+<tr><td>模块加载失败</td><td>不作为主线承诺</td><td>通常发生在装载阶段，优先先修模块路径</td></tr>
+<tr><td>语法错误</td><td>不可以</td><td>程序尚未进入执行阶段</td></tr>
+</tbody>
+</table>
+</div>
+<p>查表版说明见 <a href="../reference/errors.html">../reference/errors.md</a>。</p>
+<h2 id="常见例子"><a class="header" href="#常见例子">常见例子</a></h2>
+<h3 id="文件读取失败"><a class="header" href="#文件读取失败">文件读取失败</a></h3>
 <pre><code class="language-dol">$mod std.fs;
 $try {
     $ content = fs.read_text("missing.txt");
@@ -199,62 +247,7 @@ $try {
     $&gt;&gt; "caught!";
 }
 </code></pre>
-<h2 id="throw"><a class="header" href="#throw">throw</a></h2>
-<pre><code class="language-dol">$throw "bad input";
-</code></pre>
-<p>如果没有被捕获，会变成未捕获错误。</p>
-<p>它适合：</p>
-<ul>
-<li>主动拒绝非法输入</li>
-<li>在工具函数里显式抛出失败</li>
-<li>配合 <code>check.assert(...)</code> 之类的封装</li>
-</ul>
-<p>例如：</p>
-<pre><code class="language-dol">$fn must_positive(n) {
-    $if n &lt;= 0 {
-        $throw "n must be positive";
-    }
-    $# n;
-}
-</code></pre>
-<h2 id="常见错误来源"><a class="header" href="#常见错误来源">常见错误来源</a></h2>
-<ul>
-<li>未定义变量</li>
-<li>类型不匹配</li>
-<li>模块找不到</li>
-<li>文件读取失败</li>
-<li>JSON 解析失败</li>
-</ul>
-<h3 id="1-未定义变量"><a class="header" href="#1-未定义变量">1. 未定义变量</a></h3>
-<pre><code class="language-dol">$&gt;&gt; missing;
-</code></pre>
-<h3 id="2-类型不匹配"><a class="header" href="#2-类型不匹配">2. 类型不匹配</a></h3>
-<pre><code class="language-dol">$ value: Int = "text";
-</code></pre>
-<h3 id="3-模块找不到"><a class="header" href="#3-模块找不到">3. 模块找不到</a></h3>
-<pre><code class="language-dol">$mod missing.module;
-</code></pre>
-<h3 id="4-文件不存在"><a class="header" href="#4-文件不存在">4. 文件不存在</a></h3>
-<pre><code class="language-dol">$mod std.fs;
-$ content = fs.read_text("missing.txt");
-</code></pre>
-<h2 id="如何阅读错误"><a class="header" href="#如何阅读错误">如何阅读错误</a></h2>
-<p>排查时建议按这个顺序看：</p>
-<ol>
-<li>是 parse error 还是 runtime error</li>
-<li>出错的是哪一行</li>
-<li>是语法问题、值类型问题，还是模块/文件问题</li>
-<li>能否先在 REPL 或最小 <code>.dol</code> 文件里复现</li>
-</ol>
-<h2 id="trycatch-的实际价值"><a class="header" href="#trycatch-的实际价值">try/catch 的实际价值</a></h2>
-<p>如果你不捕获错误，程序会直接失败。</p>
-<p>如果你捕获错误，就可以：</p>
-<ul>
-<li>输出更友好的消息</li>
-<li>给默认值</li>
-<li>跳过失败分支继续执行</li>
-</ul>
-<p>例如环境变量读取失败时：</p>
+<h3 id="环境变量失败"><a class="header" href="#环境变量失败">环境变量失败</a></h3>
 <pre><code class="language-dol">$mod std.env;
 $try {
     $ token = env.get("APP_TOKEN");
@@ -263,25 +256,21 @@ $try {
     $&gt;&gt; "env error caught";
 }
 </code></pre>
-<h2 id="一个完整例子"><a class="header" href="#一个完整例子">一个完整例子</a></h2>
-<pre><code class="language-dol">$mod std.json;
-
-$fn parse_or_default(raw) -&gt; String {
-    $try {
-        $ value = json.parse(raw);
-        $# json.stringify(value);
-    } $catch err {
-        $# "{}";
+<h3 id="主动抛错"><a class="header" href="#主动抛错">主动抛错</a></h3>
+<pre><code class="language-dol">$fn must_positive(n) -&gt; Int {
+    $if n &lt;= 0 {
+        $throw "n must be positive";
     }
+    $# n;
 }
-
-$&gt;&gt; parse_or_default("{\"ok\":true}");
 </code></pre>
-<h2 id="进一步参考"><a class="header" href="#进一步参考">进一步参考</a></h2>
-<ul>
-<li><code>docs/reference/errors.md</code></li>
-<li><a href="appendix/common-errors.html">common-errors.md</a></li>
-</ul>
+<h2 id="怎么排查"><a class="header" href="#怎么排查">怎么排查</a></h2>
+<ol>
+<li>先分清是 parse error 还是 runtime error</li>
+<li>再看出错位置</li>
+<li>看是语法、值类型、模块、文件还是环境问题</li>
+<li>尽量把问题缩成最小 <code>.dol</code> 文件</li>
+</ol>
 <h2 id="下一章"><a class="header" href="#下一章">下一章</a></h2>
 <p>继续看 <a href="11-modules.html">11-modules.md</a>。</p>
 

@@ -1,5 +1,11 @@
 # Web 服务
 
+> **Status: Migration Source**
+>
+> 这是一页迁移期旧 Web 文档。
+> 当前主线请改读 [15-http-basics.md](15-http-basics.md) 和 [16-http-organization.md](16-http-organization.md)。
+> 本页仍保留的独特价值是把 serve 启动、路由、CORS、静态资源放在同一页浏览，但不再作为主线入口。
+
 Dolang 内置 HTTP 服务支持，通过 `dolang serve` 启动，使用声明式语法定义路由。
 
 ---

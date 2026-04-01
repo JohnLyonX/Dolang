@@ -1,0 +1,6 @@
+$Type User {
+    id: Int
+    name: String
+    email: String
+    created_at: String
+}

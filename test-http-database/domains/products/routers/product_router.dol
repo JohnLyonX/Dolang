@@ -1,0 +1,11 @@
+$mod domains.products.data.category_types;
+$mod domains.products.data.product_types;
+$mod domains.products.services.product_service;
+
+$GET("/categories") get_categories() -> List<Category> {
+    $# product_service.list_categories();
+}
+
+$GET("/products") get_products() -> List<Product> {
+    $# product_service.list_products();
+}

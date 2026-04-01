@@ -1,0 +1,22 @@
+$mod domains.users.data.user_queries;
+$mod domains.users.data.user_types;
+
+$fn list_users() -> List<User> {
+    $try {
+        $ rows = user_queries.list_users_rows();
+        $ users = [];
+
+        $for row in rows {
+            users.push(User {
+                id: row["id"],
+                name: row["name"],
+                email: row["email"],
+                created_at: row["created_at"],
+            });
+        }
+
+        $# users;
+    } $catch err {
+        $throw "database unavailable";
+    }
+}

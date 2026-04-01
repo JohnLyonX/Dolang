@@ -1,0 +1,6 @@
+$mod domains.users.data.user_types;
+$mod domains.users.services.user_service;
+
+$GET("/users") get_users() -> List<User> {
+    $# user_service.list_users();
+}

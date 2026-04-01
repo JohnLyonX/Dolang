@@ -1,0 +1,5 @@
+$mod shared.db.queries;
+
+$fn list_users_rows() -> List<Map> {
+    $# queries.safe_query("SELECT id, name, email, created_at::text AS created_at FROM users ORDER BY id", []);
+}

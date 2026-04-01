@@ -1,0 +1,41 @@
+$mod domains.products.data.category_types;
+$mod domains.products.data.product_queries;
+$mod domains.products.data.product_types;
+
+$fn list_categories() -> List<Category> {
+    $try {
+        $ rows = product_queries.list_categories_rows();
+        $ items = [];
+
+        $for row in rows {
+            items.push(Category {
+                id: row["id"],
+                name: row["name"],
+            });
+        }
+
+        $# items;
+    } $catch err {
+        $throw "database unavailable";
+    }
+}
+
+$fn list_products() -> List<Product> {
+    $try {
+        $ rows = product_queries.list_products_rows();
+        $ items = [];
+
+        $for row in rows {
+            items.push(Product {
+                id: row["id"],
+                name: row["name"],
+                price: row["price"],
+                category_id: row["category_id"],
+            });
+        }
+
+        $# items;
+    } $catch err {
+        $throw "database unavailable";
+    }
+}

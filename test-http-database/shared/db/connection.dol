@@ -1,0 +1,5 @@
+$mod std.postgres;
+
+$fn connect_db() {
+    $# postgres.connect("postgresql://liangzhanbo@127.0.0.1:5432/postgres");
+}

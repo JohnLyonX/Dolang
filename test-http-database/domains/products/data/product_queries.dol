@@ -1,0 +1,9 @@
+$mod shared.db.queries;
+
+$fn list_categories_rows() -> List<Map> {
+    $# queries.safe_query("SELECT id, name FROM categories ORDER BY id", []);
+}
+
+$fn list_products_rows() -> List<Map> {
+    $# queries.safe_query("SELECT id, name, price::double precision AS price, category_id FROM products ORDER BY id", []);
+}

@@ -1,0 +1,17 @@
+$mod shared.db.queries;
+
+$fn find_order_rows_by_user_id(user_id) -> List<Map> {
+    $# queries.safe_query("SELECT id, user_id, created_at::text AS created_at, status FROM orders WHERE user_id::bigint = $1 ORDER BY id", [user_id.to_int()]);
+}
+
+$fn find_order_row_by_id(order_id) -> List<Map> {
+    $# queries.safe_query("SELECT id, user_id, created_at::text AS created_at, status FROM orders WHERE id::bigint = $1", [order_id.to_int()]);
+}
+
+$fn find_order_item_rows(order_id) -> List<Map> {
+    $# queries.safe_query("SELECT oi.id, oi.order_id, oi.product_id, oi.quantity, oi.price::double precision AS price, p.name AS product_name FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id::bigint = $1 ORDER BY oi.id", [order_id.to_int()]);
+}
+
+$fn find_user_row(user_id) -> List<Map> {
+    $# queries.safe_query("SELECT id, name, email, created_at::text AS created_at FROM users WHERE id::bigint = $1", [user_id.to_int()]);
+}

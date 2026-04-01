@@ -1,0 +1,6 @@
+$mod std.postgres;
+$mod config.app_config;
+
+$fn connect_db() {
+    $# postgres.connect(app_config.database_url());
+}

@@ -1,10 +1,10 @@
-$mod shared.db.connection;
-
-$ conn = connection.connect_db();
+$mod config.database;
 
 $fn safe_query(sql, params) -> List<Map> {
     $try {
+        $ conn = database.connect_db();
         $ rows = conn.query(sql, params);
+        $>> conn.close();
         $# rows;
     } $catch err {
         $throw "database unavailable";

@@ -1,0 +1,20 @@
+$mod domains.orders.data.order_types;
+$mod domains.orders.services.order_service;
+
+$GET("/users/:id/orders") get_user_orders(id) -> List<Order> {
+    $# order_service.list_orders_by_user_id(id);
+}
+
+$HTTP("/orders") {
+    $GET("/:id") get_order(id) -> Order {
+        $# order_service.get_order_by_id(id);
+    }
+
+    $GET("/:id/items") get_order_items(id) -> List<OrderItem> {
+        $# order_service.list_order_items(id);
+    }
+
+    $GET("/:id/detail") get_order_detail(id) -> Map {
+        $# order_service.get_order_detail(id);
+    }
+}

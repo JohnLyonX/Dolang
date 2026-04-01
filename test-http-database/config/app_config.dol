@@ -1,0 +1,3 @@
+$fn database_url() -> String {
+    $# "postgresql://liangzhanbo@127.0.0.1:5432/postgres";
+}

@@ -1,0 +1,3 @@
+$HTTP("/api").link("domains.users.routers.user_router");
+$HTTP("/api").link("domains.products.routers.product_router");
+$HTTP("/api").link("domains.orders.routers.order_router");

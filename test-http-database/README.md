@@ -2,6 +2,15 @@
 
 本项目用于验证 Dolang 在真实 HTTP + PostgreSQL + DDD 分层场景下的可用性与容灾路径。
 
+## Recommended Layout
+
+- `main.dol`: startup only
+- `app/http/routes.dol`: route assembly
+- `config/`: runtime configuration and database connection
+- `domains/*/data`: SQL and row fetching
+- `domains/*/services`: use-case orchestration
+- `domains/*/routers`: HTTP adapters
+
 ## Run
 
 ```bash

@@ -3,7 +3,7 @@ $mod domains.users.data.user_types;
 
 $fn list_users() -> List<User> {
     $try {
-        $ rows = user_queries.list_users_rows();
+        $ rows = user_queries.list_user_rows();
         $ users = [];
 
         $for row in rows {

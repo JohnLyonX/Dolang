@@ -1,5 +1,12 @@
-$mod app.http.routes;
-
 $main() {
     $>> "[INFO] test-http-database starting";
+
+    $STATIC("/assets", "app/public");
+    $HTTP("/api").link("app.router.user_router");
+    $HTTP("/api").link("app.router.product_router");
+    $HTTP("/api").link("app.router.orders_router");
+
+    $GET("/admin") admin_page() {
+        $# $HTML().link("app.pages.admin");
+    }
 }

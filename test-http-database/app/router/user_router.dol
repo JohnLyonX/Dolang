@@ -4,3 +4,19 @@ $mod domains.users.services.user_service;
 $GET("/users") get_users() -> List<User> {
     $# user_service.list_users();
 }
+
+$GET("/users/:id") get_user(id) -> User {
+    $# user_service.get_user_by_id(id);
+}
+
+$POST("/users") create_user() -> User {
+    $# user_service.create_user(body["name"], body["email"]);
+}
+
+$PUT("/users/:id") update_user(id) -> User {
+    $# user_service.update_user(id, body["name"], body["email"]);
+}
+
+$DEL("/users/:id") delete_user(id) -> JSON {
+    $# user_service.delete_user(id);
+}

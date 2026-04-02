@@ -20,3 +20,88 @@ $fn list_users() -> List<User> {
         $throw "database unavailable";
     }
 }
+
+$fn get_user_by_id(id) -> User {
+    $try {
+        $ rows = user_queries.find_user_row_by_id(id);
+
+        $if rows.len() == 0 {
+            $throw "user not found";
+        }
+
+        $ row = rows[0];
+        $# User {
+            id: row["id"],
+            name: row["name"],
+            email: row["email"],
+            created_at: row["created_at"],
+        };
+    } $catch err {
+        $if err == "user not found" {
+            $throw err;
+        }
+
+        $throw "database unavailable";
+    }
+}
+
+$fn create_user(name, email) -> User {
+    $try {
+        $ rows = user_queries.insert_user_row(name, email);
+        $ row = rows[0];
+
+        $# User {
+            id: row["id"],
+            name: row["name"],
+            email: row["email"],
+            created_at: row["created_at"],
+        };
+    } $catch err {
+        $throw "database unavailable";
+    }
+}
+
+$fn update_user(id, name, email) -> User {
+    $try {
+        $ rows = user_queries.update_user_row(id, name, email);
+
+        $if rows.len() == 0 {
+            $throw "user not found";
+        }
+
+        $ row = rows[0];
+        $# User {
+            id: row["id"],
+            name: row["name"],
+            email: row["email"],
+            created_at: row["created_at"],
+        };
+    } $catch err {
+        $if err == "user not found" {
+            $throw err;
+        }
+
+        $throw "database unavailable";
+    }
+}
+
+$fn delete_user(id) -> Map {
+    $try {
+        $ rows = user_queries.delete_user_row(id);
+
+        $if rows.len() == 0 {
+            $throw "user not found";
+        }
+
+        $# {
+            "deleted": true,
+            "id": id.to_int()
+        };
+    } $catch err {
+        $if err == "user not found" {
+            $throw err;
+        }
+
+        $throw "database unavailable";
+    }
+}

@@ -63,6 +63,15 @@ mod tests {
         }
     }
 
+    fn assert_sample_sql_registry_empty(context: &RuntimeContext, message: &str) {
+        assert!(
+            context
+                .with_sql_conn_registry(|registry| Ok(registry.get("conn:postgres:0").is_none()))
+                .unwrap(),
+            "{message}"
+        );
+    }
+
     fn run_app_config_snippet() -> String {
         let mut context = sample_context();
         let mut state = ProgramState::new();
@@ -181,27 +190,43 @@ mod tests {
             std::env::set_var("DATABASE_URL", url);
         }
 
-        let mut context = sample_context();
-        let mut state = ProgramState::new();
-        let mut stdout = Vec::new();
+        let mut success_context = sample_context();
+        let mut success_state = ProgramState::new();
+        let mut success_stdout = Vec::new();
         execute_source_with_writer(
-            "$mod shared.db.queries;\n\n$try {\n    $>> queries.safe_query(\"SELECT * FROM definitely_missing_table\", []);\n} $catch err {\n    $>> err;\n}\n",
-            &mut state,
-            &mut context,
-            &mut stdout,
+            "$mod shared.db.queries;\n$>> queries.safe_query(\"SELECT 1 AS n\", []);\n",
+            &mut success_state,
+            &mut success_context,
+            &mut success_stdout,
+        )
+        .expect("successful sample query snippet should execute");
+
+        assert_eq!(
+            String::from_utf8(success_stdout).expect("stdout should be utf-8"),
+            "[{n: 1}]\n"
+        );
+        assert_sample_sql_registry_empty(
+            &success_context,
+            "successful query should close the postgres connection",
+        );
+
+        let mut failure_context = sample_context();
+        let mut failure_state = ProgramState::new();
+        let mut failure_stdout = Vec::new();
+        execute_source_with_writer(
+            "$mod shared.db.queries;\n\n$try {\n    queries.safe_query(\"SELECT * FROM definitely_missing_table\", []);\n} $catch err {\n    $>> \"database unavailable\";\n}\n",
+            &mut failure_state,
+            &mut failure_context,
+            &mut failure_stdout,
         )
         .expect("sample query snippet should execute");
 
         assert_eq!(
-            String::from_utf8(stdout).expect("stdout should be utf-8"),
+            String::from_utf8(failure_stdout).expect("stdout should be utf-8"),
             "database unavailable\n"
         );
-        assert!(
-            context
-                .with_sql_conn_registry(|registry| {
-                    Ok(registry.get("conn:postgres:0").is_none())
-                })
-                .unwrap(),
+        assert_sample_sql_registry_empty(
+            &failure_context,
             "failed query should close the postgres connection"
         );
 

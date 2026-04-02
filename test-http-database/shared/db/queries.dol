@@ -5,10 +5,10 @@ $fn safe_query(sql, params) -> List<Map> {
         $ conn = database.connect_db();
         $try {
             $ rows = conn.query(sql, params);
-            $>> conn.close();
+            conn.close();
             $# rows;
         } $catch err {
-            $>> conn.close();
+            conn.close();
             $throw "database unavailable";
         }
     } $catch err {

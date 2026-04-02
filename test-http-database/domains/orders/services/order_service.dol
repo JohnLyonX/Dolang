@@ -2,6 +2,7 @@ $mod domains.orders.data.order_queries;
 $mod domains.orders.data.order_types;
 $mod domains.users.data.user_types;
 
+
 $fn get_order_by_id(id) -> Order {
     $ rows = order_queries.find_order_row_by_id(id);
 
@@ -18,9 +19,31 @@ $fn get_order_by_id(id) -> Order {
     };
 }
 
+
+
 $fn list_orders_by_user_id(id) -> List<Order> {
     $try {
         $ rows = order_queries.find_order_rows_by_user_id(id);
+        $ items = [];
+
+        $for row in rows {
+            items.push(Order {
+                id: row["id"],
+                user_id: row["user_id"],
+                created_at: row["created_at"],
+                status: row["status"],
+            });
+        }
+
+        $# items;
+    } $catch err {
+        $throw "database unavailable";
+    }
+}
+
+$fn list_orders() -> List<Order> {
+    $try {
+        $ rows = order_queries.list_order_rows();
         $ items = [];
 
         $for row in rows {

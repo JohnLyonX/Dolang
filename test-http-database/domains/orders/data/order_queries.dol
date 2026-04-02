@@ -15,3 +15,7 @@ $fn find_order_item_rows(order_id) -> List<Map> {
 $fn find_user_row(user_id) -> List<Map> {
     $# queries.safe_query("SELECT id, name, email, created_at::text AS created_at FROM users WHERE id::bigint = $1", [user_id.to_int()]);
 }
+
+$fn list_order_rows() -> List<Map> {
+    $# queries.safe_query("SELECT id, user_id, created_at::text AS created_at, status FROM orders ORDER BY id", []);
+}

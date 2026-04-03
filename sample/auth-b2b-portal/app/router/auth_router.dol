@@ -1,0 +1,23 @@
+$mod services.auth;
+
+$POST("/login") login() -> JSON {
+    $ user = auth.authenticate(body["username"], body["password"]);
+    $if user == null {
+        $# $RES(401, {
+            "status": 401,
+            "code": "invalid_credentials",
+            "message": "username or password is incorrect"
+        });
+    }
+
+    $# auth.issue_login(user);
+}
+
+$POST("/refresh") refresh() -> JSON {
+    $# auth.refresh_pair(body["refresh_token"]);
+}
+
+$POST("/logout") logout() -> JSON {
+    auth.logout(body["refresh_token"]);
+    $# {"ok": true};
+}

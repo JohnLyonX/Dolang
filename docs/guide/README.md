@@ -237,8 +237,8 @@ Reference 快速入口：
 
 - `$<<ENV(...)`
 - `$<<CONFIG(...)`
-- `$<<FILE(...)` 与 `$>>FILE(...)`
 - `std.fs` 与 `std.env`
+- legacy `$<<FILE(...)` / `$>>FILE(...)` 的迁移口径
 - serve 模式与非 serve 模式下的能力差异
 
 ### Part 5 Web 开发

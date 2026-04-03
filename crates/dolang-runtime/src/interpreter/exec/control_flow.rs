@@ -4,12 +4,13 @@ use crate::runtime::{ProgramState, RuntimeContext};
 
 use super::super::eval::{check_eval_result, eval_expr};
 use super::super::value::DolangValue;
-use super::{Flow, exec, exec_block, exec_inner};
+use super::{Flow, exec_block, exec_inner, exec_with_writer};
 
 pub(super) fn handle_main_decl(
     stmt: &MainDeclStmt,
     state: &mut ProgramState,
     context: &mut RuntimeContext,
+    w: &mut dyn std::io::Write,
 ) -> Flow {
     let current_file = context.current_file().map(ToOwned::to_owned);
     let is_main_dol = current_file
@@ -31,7 +32,7 @@ pub(super) fn handle_main_decl(
     context.set_global_cors(stmt.global_cors.clone());
 
     for main_stmt in &stmt.body {
-        let (cont, err) = exec(main_stmt, state, context);
+        let (cont, err) = exec_with_writer(main_stmt, state, context, w);
         if let Err(err) = err {
             return Flow::Err(err);
         }

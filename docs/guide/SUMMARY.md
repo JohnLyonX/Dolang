@@ -22,6 +22,7 @@
 - [10. 错误处理](10-error-handling.md)
 - [11. 模块系统](11-modules.md)
 - [12. 项目系统与 package.toml](12-projects-and-package.md)
+- [12A. 配置文件与 Serve 模式](12a-serve-config-file.md)
 
 # Part 4 标准库与宿主能力
 

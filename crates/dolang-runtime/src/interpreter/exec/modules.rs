@@ -15,7 +15,7 @@ use crate::runtime::{ProgramState, RuntimeContext, execute_program_with_writer};
 use super::super::env::{Env, FnEnv};
 use super::super::value::DolangValue;
 use super::super::{ModuleNamespace, StaticRoute};
-use super::Flow;
+use super::{Flow, info_prefix};
 
 pub(super) fn handle_mod_decl(
     stmt: &ModDeclStmt,
@@ -371,8 +371,10 @@ pub(super) fn handle_static_stmt(
     context.register_static_route(static_route);
     writeln!(
         w,
-        "[INFO] Static route registered: {} -> {}",
-        stmt.url_prefix, stmt.module_path
+        "{} Static route registered: {} -> {}",
+        info_prefix(context),
+        stmt.url_prefix,
+        stmt.module_path
     )
     .ok();
     Flow::Normal

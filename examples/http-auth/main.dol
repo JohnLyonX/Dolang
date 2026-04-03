@@ -1,0 +1,67 @@
+$mod std.auth.guard;
+$mod std.auth.csrf;
+$mod std.auth.jwt;
+$mod std.auth.session;
+
+$POST("/login") login(body) -> JSON {
+    $if body["username"] != "admin" || body["password"] != "password123" {
+        $# $RES(401, {
+            "status": 401,
+            "code": "invalid_credentials",
+            "message": "username or password is incorrect"
+        });
+    }
+
+    session.create({
+        "subject": "user_admin_1",
+        "roles": ["admin"],
+        "permissions": ["post:create", "post:publish"],
+        "claims": {
+            "display_name": "Demo Admin",
+            "team_id": "team_demo"
+        }
+    });
+
+    $ pair = jwt.issue_pair({
+        "sub": "user_admin_1",
+        "roles": ["admin"],
+        "permissions": ["post:create", "post:publish"],
+        "display_name": "Demo Admin",
+        "team_id": "team_demo"
+    });
+
+    $# {
+        "ok": true,
+        "session": session.current(),
+        "csrf_token": csrf.token(),
+        "access_token": pair["access_token"],
+        "refresh_token": pair["refresh_token"]
+    };
+}
+
+$POST("/refresh") refresh(body) -> JSON {
+    $# jwt.refresh_pair(body["refresh_token"]);
+}
+
+$POST("/logout") logout() -> JSON {
+    session.destroy();
+    $# {"ok": true};
+}
+
+$GET("/me") me() -> JSON {
+    $# {
+        "authenticated": guard.authenticated(),
+        "principal": guard.principal(),
+        "session": session.current(),
+        "jwt": jwt.current()
+    };
+}
+
+$GET("/admin") admin() -> JSON {
+    guard.require_role("admin");
+    $# {
+        "ok": true,
+        "subject": guard.principal()["subject"],
+        "roles": guard.principal()["roles"]
+    };
+}

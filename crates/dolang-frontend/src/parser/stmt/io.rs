@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 
 use crate::ast::{
-    FStringLiteral, FileReadStmt, FileWriteStmt, PrintStmt, PrintTarget, ReadMode, ReadStmt, Span,
-    Stmt, StringLiteral,
+    FStringLiteral, PrintStmt, PrintTarget, ReadMode, ReadStmt, Span, Stmt, StringLiteral,
 };
+use crate::diagnostics::{Diagnostic, codes};
 use crate::error::Error;
 use crate::token::{Token, Type};
 
@@ -15,13 +15,19 @@ impl<'a> StmtParser<'a> {
         let print_literal = self.peek().literal.clone();
         self.advance();
 
-        if print_literal == "$>>FILE" {
-            return self.parse_file_write(start);
-        }
-
         let expr_toks = self.collect_until_semi();
         if expr_toks.is_empty() {
             return Err(Error::InvalidExpression(None));
+        }
+
+        if print_literal == "$>>FILE"
+            || (print_literal == "$>>"
+                && expr_toks.len() >= 2
+                && expr_toks[0].typ == Type::Ident
+                && expr_toks[0].literal == "FILE"
+                && expr_toks[1].typ == Type::LParen)
+        {
+            return Err(self.legacy_file_write_error(start));
         }
 
         if expr_toks.len() >= 2 && expr_toks[0].typ == Type::Ident && expr_toks[0].literal == "ERR"
@@ -46,12 +52,7 @@ impl<'a> StmtParser<'a> {
 
     pub fn parse_read_stmt(&mut self) -> Result<Option<Stmt>, Error> {
         let start = self.peek().pos;
-        let read_literal = self.peek().literal.clone();
         self.advance();
-
-        if read_literal == "$<<FILE" {
-            return self.parse_file_read(start);
-        }
 
         let expr_toks = self.collect_until_semi();
         if expr_toks.is_empty() {
@@ -66,28 +67,25 @@ impl<'a> StmtParser<'a> {
         }
         if expr_toks[0].typ != Type::Ident {
             return Err(Error::Parse(crate::error::ParseError {
-                message: "expected ENV, LINE, or FILE after $<<".to_string(),
+                message: "expected ENV or LINE after $<<".to_string(),
                 line: 1,
                 column: 1,
                 found: Some(format!("{:?}", expr_toks[0].typ)),
-                expected: Some("ENV, LINE, or FILE".to_string()),
+                expected: Some("ENV or LINE".to_string()),
             }));
         }
 
         let mode_name = expr_toks[0].literal.clone();
         if mode_name == "FILE" {
-            return self.parse_file_read(start);
+            return Err(self.legacy_file_read_error(start));
         }
         if mode_name != "ENV" && mode_name != "LINE" {
             return Err(Error::Parse(crate::error::ParseError {
-                message: format!(
-                    "unknown read mode '{}', expected ENV, LINE, or FILE",
-                    mode_name
-                ),
+                message: format!("unknown read mode '{}', expected ENV or LINE", mode_name),
                 line: 1,
                 column: 1,
                 found: Some(mode_name),
-                expected: Some("ENV, LINE, or FILE".to_string()),
+                expected: Some("ENV or LINE".to_string()),
             }));
         }
 
@@ -162,140 +160,6 @@ impl<'a> StmtParser<'a> {
         })))
     }
 
-    pub fn parse_file_write(&mut self, start: usize) -> Result<Option<Stmt>, Error> {
-        let expr_toks = self.collect_until_semi();
-        if expr_toks.is_empty() {
-            return Err(Error::Parse(crate::error::ParseError {
-                message: "invalid file write statement, use $>>FILE(path, content) or $>>FILE(path, content, mode)".to_string(),
-                line: 1,
-                column: 1,
-                found: None,
-                expected: None,
-            }));
-        }
-        if expr_toks[0].typ != Type::LParen {
-            return Err(Error::Parse(crate::error::ParseError {
-                message: "expected '(' after $>>FILE".to_string(),
-                line: 1,
-                column: 1,
-                found: Some(format!("{:?}", expr_toks[0].typ)),
-                expected: Some("(".to_string()),
-            }));
-        }
-
-        let args = collect_top_level_file_args(&expr_toks);
-        if args.len() < 2 {
-            return Err(Error::Parse(crate::error::ParseError {
-                message: "FILE write requires at least 2 arguments: path, content".to_string(),
-                line: 1,
-                column: 1,
-                found: Some(format!("{} arguments", args.len())),
-                expected: Some("path, content".to_string()),
-            }));
-        }
-
-        let path_expr = self.parse_expr_tokens(&[args[0].clone()]).map_err(|_| {
-            Error::Parse(crate::error::ParseError {
-                message: "invalid path expression".to_string(),
-                line: 1,
-                column: 1,
-                found: None,
-                expected: None,
-            })
-        })?;
-        let content_expr = self.parse_expr_tokens(&[args[1].clone()]).map_err(|_| {
-            Error::Parse(crate::error::ParseError {
-                message: "invalid content expression".to_string(),
-                line: 1,
-                column: 1,
-                found: None,
-                expected: None,
-            })
-        })?;
-        let mode = if args.len() >= 3 {
-            Some(self.parse_expr_tokens(&[args[2].clone()]).map_err(|_| {
-                Error::Parse(crate::error::ParseError {
-                    message: "invalid mode expression".to_string(),
-                    line: 1,
-                    column: 1,
-                    found: None,
-                    expected: None,
-                })
-            })?)
-        } else {
-            None
-        };
-
-        Ok(Some(Stmt::FileWrite(FileWriteStmt {
-            span: Span::from_token(start),
-            path: path_expr,
-            content: Some(content_expr),
-            mode,
-        })))
-    }
-
-    pub fn parse_file_read(&mut self, start: usize) -> Result<Option<Stmt>, Error> {
-        let expr_toks = self.collect_until_semi();
-        if expr_toks.is_empty() {
-            return Err(Error::Parse(crate::error::ParseError {
-                message: "invalid file read statement, use $<<FILE(path)".to_string(),
-                line: 1,
-                column: 1,
-                found: None,
-                expected: None,
-            }));
-        }
-        if expr_toks[0].typ != Type::LParen {
-            return Err(Error::Parse(crate::error::ParseError {
-                message: "expected '(' after $<<FILE".to_string(),
-                line: 1,
-                column: 1,
-                found: Some(format!("{:?}", expr_toks[0].typ)),
-                expected: Some("(".to_string()),
-            }));
-        }
-
-        let args = collect_top_level_file_args(&expr_toks);
-        if args.is_empty() {
-            return Err(Error::Parse(crate::error::ParseError {
-                message: "FILE read requires at least 1 argument: path".to_string(),
-                line: 1,
-                column: 1,
-                found: Some("0 arguments".to_string()),
-                expected: Some("path".to_string()),
-            }));
-        }
-
-        let path_expr = self.parse_expr_tokens(&[args[0].clone()]).map_err(|_| {
-            Error::Parse(crate::error::ParseError {
-                message: "invalid path expression".to_string(),
-                line: 1,
-                column: 1,
-                found: None,
-                expected: None,
-            })
-        })?;
-        let mode = if args.len() >= 2 {
-            Some(self.parse_expr_tokens(&[args[1].clone()]).map_err(|_| {
-                Error::Parse(crate::error::ParseError {
-                    message: "invalid mode expression".to_string(),
-                    line: 1,
-                    column: 1,
-                    found: None,
-                    expected: None,
-                })
-            })?)
-        } else {
-            None
-        };
-
-        Ok(Some(Stmt::FileRead(FileReadStmt {
-            span: Span::from_token(start),
-            path: path_expr,
-            mode,
-        })))
-    }
-
     fn parse_stderr_target(&self, expr_toks: &[Token]) -> Result<Box<crate::ast::Expr>, Error> {
         if expr_toks[1].typ != Type::LParen {
             return Err(Error::Parse(crate::error::ParseError {
@@ -340,6 +204,36 @@ impl<'a> StmtParser<'a> {
 
         parse_string_like_expr_with_flag(&arg_tok, is_fstring)
     }
+
+    fn legacy_file_write_error(&self, pos: usize) -> Error {
+        let (line, column) = crate::parser::calc_line_col(self.src, pos);
+        Error::Diagnostic(
+            Diagnostic::error(
+                codes::PARSE_LEGACY_FILE_SYNTAX,
+                "legacy file syntax `$>>FILE(...)` has been removed",
+            )
+            .with_location(line, column)
+            .with_span(Span::from_token(pos))
+            .with_note("replace `$>>FILE(path, content)` with `std.fs.write(path, content)`")
+            .with_note(
+                "replace append/delete cases with `std.fs.append(...)` / `std.fs.delete(...)`",
+            ),
+        )
+    }
+
+    fn legacy_file_read_error(&self, pos: usize) -> Error {
+        let (line, column) = crate::parser::calc_line_col(self.src, pos);
+        Error::Diagnostic(
+            Diagnostic::error(
+                codes::PARSE_LEGACY_FILE_SYNTAX,
+                "legacy file syntax `$<<FILE(...)` has been removed",
+            )
+            .with_location(line, column)
+            .with_span(Span::from_token(pos))
+            .with_note("replace `$<<FILE(path)` with `std.fs.read_text(path)`")
+            .with_note("replace `$<<FILE(path, \"LINES\")` with `std.fs.read_lines(path)`"),
+        )
+    }
 }
 
 fn collect_top_level_string_args(
@@ -378,35 +272,6 @@ fn collect_top_level_string_args(
     }
 
     Ok(args)
-}
-
-fn collect_top_level_file_args(expr_toks: &[Token]) -> Vec<Token> {
-    let mut args: Vec<Token> = Vec::new();
-    let mut paren_depth = 1;
-    let mut i = 1;
-    while i < expr_toks.len() {
-        let tok = &expr_toks[i];
-        match tok.typ {
-            Type::LParen => paren_depth += 1,
-            Type::RParen => {
-                paren_depth -= 1;
-                if paren_depth == 0 {
-                    break;
-                }
-            }
-            _ => {}
-        }
-        if paren_depth == 1
-            && (tok.typ == Type::String
-                || tok.typ == Type::FString
-                || tok.typ == Type::Ident
-                || tok.typ == Type::Number)
-        {
-            args.push(tok.clone());
-        }
-        i += 1;
-    }
-    args
 }
 
 fn parse_string_like_expr(tok: &Token) -> Result<Box<crate::ast::Expr>, Error> {

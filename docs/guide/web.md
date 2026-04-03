@@ -23,7 +23,7 @@ dolang serve .
 dolang serve . --routertab
 ```
 
-默认监听 `0.0.0.0:8080`，可通过 `package.toml` 修改：
+默认监听 `127.0.0.1:8080`，可通过 `package.toml` 修改：
 
 ```toml
 [server]
@@ -418,5 +418,6 @@ dolang serve main.dol --routertab
   GET    /api/users/:id -> get_user
   STATIC /static        -> static/
 
-Server running at http://0.0.0.0:8080
+Local: http://127.0.0.1:8080
+Network: listening on all interfaces (:8080), use your LAN IP to access
 ```

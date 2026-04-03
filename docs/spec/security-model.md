@@ -35,12 +35,19 @@ Phase 11 的目标不是立即实现沙箱，而是先把当前真实行为文�
 
 Dolang 当前支持文件相关能力，包括：
 
-- `$<<FILE(...)`
-- `$>>FILE(...)`
-- `File` 值上的读取、写入、追加、删除类方法
+- `std.fs.read_text(...)`
+- `std.fs.read_lines(...)`
+- `std.fs.write(...)`
+- `std.fs.append(...)`
+- `std.fs.delete(...)`
+- `std.fs.exists(...)`
+- `std.fs.size(...)`
+- `std.fs.is_dir(...)`
 
 这些能力当前直接映射到底层文件系统访问，不经过沙箱。
 当前实现已经通过 runtime intrinsic 层集中管理 `fs/env/config` 这类宿主能力，但默认 policy 仍是 allow-all。
+
+legacy 语法 `$<<FILE(...)` / `$>>FILE(...)` 目前仍存在兼容窗口，但安全边界应以 `std.fs` 这组能力来理解。
 
 ### 当前边界
 

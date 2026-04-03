@@ -104,6 +104,7 @@ my-app/
 `package.toml`
 
 ```toml
+[project]
 name = "my-app"
 version = "0.1.0"
 entry = "main.dol"
@@ -160,6 +161,7 @@ http-app/
 `package.toml`
 
 ```toml
+[project]
 name = "http-app"
 version = "0.1.0"
 entry = "main.dol"
@@ -211,6 +213,34 @@ curl http://127.0.0.1:8080/api/status
 - [12-projects-and-package.md](12-projects-and-package.md)
 - [15-http-basics.md](15-http-basics.md)
 - [16-http-organization.md](16-http-organization.md)
+
+## 配方 5：带登录、刷新和 CSRF 的 HTTP 认证服务
+
+如果你要一个可直接运行的完整 auth 起步项目，不要从零拼配置，直接用仓库里的示例：
+
+- [examples/http-auth](/Users/liangzhanbo/CodeStudio/dolang/examples/http-auth)
+
+它已经覆盖：
+
+- `POST /login`
+- `POST /refresh`
+- `POST /logout`
+- `GET /me`
+- `GET /admin`
+- session cookie 与 bearer token 双入口
+- cookie 写请求的 `X-CSRF-Token` 校验
+
+启动：
+
+```bash
+dolang serve examples/http-auth
+```
+
+如果你是从 guide 往下走，建议搭配阅读：
+
+- [15-http-basics.md](15-http-basics.md)
+- [../reference/http.md](../reference/http.md)
+- [../reference/stdlib-api.md](../reference/stdlib-api.md)
 
 ## 迁移说明
 

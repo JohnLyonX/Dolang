@@ -31,15 +31,20 @@ $>> "Hello";
 $>>ERR("bad input");
 $ name = $<<LINE();
 $ home = $<<ENV("HOME");
-$ text = $<<FILE("notes.txt");
-$ lines = $<<FILE("notes.txt", "LINES");
+$>> fs.read_text("notes.txt");
 ```
 
-关于 `$<<FILE(...)`，统一口径如下：
+文件能力主线推荐走 `std.fs`：
 
-- `$<<FILE(path)`：按全文读取
-- `$<<FILE(path, "LINES")`：按行读取
-- 如果你需要更明确、更完整的文件 API，优先改用 `std.fs.read_text(...)` / `std.fs.read_lines(...)`
+```dao
+$mod std.fs;
+
+$ text = fs.read_text("notes.txt");
+$ lines = fs.read_lines("notes.txt");
+fs.write("output.txt", text);
+```
+
+`$<<FILE(...)` / `$>>FILE(...)` 已移除；继续使用会报 `DOL-P008`，文件读写请改用 `std.fs`。
 
 ## 控制流
 

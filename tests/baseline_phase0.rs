@@ -9,11 +9,13 @@ use dolang::runtime::{
     execute_program_with_writer, execute_source_with_writer, intrinsics::ids,
     load_context_and_program,
 };
+use dolang_runtime::stdlib_native;
 
 fn run_program(source: &str) -> (ProgramState, RuntimeContext, String) {
     let statements = parse(source).expect("source should parse");
     let mut state = ProgramState::new();
     let mut context = RuntimeContext::new(RuntimeMode::Test, PathBuf::from("."));
+    stdlib_native::register_stdlib_native_modules(&mut context);
     let mut output = Vec::new();
 
     let should_continue =
@@ -32,6 +34,7 @@ fn run_program_error(source: &str) -> String {
     let statements = parse(source).expect("source should parse");
     let mut state = ProgramState::new();
     let mut context = RuntimeContext::new(RuntimeMode::Test, PathBuf::from("."));
+    stdlib_native::register_stdlib_native_modules(&mut context);
     let mut output = Vec::new();
 
     execute_program_with_writer(&statements, &mut state, &mut context, &mut output)
@@ -130,27 +133,77 @@ fn execute_source_with_writer_uses_explicit_context() {
 }
 
 #[test]
-fn loader_honors_package_entry_override() {
+fn main_decl_prints_use_the_explicit_writer() {
+    let source = r#"
+$main() {
+    $>> "[INFO] startup";
+}
+"#;
+    let statements = parse(source).expect("source should parse");
+    let mut state = ProgramState::new();
+    let mut context = RuntimeContext::new(RuntimeMode::Serve, PathBuf::from("."));
+    context.set_current_file(Some("main.dol".to_string()));
+    let mut output = Vec::new();
+
+    let should_continue =
+        execute_program_with_writer(&statements, &mut state, &mut context, &mut output)
+            .expect("program should execute successfully");
+
+    assert!(should_continue);
+    assert_eq!(
+        String::from_utf8(output).expect("utf-8"),
+        "[INFO] startup\n"
+    );
+}
+
+#[test]
+fn run_mode_ignores_package_manifest_and_uses_script_path_directly() {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock should be valid")
         .as_nanos();
     let project_dir = std::env::temp_dir().join(format!("dolang-phase1-{unique}"));
-    fs::create_dir_all(&project_dir).expect("temp project dir should be created");
+    fs::create_dir_all(project_dir.join("scripts")).expect("temp project dir should be created");
 
-    let package = "name = \"phase1\"\nversion = \"0.1.0\"\nentry = \"app.dol\"\n";
+    let package = r#"
+[project]
+name = "phase1"
+version = "0.1.0"
+entry = "app.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+
+[server.auth.session.store]
+driver = "postgres"
+
+[server.auth.session.store.postgres]
+url_env = "SESSION_DATABASE_URL"
+table = "auth_sessions"
+refresh_table = "auth_refresh_tokens"
+"#;
     fs::write(project_dir.join("package.toml"), package).expect("package.toml should be written");
     fs::write(project_dir.join("app.dol"), "$ value = 42;").expect("entry file should be written");
+    let script_path = project_dir.join("scripts/hash_password.dol");
+    fs::write(&script_path, "$ value = 7;").expect("script file should be written");
 
     let (context, program) =
-        load_context_and_program(RuntimeMode::Run, &project_dir).expect("program should load");
+        load_context_and_program(RuntimeMode::Run, &script_path).expect("program should load");
 
-    assert_eq!(program.path, project_dir.join("app.dol"));
+    assert_eq!(program.path, script_path);
     assert_eq!(
         context.current_file(),
         Some(program.path.to_string_lossy().as_ref())
     );
-    assert_eq!(context.project_root(), project_dir.as_path());
+    assert_eq!(
+        context.project_root(),
+        project_dir.join("scripts").as_path()
+    );
+    assert!(context.project_config().is_none());
 
     fs::remove_dir_all(&project_dir).expect("temp project dir should be removed");
 }
@@ -186,6 +239,78 @@ fn runtime_context_exposes_intrinsic_registry_for_file_io() {
 }
 
 #[test]
+fn std_fs_write_append_delete_round_trip() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!("dolang-stdout-fs-{unique}.txt"));
+    let source = format!(
+        "$mod std.fs;\n\
+         fs.write(\"{}\", \"hello\");\n\
+         fs.append(\"{}\", \"\\nworld\");\n\
+         $ text = fs.read_text(\"{}\");\n\
+         $ exists_before = fs.exists(\"{}\");\n\
+         $ size_before = fs.size(\"{}\");\n\
+         fs.delete(\"{}\");\n\
+         $ exists_after = fs.exists(\"{}\");\n",
+        path.display(),
+        path.display(),
+        path.display(),
+        path.display(),
+        path.display(),
+        path.display(),
+        path.display()
+    );
+
+    let (state, _context, _output) = run_program(&source);
+    assert_eq!(
+        state.env.get("text"),
+        Some(&DolangValue::Str("hello\nworld".to_string()))
+    );
+    assert_eq!(
+        state.env.get("exists_before"),
+        Some(&DolangValue::Bool(true))
+    );
+    assert_eq!(
+        state.env.get("exists_after"),
+        Some(&DolangValue::Bool(false))
+    );
+    assert_eq!(state.env.get("size_before"), Some(&DolangValue::Int(11)));
+}
+
+#[test]
+fn std_fs_read_lines_and_is_dir_work() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("dolang-stdout-fs-dir-{unique}"));
+    fs::create_dir_all(&dir).expect("dir should exist");
+    let file = dir.join("lines.txt");
+    fs::write(&file, "a\nb\n").expect("fixture file");
+
+    let source = format!(
+        "$mod std.fs;\n\
+         $ lines = fs.read_lines(\"{}\");\n\
+         $ dir_flag = fs.is_dir(\"{}\");\n",
+        file.display(),
+        dir.display()
+    );
+
+    let (state, _context, _output) = run_program(&source);
+    assert_eq!(
+        state.env.get("lines"),
+        Some(&DolangValue::List(vec![
+            DolangValue::Str("a".to_string()),
+            DolangValue::Str("b".to_string())
+        ]))
+    );
+    assert_eq!(state.env.get("dir_flag"), Some(&DolangValue::Bool(true)));
+    fs::remove_dir_all(dir).expect("cleanup");
+}
+
+#[test]
 fn runtime_policy_can_block_intrinsic_calls() {
     let mut context = RuntimeContext::new(RuntimeMode::Test, PathBuf::from("."));
     let mut policy = RuntimePolicy::allow_all();
@@ -212,18 +337,20 @@ fn runtime_context_can_surface_unregistered_intrinsic_error() {
 }
 
 #[test]
-fn file_value_methods_keep_working_after_intrinsic_refactor() {
+fn std_fs_metadata_methods_keep_working_after_intrinsic_refactor() {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock should be valid")
         .as_nanos();
     let path = std::env::temp_dir().join(format!("dolang-file-methods-{unique}.txt"));
     let source = format!(
-        "$ writer = $>>FILE(\"{}\"); writer.content(\"hello\\nworld\");\n\
-         $ file = $<<FILE(\"{}\", \"LINES\");\n\
-         $ exists = file.exists();\n\
-         $ size = file.size();\n\
-         $ lines = file.read();\n",
+        "$mod std.fs;\n\
+         fs.write(\"{}\", \"hello\\nworld\");\n\
+         $ exists = fs.exists(\"{}\");\n\
+         $ size = fs.size(\"{}\");\n\
+         $ lines = fs.read_lines(\"{}\");\n",
+        path.display(),
+        path.display(),
         path.display(),
         path.display()
     );

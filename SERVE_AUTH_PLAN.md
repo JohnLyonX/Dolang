@@ -336,13 +336,15 @@
 
 ### P2
 
-- [ ] cookie/session 安全策略进一步收紧
+- [x] cookie/session 安全策略进一步收紧
   - 例如：
-    - CSRF 配套能力
-    - 更严格的 session fixation 防护
-    - login / refresh 时的 rotate 策略细化
+    - [x] session cookie 启动期安全校验：`cookie_same_site` 只允许 `lax|strict|none`
+    - [x] session cookie 启动期安全校验：`SameSite=None` 必须同时启用 `Secure`
+    - [x] CSRF 配套能力：session 自动生成 `csrf_token`，cookie 写请求默认校验 `X-CSRF-Token`
+    - [x] 更严格的 session fixation 防护：`rotation = "always"` 下重新登录会立即失效旧 session cookie
+    - [x] login 时的 rotate 策略细化：`rotation` 允许值收敛为 `off|on_login|always`
 
-- [ ] 更完整的 auth 示例工程
+- [x] 更完整的 auth 示例工程
   - 目标：提供可直接运行的登录、刷新、登出、管理员路由样例
 
 ## 推荐执行顺序

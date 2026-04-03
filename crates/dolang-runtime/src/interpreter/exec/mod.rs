@@ -9,7 +9,7 @@ mod variables;
 
 use crate::ast::Stmt;
 use crate::error::Error;
-use crate::runtime::{ProgramState, RuntimeContext};
+use crate::runtime::{ProgramState, RuntimeContext, RuntimeMode};
 use std::io::{Write, stdout};
 
 use super::value::DolangValue;
@@ -34,6 +34,14 @@ pub fn exec(
     context: &mut RuntimeContext,
 ) -> (bool, Result<(), Error>) {
     exec_with_writer(stmt, state, context, &mut stdout())
+}
+
+pub(super) fn info_prefix(context: &RuntimeContext) -> &'static str {
+    if matches!(context.mode(), RuntimeMode::Serve) {
+        "\u{1b}[97;44m[INFO]\u{1b}[0m"
+    } else {
+        "[INFO]"
+    }
 }
 
 pub fn exec_with_writer(
@@ -64,7 +72,7 @@ pub(super) fn exec_inner(
         Stmt::Break(_) => Flow::Break,
         Stmt::Continue(_) => Flow::Continue,
         Stmt::ModDecl(stmt) => modules::handle_mod_decl(stmt, state, context, w),
-        Stmt::MainDecl(stmt) => control_flow::handle_main_decl(stmt, state, context),
+        Stmt::MainDecl(stmt) => control_flow::handle_main_decl(stmt, state, context, w),
         Stmt::Return(stmt) => control_flow::handle_return_stmt(stmt, state, context, w),
         Stmt::Print(stmt) => io::handle_print_stmt(stmt, state, context, w),
         Stmt::Read(stmt) => io::handle_read_stmt(stmt, state, context, w),
@@ -80,8 +88,6 @@ pub(super) fn exec_inner(
         Stmt::HttpFn(stmt) => http::handle_http_fn(stmt, state, context, w),
         Stmt::HttpBlock(stmt) => http::handle_http_block(stmt, state, context, w),
         Stmt::Static(stmt) => modules::handle_static_stmt(stmt, context, w),
-        Stmt::FileWrite(stmt) => io::handle_file_write_stmt(stmt, state, context, w),
-        Stmt::FileRead(stmt) => io::handle_file_read_stmt(stmt, state, context, w),
         Stmt::Try(stmt) => error_handling::handle_try_stmt(stmt, state, context, w),
         Stmt::Throw(stmt) => error_handling::handle_throw_stmt(stmt, state, context, w),
         Stmt::ExprStmt(expr) => variables::handle_expr_stmt(expr, state, context, w),

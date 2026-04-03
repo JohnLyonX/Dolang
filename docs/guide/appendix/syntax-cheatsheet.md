@@ -17,11 +17,17 @@ value += 1;
 ```dol
 $>> "hello";
 $>>ERR("bad input");
-$>>FILE("out.txt", "hello");
 $ name = $<<LINE();
 $ home = $<<ENV("HOME");
-$ text = $<<FILE("notes.txt");
-$ lines = $<<FILE("notes.txt", "LINES");
+$>> fs.read_text("notes.txt");
+```
+
+```dol
+$mod std.fs;
+$ text = fs.read_text("notes.txt");
+$ lines = fs.read_lines("notes.txt");
+fs.write("out.txt", text);
+fs.append("out.txt", "\nmore");
 ```
 
 ## 控制流

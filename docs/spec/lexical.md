@@ -23,8 +23,8 @@
   - `$mod`、`$main`、`$Type`
   - `$GET`、`$POST`、`$PUT`、`$DEL`、`$PATCH`、`$HTTP`
   - `$JSON`、`$HTML`、`$RES`、`$STATIC`
-  - `$<<`、`$<<FILE`、`$<<CONFIG`、`$HDR`
-  - `$>>`、`$>>FILE`
+  - `$<<`、`$<<CONFIG`、`$HDR`
+  - `$>>`
 
 ### 空白与注释
 

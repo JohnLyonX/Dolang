@@ -89,6 +89,12 @@ $GET("/whoami") whoami() -> JSON {
 }
 ```
 
+这在 bearer token 场景下尤其常见：
+
+```http
+Authorization: Bearer <access_token>
+```
+
 ## body 注入
 
 当前主线明确这条规则：
@@ -112,6 +118,63 @@ $PATCH("/users") patch_user() -> JSON {
     $# $JSON { "updated": true, "name": name };
 }
 ```
+
+## 认证与授权入口
+
+`serve` 模式当前已经接通两类请求身份来源：
+
+- cookie session
+- bearer token
+
+启用入口在 `package.toml` 的 `[server.auth]` 配置树里。最小例子：
+
+```toml
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie", "bearer"]
+
+[server.auth.session]
+enabled = true
+
+[server.auth.jwt]
+enabled = true
+secret = "replace-me"
+issuer = "dolang"
+audience = "dolang"
+```
+
+路由进入 handler 前，runtime 会先解析当前 principal；如果你配置了授权规则，未认证请求会得到 `401`，权限不足会得到 `403`。
+
+程序侧常用模块：
+
+- `std.auth.session`
+- `std.auth.jwt`
+- `std.auth.guard`
+- `std.auth.csrf`
+
+完整配置和 API 细节请读：
+
+- [../reference/http.md](../reference/http.md)
+- [../reference/stdlib-api.md](../reference/stdlib-api.md)
+
+## CSRF 基线
+
+如果请求是通过 cookie session 认证的，并且方法属于：
+
+- `POST`
+- `PUT`
+- `PATCH`
+- `DELETE`
+
+runtime 会默认校验 `X-CSRF-Token`。
+
+使用方式：
+
+1. 登录后读取 `session.current()["csrf_token"]`，或通过 `std.auth.csrf.token()` 获取 token
+2. 后续带 cookie 的写请求附加 `X-CSRF-Token: <token>`
+
+如果你走的是 bearer token 请求链路，则不要求这个 header。
 
 ## HTML 返回
 

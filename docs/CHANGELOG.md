@@ -32,6 +32,9 @@
 - JWT 现在支持按配置选择 `HS256` / `HS384` / `HS512`，非法算法会在启动时被拒绝
 - 路由授权规则现在支持前缀通配、具体规则优先级，以及 `claims_all` claims 精确匹配约束
 - `std.auth.guard` 新增批量角色/权限辅助：`has_any_*` / `has_all_*` / `require_any_*` / `require_all_*`
+- 新增可直接运行的 [examples/http-auth](/Users/liangzhanbo/CodeStudio/dolang/examples/http-auth) 示例工程，覆盖登录、刷新、登出、受保护路由与 session/JWT 双入口
+- 新增 `std.auth.csrf` 原生模块，并为 cookie session 写请求接通默认 CSRF 校验
+- `std.fs` 现在补齐 `write(...)` / `append(...)` 主 API，并在 `run` 与 `serve` 模式下统一按项目根解析相对路径
 
 ### Changed
 
@@ -39,6 +42,9 @@
 - 将 stdlib native module 注册从 `intrinsics.rs` 拆分到 `src/runtime/stdlib/`，为后续标准库扩展提供结构化入口
 - `serve` 请求链路现在会在进入 handler 前解析当前 principal，并把认证态注入请求级 auth context
 - 受保护路由当前支持 `require = "authenticated"`、`roles_any`、`roles_all`、`permissions_any`、`permissions_all` 规则
+- session cookie 配置现在会在启动期拒绝不安全组合：非法 `cookie_same_site`，以及 `SameSite=None` 但未启用 `Secure`
+- session rotation 配置现在会在启动期拒绝非法模式；`rotation = "always"` 下重新登录会立即失效旧 cookie，避免旧 session 继续可用
+- 文件读写文档主路径现在切换到 `std.fs`；`$>>FILE(...)` / `$<<FILE(...)` 已移除，继续使用会报 `DOL-P008`
 
 ### Deprecated
 
@@ -51,6 +57,7 @@
 ### Fixed
 
 - 对齐 spec 样例与当前 parser/runtime 真实行为
+- `dolang run <file.dol>` 现在按真正的脚本模式执行，不再因为文件位于项目目录内而继承上层 `package.toml` 的 auth / session store 初始化；项目内工具脚本可脱离 `serve` 配置单独运行
 - 修复 `std.postgres` 在 `serve` 模式 HTTP handler 中调用 `Connection.close()` 时触发的 Tokio runtime 嵌套 panic，真实 HTTP + PostgreSQL 查询链路现在可正常工作
 - HTTP handler 在真实 `serve` 请求链路中的路径参数、query 参数与 `$HDR(...)` 请求头读取行为已补齐并覆盖集成测试
 - `RuntimeMode::Test` 下 HTTP handler 注册阶段现在会执行返回类型校验；同时普通 `$fn` 与 HTTP handler 共用同一套返回类型验证逻辑

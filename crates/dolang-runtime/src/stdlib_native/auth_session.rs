@@ -6,7 +6,9 @@ use uuid::Uuid;
 
 use crate::error::Error;
 use crate::interpreter::DolangValue;
-use crate::runtime::auth::{Principal, SessionRecord};
+use crate::runtime::auth::{
+    Principal, SessionRecord, csrf_token_from_claims, replace_session_csrf_token,
+};
 use crate::runtime::{NativeFnMap, RuntimeContext};
 
 use super::auth_guard::principal_to_value;
@@ -66,7 +68,10 @@ pub fn register(context: &mut RuntimeContext) {
             };
 
             ctx.with_request_auth_context_mut(|auth| {
-                if ctx.runtime_auth_config().session_rotation == "on_login" {
+                if matches!(
+                    ctx.runtime_auth_config().session_rotation.as_str(),
+                    "on_login" | "always"
+                ) {
                     if let Some(current) = auth.current_session() {
                         auth.queue_session_delete(current.session_id.clone());
                     }
@@ -231,13 +236,15 @@ fn session_from_payload(
     };
     let now = Utc::now().timestamp();
     let auth_config = ctx.runtime_auth_config();
+    let mut claims = claims_field(payload, "claims");
+    replace_session_csrf_token(&mut claims);
 
     Ok(SessionRecord {
         session_id: format!("sess_{}", Uuid::new_v4().simple()),
         subject,
         roles: string_list_field(payload, "roles"),
         permissions: string_list_field(payload, "permissions"),
-        claims: claims_field(payload, "claims"),
+        claims,
         expires_at: now + auth_config.session_ttl_seconds,
         idle_timeout_at: if auth_config.session_idle_timeout_seconds > 0 {
             Some(now + auth_config.session_idle_timeout_seconds)
@@ -296,6 +303,12 @@ fn session_to_value(session: &SessionRecord) -> DolangValue {
         session
             .idle_timeout_at
             .map(DolangValue::Int)
+            .unwrap_or(DolangValue::Null),
+    );
+    map.insert(
+        "csrf_token".to_string(),
+        csrf_token_from_claims(&session.claims)
+            .map(DolangValue::Str)
             .unwrap_or(DolangValue::Null),
     );
     DolangValue::Map(map)

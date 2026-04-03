@@ -1,4 +1,4 @@
-use crate::ast::{ConfigReadExpr, Expr, ExprRead, FileReadExpr, FileWriteExpr, HdrReadExpr};
+use crate::ast::{ConfigReadExpr, Expr, ExprRead, HdrReadExpr};
 use crate::diagnostics::codes;
 use crate::error::Error;
 use crate::runtime::{ProgramState, RuntimeContext, intrinsics::ids};
@@ -65,68 +65,6 @@ pub fn eval_read_expr(
             }
         }
     }
-}
-
-pub fn eval_file_read_expr(
-    e: &Expr,
-    file_read: &FileReadExpr,
-    state: &mut ProgramState,
-    context: &mut RuntimeContext,
-    w: &mut dyn std::io::Write,
-) -> Result<DolangValue, Error> {
-    let path_val = eval_expr(&file_read.path, state, context, w, false)?;
-    let path_str = match path_val {
-        DolangValue::Str(s) => s,
-        _ => {
-            return Err(super::runtime_error(
-                e,
-                codes::RUNTIME_GENERIC,
-                "file path must be a String",
-            ));
-        }
-    };
-
-    let mode_str = if let Some(mode_expr) = &file_read.mode {
-        Some(eval_expr(mode_expr, state, context, w, false)?.to_string())
-    } else {
-        None
-    };
-
-    Ok(DolangValue::File {
-        path: path_str,
-        mode: mode_str,
-    })
-}
-
-pub fn eval_file_write_expr(
-    e: &Expr,
-    file_write: &FileWriteExpr,
-    state: &mut ProgramState,
-    context: &mut RuntimeContext,
-    w: &mut dyn std::io::Write,
-) -> Result<DolangValue, Error> {
-    let path_val = eval_expr(&file_write.path, state, context, w, false)?;
-    let path_str = match path_val {
-        DolangValue::Str(s) => s,
-        _ => {
-            return Err(super::runtime_error(
-                e,
-                codes::RUNTIME_GENERIC,
-                "file path must be a String",
-            ));
-        }
-    };
-
-    let mode_str = if let Some(mode_expr) = &file_write.mode {
-        Some(eval_expr(mode_expr, state, context, w, false)?.to_string())
-    } else {
-        None
-    };
-
-    Ok(DolangValue::File {
-        path: path_str,
-        mode: mode_str,
-    })
 }
 
 pub fn eval_config_read_expr(

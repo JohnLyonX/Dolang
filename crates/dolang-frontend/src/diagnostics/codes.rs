@@ -10,6 +10,7 @@ pub const PARSE_CORS_DUPLICATE: &str = "DOL-P004";
 pub const PARSE_CORS_INVALID_SYNTAX: &str = "DOL-P005";
 pub const PARSE_SET_HDR_INVALID_POSITION: &str = "DOL-P006";
 pub const PARSE_SET_HDR_INVALID_SYNTAX: &str = "DOL-P007";
+pub const PARSE_LEGACY_FILE_SYNTAX: &str = "DOL-P008";
 
 pub const RUNTIME_GENERIC: &str = "DOL-R001";
 pub const RUNTIME_DIVISION_BY_ZERO: &str = "DOL-R002";

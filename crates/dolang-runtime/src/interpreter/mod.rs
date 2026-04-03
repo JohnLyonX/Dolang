@@ -99,11 +99,11 @@ pub fn exec_http_handler(
                 break;
             }
             Flow::Err(e) => {
-                eprintln!("[ERROR] {}", e);
+                eprintln!("\u{1b}[97;41m[ERROR]\u{1b}[0m {}", e);
                 return (true, None, Some(e.to_string()));
             }
             Flow::Throw(val) => {
-                eprintln!("[ERROR] uncaught throw: {val}");
+                eprintln!("\u{1b}[97;41m[ERROR]\u{1b}[0m uncaught throw: {val}");
                 return (true, None, Some(format!("uncaught throw: {val}")));
             }
         }

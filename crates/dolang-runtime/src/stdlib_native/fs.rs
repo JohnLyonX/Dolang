@@ -30,7 +30,23 @@ pub fn register(context: &mut RuntimeContext) {
         ),
     );
     exports.insert(
+        "write".into(),
+        Arc::new(
+            |args: &[crate::interpreter::DolangValue], ctx: &RuntimeContext| {
+                ctx.call_intrinsic(ids::FS_WRITE_TEXT, args)
+            },
+        ),
+    );
+    exports.insert(
         "append_text".into(),
+        Arc::new(
+            |args: &[crate::interpreter::DolangValue], ctx: &RuntimeContext| {
+                ctx.call_intrinsic(ids::FS_APPEND_TEXT, args)
+            },
+        ),
+    );
+    exports.insert(
+        "append".into(),
         Arc::new(
             |args: &[crate::interpreter::DolangValue], ctx: &RuntimeContext| {
                 ctx.call_intrinsic(ids::FS_APPEND_TEXT, args)

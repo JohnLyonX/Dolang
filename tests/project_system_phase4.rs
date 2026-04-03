@@ -19,6 +19,7 @@ fn unique_project_dir(prefix: &str) -> PathBuf {
 #[test]
 fn manifest_schema_parses_sections() {
     let manifest = r#"
+[project]
 name = "phase4"
 version = "0.1.0"
 entry = "app/main.dol"
@@ -44,6 +45,65 @@ acme = "0.1.0"
     assert_eq!(config.get("APP_ENV"), Some("dev"));
     assert_eq!(config.get("DB_URL"), Some("sqlite://demo.db"));
     assert_eq!(config.dependencies.get("acme"), Some(&"0.1.0".to_string()));
+}
+
+#[test]
+fn manifest_schema_keeps_legacy_top_level_project_fields_compatible() {
+    let manifest = r#"
+name = "phase4-legacy"
+version = "0.1.0"
+entry = "app/main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 9090
+"#;
+
+    let config = ProjectConfig::parse_toml(manifest).expect("manifest should parse");
+    assert_eq!(config.name, "phase4-legacy");
+    assert_eq!(config.version, "0.1.0");
+    assert_eq!(config.entry, "app/main.dol");
+    assert_eq!(config.server.host, "127.0.0.1");
+}
+
+#[test]
+fn manifest_schema_defaults_host_to_localhost_loopback() {
+    let manifest = r#"
+[project]
+name = "phase4-default-host"
+version = "0.1.0"
+entry = "main.dol"
+"#;
+
+    let config = ProjectConfig::parse_toml(manifest).expect("manifest should parse");
+    assert_eq!(config.server.host, "127.0.0.1");
+}
+
+#[test]
+fn load_context_rejects_unsupported_server_host() {
+    let project_dir = unique_project_dir("phase4-bad-host");
+    fs::create_dir_all(&project_dir).expect("project dir");
+    fs::write(
+        project_dir.join("package.toml"),
+        r#"
+[project]
+name = "phase4-bad-host"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "localhost"
+port = 8080
+"#,
+    )
+    .expect("manifest");
+    fs::write(project_dir.join("main.dol"), "$main() {}\n").expect("main");
+
+    let outcome = load_context_and_program(RuntimeMode::Serve, &project_dir)
+        .expect_err("unsupported host should fail during load");
+
+    assert!(outcome.to_string().contains("server.host"));
+    fs::remove_dir_all(&project_dir).expect("cleanup");
 }
 
 #[test]
@@ -130,7 +190,8 @@ fn relative_imports_work_from_current_file_context() {
     .expect("helper");
 
     let (mut context, program) =
-        load_context_and_program(RuntimeMode::Run, &project_dir).expect("program should load");
+        load_context_and_program(RuntimeMode::Run, &project_dir.join("app/main.dol"))
+            .expect("program should load");
     let mut state = ProgramState::new();
     let mut output = Vec::new();
 

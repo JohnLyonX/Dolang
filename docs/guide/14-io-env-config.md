@@ -47,32 +47,55 @@ $>> app;
 
 如果某段代码只在服务项目里运行，再使用 `$<<CONFIG(...)`。
 
-## 文件读取：`$<<FILE(...)`
+## 文件系统：`std.fs`
 
-当前语言层面可写的形式是：
+文件能力现在统一主推 `std.fs`：
+
+```dol
+$mod std.fs;
+
+$ text = fs.read_text("notes.txt");
+$ lines = fs.read_lines("notes.txt");
+$ exists = fs.exists("notes.txt");
+$ is_dir = fs.is_dir("data");
+```
+
+如果你需要写入：
+
+```dol
+$mod std.fs;
+
+fs.write("output.txt", "hello");
+fs.append("output.txt", "\nworld");
+$>> fs.read_text("output.txt");
+fs.delete("output.txt");
+```
+
+主线推荐这样理解：
+
+- `$>>`：输出表达式结果
+- `std.fs`：文件读写与元信息能力
+- `$>> fs.read_text(...)`：输出标准库返回值
+
+## legacy 兼容语法
+
+旧语法示例如下，但当前已经不再可用：
 
 ```dol
 $ text = $<<FILE("notes.txt");
 $ lines = $<<FILE("notes.txt", "LINES");
 ```
 
-口径统一如下：
+如果继续使用这类写法，parser 会直接报 `DOL-P008`，并提示迁移到 `std.fs`。新的文件读写示例和项目代码应统一使用 `std.fs`。
 
-- `$<<FILE(path)`：读取全文，结果按文本处理
-- `$<<FILE(path, "LINES")`：按行读取
-- 第二个参数当前主线只写 `"LINES"`，不继续扩展旧文档里的其他模式字符串
+## 为什么主推 `std.fs`
 
-## `std.fs` 和 `$<<FILE(...)` 怎么选
+- API 更明确
+- 支持写入、追加、删除
+- 支持 `exists`、`is_dir`、`list` 等元信息
+- 在 `run` 和 `serve` 模式下统一按项目根解析相对路径
 
-如果你只是想在一行里读一次文件，`$<<FILE(...)` 足够直观。
-
-如果你需要：
-
-- 更明确的 API
-- 写入、追加、删除
-- `exists`、`is_dir`、`list` 这类能力
-
-优先用 `std.fs`：
+## 文件读取示例
 
 ```dol
 $mod std.fs;
@@ -81,17 +104,12 @@ $ content = fs.read_text("tests/fixtures/stdlib/hello.txt");
 $ lines = fs.read_lines("tests/fixtures/stdlib/lines.txt");
 ```
 
-可以把两者这样区分：
-
-- `$<<FILE(...)`：语言层面的简写入口
-- `std.fs.read_text/read_lines(...)`：脚本和项目里的主推荐写法
-
 ## 文件写入
 
 ```dol
 $mod std.fs;
 
-fs.write_text("/tmp/dolang-demo.txt", "hello");
+fs.write("/tmp/dolang-demo.txt", "hello");
 $>> fs.read_text("/tmp/dolang-demo.txt");
 fs.delete("/tmp/dolang-demo.txt");
 ```
@@ -101,6 +119,7 @@ fs.delete("/tmp/dolang-demo.txt");
 - 环境变量不存在会抛错，除非你用 `get_or`
 - `$<<CONFIG(...)` 不是跨模式通用入口
 - 文件路径错误会导致运行时错误
+- `std.fs` 相对路径以项目根为基准
 - 有副作用的能力最好配合 `$try / $catch`
 
 ## 下一章

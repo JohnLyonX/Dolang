@@ -55,9 +55,27 @@ pub fn load_context_and_program(
     mode: RuntimeMode,
     path: &Path,
 ) -> Result<(RuntimeContext, LoadedProgram), Error> {
-    let project_root = resolve_project_root(path);
-    let manifest = ProjectConfig::load_from_dir(&project_root);
-    let main_file = resolve_manifest_main_file(path, &project_root, manifest.as_ref());
+    let (project_root, manifest, main_file) = match mode {
+        RuntimeMode::Run => {
+            let main_file = if path.is_dir() {
+                path.join("main.dol")
+            } else {
+                path.to_path_buf()
+            };
+            let project_root = if path.is_dir() {
+                path.to_path_buf()
+            } else {
+                path.parent().unwrap_or(Path::new(".")).to_path_buf()
+            };
+            (project_root, None, main_file)
+        }
+        _ => {
+            let project_root = resolve_project_root(path);
+            let manifest = ProjectConfig::load_from_dir(&project_root);
+            let main_file = resolve_manifest_main_file(path, &project_root, manifest.as_ref());
+            (project_root, manifest, main_file)
+        }
+    };
     if !main_file.exists() {
         return Err(Error::from(
             Diagnostic::error(
@@ -71,6 +89,7 @@ pub fn load_context_and_program(
     let mut context = RuntimeContext::new(mode, project_root.clone());
     crate::stdlib_native::register_stdlib_native_modules(&mut context);
     context.set_project_config(manifest);
+    validate_server_config(context.project_config())?;
     validate_runtime_auth_config(context.runtime_auth_config())
         .map_err(|err| Error::Interpreter(err.to_string()))?;
     context.set_current_file(Some(main_file.to_string_lossy().to_string()));
@@ -82,4 +101,19 @@ pub fn load_context_and_program(
     });
     context.set_global_cors(global_cors);
     Ok((context, program))
+}
+
+fn validate_server_config(config: Option<&ProjectConfig>) -> Result<(), Error> {
+    let Some(config) = config else {
+        return Ok(());
+    };
+
+    match config.server.host.as_str() {
+        "127.0.0.1" | "0.0.0.0" => Ok(()),
+        other => Err(Error::from(
+            Diagnostic::error(codes::PROJECT_LOAD, "invalid server configuration").with_note(
+                format!("server.host must be \"127.0.0.1\" or \"0.0.0.0\", got \"{other}\""),
+            ),
+        )),
+    }
 }

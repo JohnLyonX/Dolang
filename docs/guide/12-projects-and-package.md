@@ -15,12 +15,13 @@ my-app/
 ## 最小 `package.toml`
 
 ```toml
+[project]
 name = "my-app"
 version = "0.1.0"
 entry = "main.dol"
 
 [server]
-host = "0.0.0.0"
+host = "127.0.0.1"
 port = 8080
 
 [env]
@@ -29,9 +30,7 @@ APP_NAME = "My App"
 
 ## 当前重要字段
 
-- `name`
-- `version`
-- `entry`
+- `[project]`
 - `[server]`
 - `[env]`
 - `[dependencies]`
@@ -44,13 +43,18 @@ APP_NAME = "My App"
 
 1. 先定位项目根
 2. 读取 `package.toml`
-3. 使用 `entry` 指定的入口文件
+3. 使用 `[project].entry` 指定的入口文件
 4. 如果没有 manifest，则默认尝试 `main.dol`
 
 所以：
 
 - `entry` 决定“从哪个文件启动项目”
 - 它不等于 `$main()`
+
+兼容性说明：
+
+- 当前实现仍兼容旧写法：顶层 `name` / `version` / `entry`
+- 新项目建议统一写到 `[project]`
 
 ## `$main()` 什么时候需要
 
@@ -106,9 +110,25 @@ $>> app;
 
 ```toml
 [server]
-host = "0.0.0.0"
+host = "127.0.0.1"
 port = 8080
 ```
+
+`host` 当前只接受两个值：
+
+- `127.0.0.1`
+  - 仅本机访问，也是默认值
+- `0.0.0.0`
+  - 绑定所有网卡接口，允许外部访问
+
+像 `localhost`、具体局域网 IP 或其他字符串，当前都会在加载阶段直接报配置错误。
+
+启动 `dolang serve .` 后，CLI 会用带颜色的地址提示输出：
+
+- `127.0.0.1` 时打印 `Local: http://127.0.0.1:<port>`
+- `0.0.0.0` 时同时打印：
+  - `Local: http://127.0.0.1:<port>`
+  - `Network: listening on all interfaces (:<port>), use your LAN IP to access`
 
 执行：
 
@@ -135,6 +155,7 @@ dolang serve .
 
 ## 进一步参考
 
+- [12a-serve-config-file.md](12a-serve-config-file.md)
 - [14-io-env-config.md](14-io-env-config.md)
 - [16-http-organization.md](16-http-organization.md)
 - [../reference/project-system.md](../reference/project-system.md)

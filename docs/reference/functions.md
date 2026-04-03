@@ -469,129 +469,54 @@ $>> "程序继续执行";
 
 ## 文件读写
 
-Dolang 支持文件读写操作，使用 `$>>FILE` 创建文件对象，`$<<FILE` 读取文件。
+Dolang 当前主线通过 `std.fs` 提供文件读写。
 
-### 写入文件 `$>>FILE`
+### 主推荐写法：`std.fs`
 
-`$>>FILE` 支持两种语法：
+```dol
+$mod std.fs;
 
-#### 1. 直接写入语法（推荐）
+fs.write("output.txt", "Hello World");
+fs.append("output.txt", "\nSecond line");
 
-```dolang
-// 覆盖写入
-$>>FILE("output.txt", "Hello World");
+$ text = fs.read_text("output.txt");
+$ lines = fs.read_lines("output.txt");
+$ exists = fs.exists("output.txt");
+$ size = fs.size("output.txt");
 
-// 追加写入
-$>>FILE("output.txt", "第二行", "A");
+$>> text;
+$>> lines;
+$>> exists;
+$>> size;
 
-// 使用变量
-$ content = "Hello";
-$>>FILE("output.txt", content, "W");
+fs.delete("output.txt");
 ```
 
-**语法**：
-```dolang
-$>>FILE(path, content);           // 覆盖写入
-$>>FILE(path, content, "W");     // 覆盖写入
-$>>FILE(path, content, "A");     // 追加写入
-$>>FILE(path, content, "a");     // 追加写入
-$>>FILE(path, "", "DEL");        // 删除文件（content 为空时）
+常用能力：
+
+- `fs.write(path, content)`：覆盖写入
+- `fs.append(path, content)`：追加写入
+- `fs.delete(path)`：删除文件
+- `fs.read_text(path)`：读取全文
+- `fs.read_lines(path)`：按行读取
+- `fs.exists(path)`：检查文件或目录是否存在
+- `fs.size(path)`：读取文件大小
+- `fs.is_dir(path)`：判断路径是否是目录
+
+### 与 `$>>` 的配合
+
+`$>>` 只是输出表达式结果，所以标准库返回值可以直接打印：
+
+```dol
+$mod std.fs;
+
+$>> fs.read_text("notes.txt");
+$>> fs.exists("notes.txt");
 ```
 
-#### 2. 链式调用语法（对象方式）
+### legacy 兼容说明
 
-```dolang
-// 创建文件对象
-$ f = $>>FILE("output.txt");
-$ f.content("Hello World");
-
-// 追加写入
-$ f = $>>FILE("output.txt", "A");
-$ f.content("\n第二行");
-
-// 删除文件
-$>>FILE("temp.txt", "DEL");
-```
-
-**语法**：
-```dolang
-$ f = $>>FILE(path);              // 创建文件对象（默认覆盖写入）
-$ f = $>>FILE(path, "W");        // 覆盖写入
-$ f = $>>FILE(path, "A");        // 追加写入
-$>>FILE(path, "DEL");            // 删除文件
-
-$ f.content("内容");              // 写入内容
-```
-
-### 读取文件 `$<<FILE`
-
-`$<<FILE("path")` 返回一个 File 对象，支持链式调用：
-
-```dao
-// 获取文件对象
-$ f = $<<FILE("data.txt");
-
-// 检查文件是否存在
-$>> f.exists();
-
-// 读取全部内容
-$ content = f.read();
-
-// 获取文件大小
-$>> f.size();
-
-// 判断是否为目录
-$>> f.is_dir();
-```
-
-**语法**：
-
-```dao
-$ f = $<<FILE(path);              // 获取文件对象
-$ f = $<<FILE(path, "LINES");    // 设置为行读取模式
-$ f.exists()                      // Bool - 文件是否存在
-$ f.read()                       // String - 读取全部内容
-$ f.read_lines()                 // List - 读取所有行（等效于设置 "LINES" 模式后调用 read()）
-$ f.size()                      // Int - 文件大小
-$ f.is_dir()                    // Bool - 是否为目录
-```
-
-### 示例
-
-```dao
-// 写入文件
-$ f = $>>FILE("data.txt");
-$ f.content("line1\nline2\nline3");
-
-// 检查文件是否存在
-$ f = $<<FILE("data.txt");
-$if f.exists() {
-    // 读取内容
-    $ content = f.read();
-    $>> content;
-}
-
-// 设置行读取模式
-$ f2 = $<<FILE("data.txt", "LINES");
-$ lines = f2.read();
-$for line in lines {
-    $>> line;
-}
-```
-
-### 错误情况
-
-```dao
-// 读取不存在的文件
-$ f = $<<FILE("not_exist.txt");
-$>> f.read();
-[ERROR] runtime error: cannot read file: Not found (os error 2)
-
-// 读取目录
-$ f = $<<FILE("./src");
-$>> f.read();
-[ERROR] runtime error: 'src' is a directory, not a file
-```
+`$>>FILE(...)` / `$<<FILE(...)` 已经移除；继续使用时会报 `DOL-P008`，并提示迁移到 `std.fs`。新文档和新项目应统一使用 `std.fs`。
 
 ---
 
@@ -791,23 +716,29 @@ $main() {
 在项目根目录创建 `package.toml` 文件：
 
 ```toml
+[project]
 name = "my-project"
 version = "0.1.0"
+entry = "main.dol"
+
+[server]
+port = 3000
+host = "127.0.0.1"
+
+[env]
 DB_URL = "postgres://localhost/db"
 API_KEY = "your-api-key"
-port = 3000
-host = "0.0.0.0"
 ```
 
 **配置项**：
 | 键 | 说明 | 默认值 |
 |---|---|---|
-| name | 项目名称 | - |
-| version | 项目版本 | - |
-| entry | 入口文件 | main.dol |
-| port | 服务器端口 | 8080 |
-| host | 服务器地址 | 0.0.0.0 |
-| 其他 | 环境变量 | - |
+| `[project].name` | 项目名称 | - |
+| `[project].version` | 项目版本 | - |
+| `[project].entry` | 入口文件 | `main.dol` |
+| `[server].port` | 服务器端口 | `8080` |
+| `[server].host` | 服务器地址，仅支持 `127.0.0.1` 或 `0.0.0.0` | `127.0.0.1` |
+| `[env].*` | 环境变量键值对 | - |
 
 ### 配置读取 `$<<CONFIG`
 

@@ -6,6 +6,9 @@ pub enum AuthConfigError {
     InvalidDefaultScheme(String),
     DefaultSchemeRequiresJwt,
     UnsupportedJwtAlgorithm(String),
+    InvalidSessionCookieSameSite(String),
+    SameSiteNoneRequiresSecure,
+    InvalidSessionRotation(String),
 }
 
 impl fmt::Display for AuthConfigError {
@@ -26,6 +29,24 @@ impl fmt::Display for AuthConfigError {
             }
             Self::UnsupportedJwtAlgorithm(algorithm) => {
                 write!(f, "unsupported JWT algorithm '{algorithm}'")
+            }
+            Self::InvalidSessionCookieSameSite(value) => {
+                write!(
+                    f,
+                    "auth session cookie_same_site must be 'lax', 'strict', or 'none', got '{value}'"
+                )
+            }
+            Self::SameSiteNoneRequiresSecure => {
+                write!(
+                    f,
+                    "auth session cookie_same_site = 'none' requires cookie_secure = true (SameSite=None must be Secure)"
+                )
+            }
+            Self::InvalidSessionRotation(value) => {
+                write!(
+                    f,
+                    "auth session rotation must be 'off', 'on_login', or 'always', got '{value}'"
+                )
             }
         }
     }

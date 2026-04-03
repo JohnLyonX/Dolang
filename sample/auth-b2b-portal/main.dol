@@ -1,0 +1,16 @@
+$main() {
+    $STATIC("/assets", "app/public");
+
+    $GET("/") home() {
+        $# $HTML().link("app.pages.console");
+    }
+
+    $GET("/console") console() {
+        $# $HTML().link("app.pages.console");
+    }
+
+    $HTTP("/auth").link("app.router.auth_router");
+    $HTTP("/").link("app.router.account_router");
+    $HTTP("/admin").link("app.router.admin_router");
+    $HTTP("/api").link("app.router.project_router");
+}

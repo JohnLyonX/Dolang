@@ -45,8 +45,9 @@ runtime intrinsic 层用于承接所有直接触达宿主 OS / 进程环境的�
 
 ## 当前调用原则
 
-- 旧语法和 builtin 表面保持不变
-- `$<<FILE(...)`、`$>>FILE(...)`、`File.*`、`$<<ENV(...)`、`$<<CONFIG(...)` 的底层实现改走 intrinsic
+- `std.fs`、`std.env`、`$<<CONFIG(...)` 等宿主能力统一落到 intrinsic 层
+- `$>>` / `$>>ERR(...)` 继续保留为输出语法
+- `$<<FILE(...)` / `$>>FILE(...)` 已移除；文件能力统一走 `std.fs`
 - `RuntimePolicy` 当前默认 allow-all，不改变现有用户行为
 
 ## 与标准库的关系

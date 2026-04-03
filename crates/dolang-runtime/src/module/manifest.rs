@@ -15,6 +15,26 @@ pub struct ProjectConfig {
     pub dependencies: HashMap<String, String>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+struct ManifestFile {
+    pub project: ProjectSection,
+    pub name: String,
+    pub version: String,
+    pub entry: String,
+    pub env: HashMap<String, String>,
+    pub server: ServerConfig,
+    pub dependencies: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+struct ProjectSection {
+    pub name: String,
+    pub version: String,
+    pub entry: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ServerConfig {
@@ -62,6 +82,7 @@ pub struct SessionStoreConfig {
 pub struct SqliteSessionStoreConfig {
     pub path: String,
     pub table: String,
+    pub refresh_table: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,6 +91,7 @@ pub struct PostgresSessionStoreConfig {
     pub url: String,
     pub url_env: String,
     pub table: String,
+    pub refresh_table: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,7 +145,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             port: 8080,
-            host: "0.0.0.0".to_string(),
+            host: "127.0.0.1".to_string(),
             auth: AuthConfig::default(),
         }
     }
@@ -174,6 +196,7 @@ impl Default for SqliteSessionStoreConfig {
         Self {
             path: ".dolang/auth.sqlite3".to_string(),
             table: "auth_sessions".to_string(),
+            refresh_table: "auth_refresh_tokens".to_string(),
         }
     }
 }
@@ -184,6 +207,7 @@ impl Default for PostgresSessionStoreConfig {
             url: String::new(),
             url_env: String::new(),
             table: "auth_sessions".to_string(),
+            refresh_table: "auth_refresh_tokens".to_string(),
         }
     }
 }
@@ -240,11 +264,19 @@ impl ProjectConfig {
     }
 
     pub fn parse_toml(content: &str) -> Option<Self> {
-        let parsed = toml::from_str::<ProjectConfig>(content).ok()?;
-        if parsed.name.is_empty() {
+        let parsed = toml::from_str::<ManifestFile>(content).ok()?;
+        let config = ProjectConfig {
+            name: first_non_empty(&parsed.project.name, &parsed.name),
+            version: first_non_empty(&parsed.project.version, &parsed.version),
+            entry: first_non_empty_or_default(&parsed.project.entry, &parsed.entry, "main.dol"),
+            env: parsed.env,
+            server: parsed.server,
+            dependencies: parsed.dependencies,
+        };
+        if config.name.is_empty() {
             return None;
         }
-        Some(parsed)
+        Some(config)
     }
 
     pub fn get(&self, key: &str) -> Option<&str> {
@@ -255,6 +287,28 @@ impl ProjectConfig {
 #[cfg(test)]
 mod tests {
     use super::ProjectConfig;
+
+    #[test]
+    fn parse_project_config_supports_project_section() {
+        let config = ProjectConfig::parse_toml(
+            r#"
+[project]
+name = "auth-demo"
+version = "0.1.0"
+entry = "app/main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+"#,
+        )
+        .expect("config should parse");
+
+        assert_eq!(config.name, "auth-demo");
+        assert_eq!(config.version, "0.1.0");
+        assert_eq!(config.entry, "app/main.dol");
+        assert_eq!(config.server.host, "127.0.0.1");
+    }
 
     #[test]
     fn parse_project_config_with_auth_settings() {
@@ -285,6 +339,7 @@ driver = "postgres"
 [server.auth.session.store.postgres]
 url_env = "SESSION_DATABASE_URL"
 table = "auth_sessions"
+refresh_table = "auth_refresh_tokens_custom"
 
 [server.auth.jwt]
 enabled = true
@@ -305,6 +360,10 @@ refresh_ttl_seconds = 86400
             vec!["cookie", "bearer"]
         );
         assert_eq!(config.server.auth.session.store.driver, "postgres");
+        assert_eq!(
+            config.server.auth.session.store.postgres.refresh_table,
+            "auth_refresh_tokens_custom"
+        );
         assert_eq!(config.server.auth.jwt.secret_env, "JWT_SECRET");
     }
 
@@ -323,5 +382,52 @@ entry = "main.dol"
         assert_eq!(config.server.auth.default_scheme, "session");
         assert_eq!(config.server.auth.identity_sources, vec!["cookie"]);
         assert_eq!(config.server.auth.session.store.driver, "memory");
+        assert_eq!(
+            config.server.auth.session.store.sqlite.refresh_table,
+            "auth_refresh_tokens"
+        );
+        assert_eq!(
+            config.server.auth.session.store.postgres.refresh_table,
+            "auth_refresh_tokens"
+        );
+    }
+
+    #[test]
+    fn parse_project_config_prefers_project_section_over_legacy_top_level_fields() {
+        let config = ProjectConfig::parse_toml(
+            r#"
+name = "legacy"
+version = "0.1.0"
+entry = "main.dol"
+
+[project]
+name = "new-style"
+version = "0.2.0"
+entry = "app/main.dol"
+"#,
+        )
+        .expect("config should parse");
+
+        assert_eq!(config.name, "new-style");
+        assert_eq!(config.version, "0.2.0");
+        assert_eq!(config.entry, "app/main.dol");
+    }
+}
+
+fn first_non_empty(preferred: &str, fallback: &str) -> String {
+    if !preferred.is_empty() {
+        preferred.to_string()
+    } else {
+        fallback.to_string()
+    }
+}
+
+fn first_non_empty_or_default(preferred: &str, fallback: &str, default: &str) -> String {
+    if !preferred.is_empty() {
+        preferred.to_string()
+    } else if !fallback.is_empty() {
+        fallback.to_string()
+    } else {
+        default.to_string()
     }
 }

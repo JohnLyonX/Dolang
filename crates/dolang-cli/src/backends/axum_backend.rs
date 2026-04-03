@@ -41,17 +41,18 @@ impl HttpBackend for AxumBackend {
         self.static_routes.push(route);
     }
 
-    async fn serve(self, context: RuntimeContext, host: &str, port: u16) {
+    async fn serve(self, context: RuntimeContext, host: &str, port: u16) -> Result<(), Error> {
         let addr = format!("{}:{}", host, port);
         let router = match build_router(self.routes, self.static_routes, context) {
             Ok(router) => router,
             Err(err) => {
-                eprintln!("{err}");
-                return;
+                return Err(err);
             }
         };
-        let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-        serve_router(router, listener).await;
+        let listener = tokio::net::TcpListener::bind(&addr).await.map_err(|err| {
+            Error::Interpreter(format!("failed to bind HTTP server on {addr}: {err}"))
+        })?;
+        serve_router(router, listener).await
     }
 }
 
@@ -61,11 +62,18 @@ impl AxumBackend {
         context: RuntimeContext,
         listener: TcpListener,
     ) -> Result<(), Error> {
-        listener.set_nonblocking(true).unwrap();
-        let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+        listener.set_nonblocking(true).map_err(|err| {
+            Error::Interpreter(format!(
+                "failed to configure HTTP listener as nonblocking: {err}"
+            ))
+        })?;
+        let listener = tokio::net::TcpListener::from_std(listener).map_err(|err| {
+            Error::Interpreter(format!(
+                "failed to adopt HTTP listener into tokio runtime: {err}"
+            ))
+        })?;
         let router = build_router(self.routes, self.static_routes, context)?;
-        serve_router(router, listener).await;
-        Ok(())
+        serve_router(router, listener).await
     }
 }
 
@@ -193,8 +201,13 @@ fn auth_error_message(err_msg: &str, marker: &str, fallback: &str) -> String {
         .to_string()
 }
 
-async fn serve_router(router: axum::Router, listener: tokio::net::TcpListener) {
-    axum::serve(listener, router).await.unwrap();
+async fn serve_router(
+    router: axum::Router,
+    listener: tokio::net::TcpListener,
+) -> Result<(), Error> {
+    axum::serve(listener, router)
+        .await
+        .map_err(|err| Error::Interpreter(format!("HTTP server error: {err}")))
 }
 
 fn build_router(
@@ -290,7 +303,7 @@ fn build_router(
                         )
                             .into_response();
                     }
-                    eprintln!("[ERROR] {err_msg}");
+                    eprintln!("\u{1b}[97;41m[ERROR]\u{1b}[0m {err_msg}");
                     return (
                         axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                         axum::response::Json(serde_json::json!({"error": err_msg})),
@@ -299,7 +312,7 @@ fn build_router(
                 }
 
                 if let Err(err) = request_context.commit_pending_auth_side_effects() {
-                    eprintln!("[ERROR] {err}");
+                    eprintln!("\u{1b}[97;41m[ERROR]\u{1b}[0m {err}");
                     return (
                         axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                         axum::response::Json(serde_json::json!({"error": err.to_string()})),
@@ -634,6 +647,10 @@ fn is_supported_method(method: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use dolang::runtime::RuntimeMode;
+
     use super::*;
 
     fn cors(origins: &[&str], methods: &[&str], headers: &[&str]) -> CorsConfig {
@@ -681,6 +698,23 @@ mod tests {
         assert_eq!(headers, vec![("x-test".to_string(), "2".to_string())]);
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].code, codes::CONFIG_HDR_INVALID);
+    }
+
+    #[test]
+    fn serve_returns_error_when_port_is_already_in_use() {
+        let blocker =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("test should bind a free port");
+        let port = blocker.local_addr().expect("local addr").port();
+        let context = RuntimeContext::new(RuntimeMode::Serve, PathBuf::from("."));
+        let backend = AxumBackend::new();
+        let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+
+        let error = rt
+            .block_on(backend.serve(context, "127.0.0.1", port))
+            .expect_err("occupied port should return an error");
+
+        assert!(error.to_string().contains("failed to bind HTTP server"));
+        assert!(error.to_string().contains("Address already in use"));
     }
 
     #[test]

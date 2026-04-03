@@ -388,7 +388,7 @@ impl RuntimeContext {
         self.project_config
             .as_ref()
             .map(|cfg| cfg.server.host.as_str())
-            .unwrap_or("0.0.0.0")
+            .unwrap_or("127.0.0.1")
     }
 
     pub fn server_port(&self) -> u16 {
@@ -396,20 +396,6 @@ impl RuntimeContext {
             .as_ref()
             .map(|cfg| cfg.server.port)
             .unwrap_or(8080)
-    }
-
-    pub fn print_routes(&self) {
-        if self.http_routes.is_empty() {
-            println!("No routes registered.");
-            return;
-        }
-
-        println!("Registered Routes:");
-        println!("{:<8} {:<30} → Handler", "Method", "Path");
-        println!("{:<8} {:<30} → --------", "------", "----");
-        for route in self.http_routes.iter() {
-            println!("{:<8} {:<30} → {}", route.method, route.path, route.name);
-        }
     }
 
     fn build_session_store(&self) -> SessionStoreBackend {
@@ -461,14 +447,31 @@ impl RuntimeContext {
     fn build_refresh_token_store(&self) -> RefreshTokenStoreBackend {
         match self.runtime_auth_config.session_store_driver.as_str() {
             "sqlite" => {
-                let path = self
+                let (path, table) = self
                     .project_config
                     .as_ref()
-                    .map(|config| config.server.auth.session.store.sqlite.path.clone())
-                    .unwrap_or_else(|| ".dolang/auth.sqlite3".to_string());
+                    .map(|config| {
+                        (
+                            config.server.auth.session.store.sqlite.path.clone(),
+                            config
+                                .server
+                                .auth
+                                .session
+                                .store
+                                .sqlite
+                                .refresh_table
+                                .clone(),
+                        )
+                    })
+                    .unwrap_or_else(|| {
+                        (
+                            ".dolang/auth.sqlite3".to_string(),
+                            "auth_refresh_tokens".to_string(),
+                        )
+                    });
                 let conn = rusqlite::Connection::open(path)
                     .expect("sqlite refresh token store should open");
-                let store = RefreshTokenStoreSqlite::new(conn, "auth_refresh_tokens");
+                let store = RefreshTokenStoreSqlite::new(conn, table);
                 store
                     .ensure_schema()
                     .expect("sqlite refresh token store schema should initialize");
@@ -487,7 +490,15 @@ impl RuntimeContext {
                 } else {
                     panic!("postgres refresh token store requires url or url_env");
                 };
-                let mut store = RefreshTokenStorePostgres::connect(&url, "auth_refresh_tokens")
+                let table = config
+                    .server
+                    .auth
+                    .session
+                    .store
+                    .postgres
+                    .refresh_table
+                    .clone();
+                let mut store = RefreshTokenStorePostgres::connect(&url, table)
                     .expect("postgres refresh token store should connect");
                 store
                     .ensure_schema()
@@ -512,6 +523,9 @@ impl std::fmt::Debug for RuntimeContext {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use super::*;
     use crate::runtime::auth::validate_runtime_auth_config;
 
@@ -641,5 +655,100 @@ mod tests {
 
         let error = validate_runtime_auth_config(&config).expect_err("config should fail");
         assert!(error.to_string().contains("JWT secret"));
+    }
+
+    #[test]
+    fn sqlite_refresh_store_uses_configured_refresh_table() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        let sqlite_path =
+            std::env::temp_dir().join(format!("dolang-auth-refresh-{unique}.sqlite3"));
+        let sqlite_path_string = sqlite_path.to_string_lossy().to_string();
+        let manifest = format!(
+            r#"
+name = "auth-demo"
+version = "0.1.0"
+entry = "main.dol"
+
+[server.auth]
+enabled = true
+
+[server.auth.session]
+enabled = true
+
+[server.auth.session.store]
+driver = "sqlite"
+
+[server.auth.session.store.sqlite]
+path = "{sqlite_path_string}"
+table = "auth_sessions_custom"
+refresh_table = "auth_refresh_tokens_custom"
+"#
+        );
+        let config = ProjectConfig::parse_toml(&manifest).expect("config should parse");
+        let mut context = RuntimeContext::new(RuntimeMode::Test, PathBuf::from("."));
+
+        context.set_project_config(Some(config));
+
+        let conn = rusqlite::Connection::open(&sqlite_path).expect("sqlite db should open");
+        let mut stmt = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1")
+            .expect("sqlite_master query should prepare");
+        let table_name: String = stmt
+            .query_row(["auth_refresh_tokens_custom"], |row| row.get(0))
+            .expect("custom refresh token table should exist");
+
+        assert_eq!(table_name, "auth_refresh_tokens_custom");
+
+        let _ = fs::remove_file(sqlite_path);
+    }
+
+    #[test]
+    fn sqlite_refresh_store_defaults_to_auth_refresh_tokens() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        let sqlite_path =
+            std::env::temp_dir().join(format!("dolang-auth-refresh-default-{unique}.sqlite3"));
+        let sqlite_path_string = sqlite_path.to_string_lossy().to_string();
+        let manifest = format!(
+            r#"
+name = "auth-demo"
+version = "0.1.0"
+entry = "main.dol"
+
+[server.auth]
+enabled = true
+
+[server.auth.session]
+enabled = true
+
+[server.auth.session.store]
+driver = "sqlite"
+
+[server.auth.session.store.sqlite]
+path = "{sqlite_path_string}"
+table = "auth_sessions_custom"
+"#
+        );
+        let config = ProjectConfig::parse_toml(&manifest).expect("config should parse");
+        let mut context = RuntimeContext::new(RuntimeMode::Test, PathBuf::from("."));
+
+        context.set_project_config(Some(config));
+
+        let conn = rusqlite::Connection::open(&sqlite_path).expect("sqlite db should open");
+        let mut stmt = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1")
+            .expect("sqlite_master query should prepare");
+        let table_name: String = stmt
+            .query_row(["auth_refresh_tokens"], |row| row.get(0))
+            .expect("default refresh token table should exist");
+
+        assert_eq!(table_name, "auth_refresh_tokens");
+
+        let _ = fs::remove_file(sqlite_path);
     }
 }

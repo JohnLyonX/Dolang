@@ -172,16 +172,27 @@ pub fn intrinsic_path_buf_arg(
     Ok(PathBuf::from(intrinsic_string_arg(id, args, index)?))
 }
 
-fn fs_read_text(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_READ_TEXT, args, 0)?;
+fn resolve_fs_path(context: &RuntimeContext, path: PathBuf) -> PathBuf {
+    if path.is_absolute() {
+        path
+    } else {
+        context.project_root().join(path)
+    }
+}
+
+fn fs_read_text(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_READ_TEXT, args, 0)?);
     match fs::read_to_string(&path) {
         Ok(content) => Ok(DolangValue::Str(content)),
         Err(err) => Err(Error::Interpreter(format!("cannot read file: {}", err))),
     }
 }
 
-fn fs_read_lines(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_READ_LINES, args, 0)?;
+fn fs_read_lines(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(
+        context,
+        intrinsic_path_buf_arg(ids::FS_READ_LINES, args, 0)?,
+    );
     match fs::read_to_string(&path) {
         Ok(content) => Ok(DolangValue::List(
             content
@@ -193,8 +204,11 @@ fn fs_read_lines(args: &[DolangValue], _context: &RuntimeContext) -> Result<Dola
     }
 }
 
-fn fs_write_text(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_WRITE_TEXT, args, 0)?;
+fn fs_write_text(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(
+        context,
+        intrinsic_path_buf_arg(ids::FS_WRITE_TEXT, args, 0)?,
+    );
     let content = intrinsic_string_arg(ids::FS_WRITE_TEXT, args, 1)?;
     match fs::write(&path, content) {
         Ok(_) => Ok(DolangValue::Null),
@@ -211,8 +225,11 @@ fn fs_write_text(args: &[DolangValue], _context: &RuntimeContext) -> Result<Dola
     }
 }
 
-fn fs_append_text(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_APPEND_TEXT, args, 0)?;
+fn fs_append_text(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(
+        context,
+        intrinsic_path_buf_arg(ids::FS_APPEND_TEXT, args, 0)?,
+    );
     let content = intrinsic_string_arg(ids::FS_APPEND_TEXT, args, 1)?;
 
     match OpenOptions::new().create(true).append(true).open(&path) {
@@ -224,37 +241,37 @@ fn fs_append_text(args: &[DolangValue], _context: &RuntimeContext) -> Result<Dol
     }
 }
 
-fn fs_delete(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_DELETE, args, 0)?;
+fn fs_delete(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_DELETE, args, 0)?);
     match fs::remove_file(&path) {
         Ok(_) => Ok(DolangValue::Null),
         Err(err) => Err(Error::Interpreter(format!("cannot delete file: {}", err))),
     }
 }
 
-fn fs_exists(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_EXISTS, args, 0)?;
+fn fs_exists(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_EXISTS, args, 0)?);
     Ok(DolangValue::Bool(fs::metadata(path).is_ok()))
 }
 
-fn fs_size(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_SIZE, args, 0)?;
+fn fs_size(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_SIZE, args, 0)?);
     match fs::metadata(path) {
         Ok(metadata) => Ok(DolangValue::Int(metadata.len() as i64)),
         Err(_) => Ok(DolangValue::Int(0)),
     }
 }
 
-fn fs_is_dir(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_IS_DIR, args, 0)?;
+fn fs_is_dir(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_IS_DIR, args, 0)?);
     match fs::metadata(path) {
         Ok(metadata) => Ok(DolangValue::Bool(metadata.is_dir())),
         Err(_) => Ok(DolangValue::Bool(false)),
     }
 }
 
-fn fs_list(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_LIST, args, 0)?;
+fn fs_list(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_LIST, args, 0)?);
     match fs::read_dir(&path) {
         Ok(entries) => {
             let mut names = Vec::new();
@@ -277,8 +294,8 @@ fn fs_list(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValu
     }
 }
 
-fn fs_mkdir(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_MKDIR, args, 0)?;
+fn fs_mkdir(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_MKDIR, args, 0)?);
     match fs::create_dir(&path) {
         Ok(_) => Ok(DolangValue::Null),
         Err(err) => Err(Error::Interpreter(format!(
@@ -288,8 +305,8 @@ fn fs_mkdir(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangVal
     }
 }
 
-fn fs_mkdir_all(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_MKDIR_ALL, args, 0)?;
+fn fs_mkdir_all(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_MKDIR_ALL, args, 0)?);
     match fs::create_dir_all(&path) {
         Ok(_) => Ok(DolangValue::Null),
         Err(err) => Err(Error::Interpreter(format!(
@@ -299,8 +316,8 @@ fn fs_mkdir_all(args: &[DolangValue], _context: &RuntimeContext) -> Result<Dolan
     }
 }
 
-fn fs_rmdir(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let path = intrinsic_path_buf_arg(ids::FS_RMDIR, args, 0)?;
+fn fs_rmdir(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let path = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_RMDIR, args, 0)?);
     match fs::remove_dir(&path) {
         Ok(_) => Ok(DolangValue::Null),
         Err(err) => Err(Error::Interpreter(format!(
@@ -310,18 +327,18 @@ fn fs_rmdir(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangVal
     }
 }
 
-fn fs_copy(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let src = intrinsic_path_buf_arg(ids::FS_COPY, args, 0)?;
-    let dst = intrinsic_path_buf_arg(ids::FS_COPY, args, 1)?;
+fn fs_copy(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let src = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_COPY, args, 0)?);
+    let dst = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_COPY, args, 1)?);
     match fs::copy(&src, &dst) {
         Ok(_) => Ok(DolangValue::Null),
         Err(err) => Err(Error::Interpreter(format!("cannot copy file: {}", err))),
     }
 }
 
-fn fs_rename(args: &[DolangValue], _context: &RuntimeContext) -> Result<DolangValue, Error> {
-    let src = intrinsic_path_buf_arg(ids::FS_RENAME, args, 0)?;
-    let dst = intrinsic_path_buf_arg(ids::FS_RENAME, args, 1)?;
+fn fs_rename(args: &[DolangValue], context: &RuntimeContext) -> Result<DolangValue, Error> {
+    let src = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_RENAME, args, 0)?);
+    let dst = resolve_fs_path(context, intrinsic_path_buf_arg(ids::FS_RENAME, args, 1)?);
     match fs::rename(&src, &dst) {
         Ok(_) => Ok(DolangValue::Null),
         Err(err) => Err(Error::Interpreter(format!("cannot rename: {}", err))),

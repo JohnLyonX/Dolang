@@ -23,6 +23,11 @@ native 模块：
 - `std.http`
 - `std.sqlite`
 - `std.postgres`
+- `std.auth.session`
+- `std.auth.jwt`
+- `std.auth.password`
+- `std.auth.guard`
+- `std.auth.csrf`
 
 纯 `.dol` 模块：
 
@@ -86,6 +91,15 @@ $ obj = json.set({"name": "Tom"}, "age", 25);
 
 - 服务端语法：第 15、16 章
 - 客户端模块：`std.http`
+
+### 认证与授权
+
+- session：`std.auth.session`
+- JWT：`std.auth.jwt`
+- 密码哈希：`std.auth.password`
+- principal / role / permission 判断：`std.auth.guard`
+- CSRF token 读取与轮换：`std.auth.csrf`
+- HTTP 配置与认证入口：见 [../reference/http.md](../reference/http.md)
 
 ### SQL 与数据库
 

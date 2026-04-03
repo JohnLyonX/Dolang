@@ -10,7 +10,7 @@ use crate::module::ModuleResolver;
 use crate::runtime::{ProgramState, RuntimeContext, RuntimeMode};
 
 use super::super::{DolangValue, HttpRoute, RouteModuleState, exec_http_handler};
-use super::Flow;
+use super::{Flow, info_prefix};
 
 pub(super) fn handle_http_fn(
     stmt: &HttpFnStmt,
@@ -42,8 +42,10 @@ pub(super) fn handle_http_fn(
     context.register_http_route(route);
     writeln!(
         w,
-        "[INFO] HTTP route registered: {} {}",
-        stmt.method, stmt.path
+        "{} HTTP route registered: {} {}",
+        info_prefix(context),
+        stmt.method,
+        stmt.path
     )
     .ok();
     Flow::Normal
@@ -91,8 +93,11 @@ pub(super) fn handle_http_block(
 
         writeln!(
             w,
-            "[INFO] HTTP linked module '{}' with prefix '{}' ({} routes)",
-            link_module, prefix, route_count
+            "{} HTTP linked module '{}' with prefix '{}' ({} routes)",
+            info_prefix(context),
+            link_module,
+            prefix,
+            route_count
         )
         .ok();
         return Flow::Normal;
@@ -135,7 +140,8 @@ pub(super) fn handle_http_block(
 
     writeln!(
         w,
-        "[INFO] HTTP block registered {} routes",
+        "{} HTTP block registered {} routes",
+        info_prefix(context),
         stmt.routes.len()
     )
     .ok();

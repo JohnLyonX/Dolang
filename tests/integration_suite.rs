@@ -2,9 +2,11 @@ mod integration;
 mod support;
 
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -26,6 +28,17 @@ use support::{
     try_start_live_http_server_from_context,
 };
 
+fn sample_project_path(relative: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("sample")
+        .join(relative)
+}
+
+fn sample_auth_env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
 fn write_temp_auth_project(package_toml: &str, main_dol: &str) -> std::path::PathBuf {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -35,6 +48,28 @@ fn write_temp_auth_project(package_toml: &str, main_dol: &str) -> std::path::Pat
     fs::create_dir_all(&project_dir).expect("project dir");
     fs::write(project_dir.join("package.toml"), package_toml).expect("package.toml");
     fs::write(project_dir.join("main.dol"), main_dol).expect("main.dol");
+    project_dir
+}
+
+fn write_temp_project(
+    prefix: &str,
+    package_toml: &str,
+    files: &[(&str, &str)],
+) -> std::path::PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("{prefix}-{unique}"));
+    fs::create_dir_all(&project_dir).expect("project dir");
+    fs::write(project_dir.join("package.toml"), package_toml).expect("package.toml");
+    for (relative, contents) in files {
+        let path = project_dir.join(relative);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("parent dir");
+        }
+        fs::write(path, contents).expect("project file");
+    }
     project_dir
 }
 
@@ -72,6 +107,370 @@ fn auth_stdlib_fixtures_cover_core_flows() {
         "spec/valid/stdlib/auth_guard_flow.dol",
         "false\ntrue\ntrue\ntrue\ntrue\nuser_1\n",
     );
+    assert_fixture_stdout(
+        "spec/valid/stdlib/auth_csrf_flow.dol",
+        "true\ntrue\ntrue\ntrue\n",
+    );
+}
+
+#[test]
+fn live_http_std_fs_write_append_read_and_delete_work() {
+    let project_dir = write_temp_project(
+        "dolang-fs-serve",
+        r#"
+[project]
+name = "fs-serve"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+"#,
+        &[
+            (
+                "main.dol",
+                r#"
+$mod std.fs;
+
+$POST("/write") write_note() -> JSON {
+    fs.write("data/note.txt", "hello");
+    $# {"ok": true};
+}
+
+$POST("/append") append_note() -> JSON {
+    fs.append("data/note.txt", "\nworld");
+    $# {"ok": true};
+}
+
+$GET("/read") read_note() -> JSON {
+    $# {
+        "text": fs.read_text("data/note.txt"),
+        "exists": fs.exists("data/note.txt"),
+        "size": fs.size("data/note.txt")
+    };
+}
+
+$POST("/delete") delete_note() -> JSON {
+    fs.delete("data/note.txt");
+    $# {"exists": fs.exists("data/note.txt")};
+}
+"#,
+            ),
+            ("data/.keep", ""),
+        ],
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let write = http_request("POST", &base_url, "/write");
+    let append = http_request("POST", &base_url, "/append");
+    let read = http_get(&base_url, "/read");
+    let delete = http_request("POST", &base_url, "/delete");
+
+    let read_json: serde_json::Value =
+        serde_json::from_str(&read.body).expect("read body should be json");
+    let delete_json: serde_json::Value =
+        serde_json::from_str(&delete.body).expect("delete body should be json");
+
+    assert_eq!(write.status, 200);
+    assert_eq!(append.status, 200);
+    assert_eq!(read.status, 200);
+    assert_eq!(delete.status, 200);
+    assert_eq!(read_json["text"], "hello\nworld");
+    assert_eq!(read_json["exists"], true);
+    assert_eq!(read_json["size"], 11);
+    assert_eq!(delete_json["exists"], false);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_std_fs_relative_paths_and_metadata_work() {
+    let project_dir = write_temp_project(
+        "dolang-fs-meta",
+        r#"
+[project]
+name = "fs-meta"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+"#,
+        &[
+            (
+                "main.dol",
+                r#"
+$mod std.fs;
+
+$GET("/meta") meta() -> JSON {
+    $# {
+        "text": fs.read_text("data/lines.txt"),
+        "lines": fs.read_lines("data/lines.txt"),
+        "exists": fs.exists("data/lines.txt"),
+        "is_dir": fs.is_dir("data")
+    };
+}
+"#,
+            ),
+            ("data/lines.txt", "line one\nline two\nline three"),
+        ],
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let meta = http_get(&base_url, "/meta");
+    let meta_json: serde_json::Value =
+        serde_json::from_str(&meta.body).expect("meta body should be json");
+
+    assert_eq!(meta.status, 200);
+    assert_eq!(meta_json["text"], "line one\nline two\nline three");
+    assert_eq!(
+        meta_json["lines"],
+        serde_json::json!(["line one", "line two", "line three"])
+    );
+    assert_eq!(meta_json["exists"], true);
+    assert_eq!(meta_json["is_dir"], true);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn sample_auth_b2b_portal_exists_and_declares_postgres_auth_stores() {
+    let project_dir = sample_project_path("auth-b2b-portal");
+    let dol_files = [
+        project_dir.join("main.dol"),
+        project_dir.join("app/router/auth_router.dol"),
+        project_dir.join("app/router/account_router.dol"),
+        project_dir.join("app/router/admin_router.dol"),
+        project_dir.join("app/router/project_router.dol"),
+        project_dir.join("services/auth.dol"),
+        project_dir.join("services/users.dol"),
+        project_dir.join("services/permissions.dol"),
+    ];
+
+    assert!(project_dir.exists(), "sample project should exist");
+    assert!(
+        project_dir.join("package.toml").exists(),
+        "package.toml should exist"
+    );
+    for path in dol_files {
+        assert!(path.exists(), "{} should exist", path.display());
+        let source = fs::read_to_string(&path).expect("sample dol source should read");
+        parser::parse(&source).unwrap_or_else(|err| {
+            panic!("{} should parse: {err}", path.display());
+        });
+    }
+
+    let config = ProjectConfig::load_from_dir(&project_dir).expect("sample config should load");
+    assert_eq!(config.name, "auth-b2b-portal");
+    assert_eq!(config.server.auth.session.store.driver, "postgres");
+    assert_eq!(
+        config.server.auth.session.store.postgres.table,
+        "auth_sessions"
+    );
+    assert_eq!(
+        config.server.auth.session.store.postgres.refresh_table,
+        "auth_refresh_tokens"
+    );
+    assert_eq!(
+        config.server.auth.session.store.postgres.url_env,
+        "SESSION_DATABASE_URL"
+    );
+    assert_eq!(config.server.auth.jwt.secret_env, "JWT_SECRET");
+}
+
+#[test]
+fn sample_auth_b2b_portal_exposes_browser_console_assets() {
+    let project_dir = sample_project_path("auth-b2b-portal");
+    let main_path = project_dir.join("main.dol");
+    let html_path = project_dir.join("app/pages/console.html");
+    let css_path = project_dir.join("app/public/css/console.css");
+    let js_path = project_dir.join("app/public/js/console.js");
+
+    let main_source = fs::read_to_string(&main_path).expect("main.dol should read");
+    let html_source = fs::read_to_string(&html_path).expect("console html should read");
+    let css_source = fs::read_to_string(&css_path).expect("console css should read");
+    let js_source = fs::read_to_string(&js_path).expect("console js should read");
+
+    assert!(main_source.contains("$STATIC(\"/assets\", \"app/public\")"));
+    assert!(main_source.contains("$GET(\"/console\")"));
+    assert!(main_source.contains("$HTML().link(\"app.pages.console\")"));
+    assert!(html_source.contains("/assets/css/console.css"));
+    assert!(html_source.contains("/assets/js/console.js"));
+    assert!(html_source.contains("auth-console"));
+    assert!(css_source.contains(".auth-shell"));
+    assert!(js_source.contains("login"));
+    assert!(js_source.contains("/auth/login"));
+    assert!(js_source.contains("/api/projects"));
+    assert!(js_source.contains("/admin/audit"));
+    assert!(js_source.contains("transport === \"bearer\" ? \"omit\" : \"include\""));
+    assert!(js_source.contains("await bootstrapCookieSession()"));
+    assert!(js_source.contains("requestJson(\"/me\", { transport: \"cookie\" })"));
+}
+
+#[test]
+fn sample_auth_b2b_portal_documents_argon2_password_seed_setup() {
+    let project_dir = sample_project_path("auth-b2b-portal");
+    let readme =
+        fs::read_to_string(project_dir.join("README.md")).expect("sample readme should read");
+    let plan =
+        fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-auth-plan.md"))
+            .expect("test auth plan should read");
+    let hash_script = project_dir.join("scripts/hash_password.dol");
+    let hash_source = fs::read_to_string(&hash_script).expect("hash helper should read");
+
+    assert!(readme.contains("Argon2"));
+    assert!(plan.contains("REPLACE_WITH_ARGON2_HASH"));
+    assert!(!plan.contains("REPLACE_WITH_BCRYPT_HASH"));
+    assert!(hash_source.contains("$mod std.auth.password;"));
+    assert!(hash_source.contains("PASSWORD"));
+    assert!(hash_source.contains("password.hash("));
+}
+
+#[test]
+fn sample_auth_hash_helper_runs_without_project_auth_env() {
+    let _guard = sample_auth_env_lock().lock().expect("env lock should work");
+    let script_path = sample_project_path("auth-b2b-portal/scripts/hash_password.dol");
+
+    // SAFETY: test serializes process env mutation with a process-wide mutex.
+    unsafe {
+        std::env::remove_var("SESSION_DATABASE_URL");
+        std::env::remove_var("APP_DATABASE_URL");
+        std::env::remove_var("JWT_SECRET");
+        std::env::set_var("PASSWORD", "password123");
+    }
+
+    let outcome = run_program_at_path(&script_path, RuntimeMode::Run);
+
+    assert!(
+        outcome.error.is_none(),
+        "hash helper should run without package auth env: {:?}",
+        outcome.error
+    );
+    assert!(outcome.stdout.starts_with("$argon2id$"));
+
+    // SAFETY: test serializes process env mutation with a process-wide mutex.
+    unsafe {
+        std::env::remove_var("PASSWORD");
+    }
+}
+
+#[test]
+fn sample_auth_b2b_portal_live_flows_work_when_env_is_available() {
+    let Some(url) = std::env::var("DOLANG_TEST_POSTGRES_URL").ok() else {
+        return;
+    };
+    let _guard = sample_auth_env_lock().lock().expect("env lock should work");
+    let project_dir = sample_project_path("auth-b2b-portal");
+
+    // SAFETY: test serializes access with a process-wide mutex.
+    unsafe {
+        std::env::set_var("SESSION_DATABASE_URL", &url);
+        std::env::set_var("APP_DATABASE_URL", &url);
+        std::env::set_var("JWT_SECRET", "sample-auth-secret");
+    }
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "sample project should boot");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let login_body = serde_json::json!({
+        "username": "admin",
+        "password": "password123"
+    })
+    .to_string();
+    let login = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/auth/login",
+        &[("Content-Type", "application/json")],
+        Some(login_body.as_str()),
+    );
+    let login_json: serde_json::Value =
+        serde_json::from_str(&login.body).expect("login response should be json");
+    let session_cookie = login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("login should set cookie");
+    let csrf_token = login_json["csrf_token"]
+        .as_str()
+        .expect("csrf token should be string");
+    let access_token = login_json["access_token"]
+        .as_str()
+        .expect("access token should be string");
+    let refresh_token = login_json["refresh_token"]
+        .as_str()
+        .expect("refresh token should be string");
+
+    let me_cookie =
+        http_request_with_headers("GET", &base_url, "/me", &[("Cookie", &session_cookie)]);
+    let me_cookie_json: serde_json::Value =
+        serde_json::from_str(&me_cookie.body).expect("me cookie response should be json");
+
+    let me_bearer = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/me",
+        &[("Authorization", &format!("Bearer {access_token}"))],
+    );
+    let me_bearer_json: serde_json::Value =
+        serde_json::from_str(&me_bearer.body).expect("me bearer response should be json");
+
+    let switch_body = serde_json::json!({ "workspace_id": "team_red" }).to_string();
+    let switch_without_csrf = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/workspaces/current/switch",
+        &[
+            ("Content-Type", "application/json"),
+            ("Cookie", &session_cookie),
+        ],
+        Some(switch_body.as_str()),
+    );
+    let switch_with_csrf = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/workspaces/current/switch",
+        &[
+            ("Content-Type", "application/json"),
+            ("Cookie", &session_cookie),
+            ("X-CSRF-Token", csrf_token),
+        ],
+        Some(switch_body.as_str()),
+    );
+
+    let refresh_body = serde_json::json!({ "refresh_token": refresh_token }).to_string();
+    let refresh = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/auth/refresh",
+        &[("Content-Type", "application/json")],
+        Some(refresh_body.as_str()),
+    );
+
+    assert_eq!(login.status, 200);
+    assert_eq!(me_cookie.status, 200);
+    assert_eq!(me_bearer.status, 200);
+    assert_eq!(switch_without_csrf.status, 403);
+    assert_eq!(switch_with_csrf.status, 200);
+    assert_eq!(refresh.status, 200);
+    assert_eq!(me_cookie_json["authenticated"], true);
+    assert_eq!(me_cookie_json["principal"]["scheme"], "session");
+    assert_eq!(me_bearer_json["principal"]["scheme"], "bearer");
+
+    // SAFETY: test serializes access with a process-wide mutex.
+    unsafe {
+        std::env::remove_var("SESSION_DATABASE_URL");
+        std::env::remove_var("APP_DATABASE_URL");
+        std::env::remove_var("JWT_SECRET");
+    }
 }
 
 #[test]
@@ -1262,6 +1661,100 @@ secret = "dolang-dev-secret"
 }
 
 #[test]
+fn load_rejects_invalid_session_cookie_same_site_value() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-invalid-same-site"
+version = "0.1.0"
+entry = "main.dol"
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_same_site = "invalid"
+"#,
+        "$main() {}\n",
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+
+    assert!(
+        outcome
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("same_site"))
+    );
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn load_rejects_same_site_none_without_secure_cookie() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-insecure-cookie"
+version = "0.1.0"
+entry = "main.dol"
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_same_site = "none"
+cookie_secure = false
+"#,
+        "$main() {}\n",
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+
+    assert!(
+        outcome
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("SameSite=None"))
+    );
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn load_rejects_invalid_session_rotation_mode() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-invalid-rotation"
+version = "0.1.0"
+entry = "main.dol"
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+rotation = "sometimes"
+"#,
+        "$main() {}\n",
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+
+    assert!(
+        outcome
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("session rotation"))
+    );
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
 fn live_http_more_specific_authorization_rule_overrides_broader_prefix_rule() {
     let project_dir = write_temp_auth_project(
         r#"
@@ -1402,12 +1895,16 @@ $GET("/team") team() -> JSON {
     let ok_token_response = http_get(&base_url, "/token-ok");
     let ok_token_json: serde_json::Value =
         serde_json::from_str(&ok_token_response.body).expect("token body should be json");
-    let ok_token = ok_token_json["token"].as_str().expect("token should be string");
+    let ok_token = ok_token_json["token"]
+        .as_str()
+        .expect("token should be string");
 
     let bad_token_response = http_get(&base_url, "/token-bad");
     let bad_token_json: serde_json::Value =
         serde_json::from_str(&bad_token_response.body).expect("token body should be json");
-    let bad_token = bad_token_json["token"].as_str().expect("token should be string");
+    let bad_token = bad_token_json["token"]
+        .as_str()
+        .expect("token should be string");
 
     let allowed = http_request_with_headers(
         "GET",
@@ -1758,6 +2255,219 @@ $GET("/me") me() -> JSON {
 
     assert_eq!(me.status, 200);
     assert_ne!(first_cookie, rotated_cookie);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_login_with_rotation_always_invalidates_previous_cookie() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-session-login-rotate"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+rotation = "always"
+
+[server.auth.session.store]
+driver = "memory"
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/me"
+require = "authenticated"
+"#,
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    });
+    $# {"ok": true, "session_id": session.id()};
+}
+
+$GET("/me") me() -> JSON {
+    $# {"session_id": session.id()};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let first_login = http_get(&base_url, "/login");
+    let first_cookie = first_login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("first login cookie");
+
+    let second_login =
+        http_request_with_headers("GET", &base_url, "/login", &[("Cookie", &first_cookie)]);
+    let second_cookie = second_login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("second login cookie");
+
+    let old_me = http_request_with_headers("GET", &base_url, "/me", &[("Cookie", &first_cookie)]);
+    let new_me = http_request_with_headers("GET", &base_url, "/me", &[("Cookie", &second_cookie)]);
+
+    assert_eq!(first_login.status, 200);
+    assert_eq!(second_login.status, 200);
+    assert_eq!(old_me.status, 401);
+    assert_eq!(new_me.status, 200);
+    assert_ne!(first_cookie, second_cookie);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_cookie_writes_require_csrf_token_but_bearer_writes_do_not() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-csrf"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie", "bearer"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+
+[server.auth.session.store]
+driver = "memory"
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+secret = "dolang-dev-secret"
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/profile"
+require = "authenticated"
+"#,
+        r#"
+$mod std.auth.jwt;
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    });
+    $ pair = jwt.issue_pair({
+        "sub": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    });
+    $# {
+        "csrf_token": session.current()["csrf_token"],
+        "access_token": pair["access_token"]
+    };
+}
+
+$POST("/profile") update_profile(body) -> JSON {
+    $# {"ok": true, "name": body["name"]};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let login = http_get(&base_url, "/login");
+    let login_json: serde_json::Value =
+        serde_json::from_str(&login.body).expect("login body should be json");
+    let csrf_token = login_json["csrf_token"]
+        .as_str()
+        .expect("csrf token should be string");
+    let access_token = login_json["access_token"]
+        .as_str()
+        .expect("access token should be string");
+    let session_cookie = login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("login should set cookie");
+
+    let body = serde_json::json!({ "name": "Alice" }).to_string();
+    let cookie_missing_csrf = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/profile",
+        &[
+            ("Content-Type", "application/json"),
+            ("Cookie", &session_cookie),
+        ],
+        Some(body.as_str()),
+    );
+    let cookie_with_csrf = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/profile",
+        &[
+            ("Content-Type", "application/json"),
+            ("Cookie", &session_cookie),
+            ("X-CSRF-Token", csrf_token),
+        ],
+        Some(body.as_str()),
+    );
+    let bearer_without_csrf = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/profile",
+        &[
+            ("Content-Type", "application/json"),
+            ("Authorization", &format!("Bearer {access_token}")),
+        ],
+        Some(body.as_str()),
+    );
+    let cookie_missing_csrf_json: serde_json::Value =
+        serde_json::from_str(&cookie_missing_csrf.body).expect("csrf failure body should be json");
+
+    assert_eq!(cookie_missing_csrf.status, 403);
+    assert_eq!(cookie_missing_csrf_json["code"], "auth_forbidden");
+    assert_eq!(cookie_missing_csrf_json["message"], "invalid csrf token");
+    assert_eq!(cookie_with_csrf.status, 200);
+    assert_eq!(bearer_without_csrf.status, 200);
     fs::remove_dir_all(&project_dir).expect("cleanup");
 }
 

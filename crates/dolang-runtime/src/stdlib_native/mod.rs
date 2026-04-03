@@ -1,3 +1,4 @@
+mod auth_csrf;
 mod auth_guard;
 mod auth_jwt;
 mod auth_password;
@@ -20,6 +21,7 @@ pub fn register_stdlib_native_modules(context: &mut RuntimeContext) {
     auth_jwt::register(context);
     auth_password::register(context);
     auth_guard::register(context);
+    auth_csrf::register(context);
     fs::register(context);
     env::register(context);
     http_client::register(context);
@@ -112,6 +114,7 @@ mod tests {
         assert!(context.native_module("std.auth.jwt").is_some());
         assert!(context.native_module("std.auth.password").is_some());
         assert!(context.native_module("std.auth.guard").is_some());
+        assert!(context.native_module("std.auth.csrf").is_some());
     }
 
     #[test]

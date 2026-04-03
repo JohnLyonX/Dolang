@@ -1,0 +1,67 @@
+$mod std.auth.csrf;
+$mod std.auth.jwt;
+$mod std.auth.password;
+$mod std.auth.session;
+$mod services.permissions;
+$mod services.users;
+
+$fn authenticate(username, plain_password) {
+    $ user = users.find_by_username(username);
+    $if user == null {
+        $# null;
+    }
+
+    $if user["is_active"] != true {
+        $# null;
+    }
+
+    $if password.verify(plain_password, user["password_hash"]) != true {
+        $# null;
+    }
+
+    $# user;
+}
+
+$fn issue_login(user) -> JSON {
+    $ roles = permissions.roles_for_user(user);
+    $ perms = permissions.permissions_for_user(user);
+    $ claims = permissions.claims_for_user(user);
+
+    session.create({
+        "subject": user["user_id"],
+        "roles": roles,
+        "permissions": perms,
+        "claims": claims
+    });
+
+    $ pair = jwt.issue_pair({
+        "sub": user["user_id"],
+        "roles": roles,
+        "permissions": perms,
+        "display_name": user["display_name"],
+        "team_id": user["team_id"],
+        "username": user["username"],
+        "role": user["role"]
+    });
+
+    $# {
+        "ok": true,
+        "user": permissions.public_user(user),
+        "session": session.current(),
+        "csrf_token": csrf.token(),
+        "access_token": pair["access_token"],
+        "refresh_token": pair["refresh_token"]
+    };
+}
+
+$fn refresh_pair(refresh_token) -> JSON {
+    $# jwt.refresh_pair(refresh_token);
+}
+
+$fn logout(refresh_token) {
+    $if refresh_token != null {
+        jwt.revoke_refresh(refresh_token);
+    }
+
+    session.destroy();
+}

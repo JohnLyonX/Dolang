@@ -147,20 +147,39 @@ user["email"] = "tom@example.com";
 
 | 函数 | 返回值 | 说明 | 稳定性 |
 |------|--------|------|--------|
-| `fs.read_text(path)` | `String` | 读取文件全部内容 | Stable |
+| `fs.write(path, content)` | `Null` | 覆盖写入文本 | Stable |
+| `fs.append(path, content)` | `Null` | 追加写入文本 | Stable |
+| `fs.delete(path)` | `Null` | 删除文件 | Stable |
+| `fs.read_text(path)` | `String` | 读取全文 | Stable |
 | `fs.read_lines(path)` | `List` | 按行读取 | Stable |
-| `fs.write_text(path, content)` | `Null` | 覆盖写入文件 | Preview |
-| `fs.append_text(path, content)` | `Null` | 追加写入文件 | Preview |
-| `fs.delete(path)` | `Null` | 删除文件 | Preview |
 | `fs.exists(path)` | `Bool` | 文件/目录是否存在 | Stable |
-| `fs.size(path)` | `Int` | 文件大小 | Preview |
-| `fs.is_dir(path)` | `Bool` | 是否为目录 | Preview |
+| `fs.size(path)` | `Int` | 文件大小 | Stable |
+| `fs.is_dir(path)` | `Bool` | 是否为目录 | Stable |
+| `fs.write_text(path, content)` | `Null` | `fs.write(...)` 的兼容别名 | Preview |
+| `fs.append_text(path, content)` | `Null` | `fs.append(...)` 的兼容别名 | Preview |
 | `fs.copy(src, dst)` | `Null` | 复制文件 | Preview |
 | `fs.rename(src, dst)` | `Null` | 移动/重命名 | Preview |
 | `fs.list(path)` | `List` | 列出目录内容 | Preview |
 | `fs.mkdir(path)` | `Null` | 创建目录 | Preview |
 | `fs.mkdir_all(path)` | `Null` | 递归创建目录 | Preview |
 | `fs.rmdir(path)` | `Null` | 删除空目录 | Preview |
+
+主推荐写法：
+
+```dol
+$mod std.fs;
+
+fs.write("output.txt", "Hello World");
+fs.append("output.txt", "\nSecond line");
+
+$ text = fs.read_text("output.txt");
+$ lines = fs.read_lines("output.txt");
+
+$>> text;
+$>> lines;
+```
+
+`$>>FILE(...)` / `$<<FILE(...)` 已移除；继续使用会报 `DOL-P008`，应迁移到 `std.fs`。
 
 ### `std.json`
 
@@ -287,6 +306,13 @@ user["email"] = "tom@example.com";
 - `permissions`
 - `claims`
 - `session_id`
+
+### `std.auth.csrf`
+
+| 函数 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `csrf.token()` | `String\|Null` | 返回当前 session 的 CSRF token；无 session 时返回 `Null` | Preview |
+| `csrf.rotate()` | `String` | 轮换当前 session 的 CSRF token 并持久化 | Preview |
 
 ### `std.path`
 

@@ -17,3 +17,6 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 postgres = "0.19"
 jsonwebtoken = "9"
 argon2 = "0.5"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread"] }

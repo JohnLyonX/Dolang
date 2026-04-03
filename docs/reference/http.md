@@ -258,6 +258,7 @@ enabled = true
 cookie_name = "dolang_session"
 ttl_seconds = 86400
 idle_timeout_seconds = 7200
+rotation = "on_login"
 
 [server.auth.session.store]
 driver = "postgres"
@@ -265,6 +266,7 @@ driver = "postgres"
 [server.auth.session.store.postgres]
 url_env = "SESSION_DATABASE_URL"
 table = "auth_sessions"
+refresh_table = "auth_refresh_tokens"
 
 [server.auth.jwt]
 enabled = true
@@ -297,6 +299,49 @@ roles_any = ["admin"]
 - `memory`
 - `sqlite`
 - `postgres`
+
+当前实现里，refresh token store 会和 session store 共享同一 backend 选择，并支持单独配置 refresh token 表名：
+
+- sqlite: `[server.auth.session.store.sqlite].refresh_table`
+- postgres: `[server.auth.session.store.postgres].refresh_table`
+
+默认值都是 `auth_refresh_tokens`。
+
+session cookie 当前还有两个启动期安全约束：
+
+- `cookie_same_site` 只接受 `lax` / `strict` / `none`
+- 如果 `cookie_same_site = "none"`，必须同时配置 `cookie_secure = true`
+
+`[server.auth.session].rotation` 当前支持：
+
+- `off`
+- `on_login`
+- `always`
+
+其中：
+
+- `on_login` 会在 `session.create(...)` 建立新登录态时失效当前 session
+- `always` 除了登录时失效旧 session，还会在每次已认证请求后轮换 session id
+
+### CSRF 保护
+
+当前 runtime 会对“基于 cookie session 的已认证写请求”自动启用 CSRF 校验：
+
+- 适用方法：`POST` / `PUT` / `PATCH` / `DELETE`
+- 仅对通过 session cookie 认证的请求生效
+- bearer token 请求不会额外要求 CSRF header
+
+校验方式：
+
+- session 创建时会自动生成 `csrf_token`
+- 请求需要携带 `X-CSRF-Token: <token>`
+- token 可通过 `session.current()["csrf_token"]` 或 `std.auth.csrf.token()` 读取
+
+缺失或不匹配时，响应为：
+
+```json
+{"status":403,"code":"auth_forbidden","message":"invalid csrf token"}
+```
 
 ### 当前请求入口
 
@@ -393,6 +438,8 @@ require = "authenticated"
 ```
 
 调用 `/login` 后，运行时会写入 `Set-Cookie`；后续请求带上该 cookie 才能访问受保护路由。
+
+如果你想看完整可运行样例，可直接运行 [examples/http-auth](/Users/liangzhanbo/CodeStudio/dolang/examples/http-auth)。
 
 ### Bearer Token 示例
 

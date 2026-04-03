@@ -113,8 +113,6 @@ pub fn eval_expr(
         Expr::MethodCall(call) => calls::eval_method_call(e, call, state, context, w),
         Expr::FnCall(call) => calls::eval_fn_call(e, call, state, context, w),
         Expr::Read(read_expr) => io::eval_read_expr(e, read_expr, state, context, w),
-        Expr::FileRead(file_read) => io::eval_file_read_expr(e, file_read, state, context, w),
-        Expr::FileWrite(file_write) => io::eval_file_write_expr(e, file_write, state, context, w),
         Expr::ConfigRead(config) => io::eval_config_read_expr(e, config, context),
         Expr::HdrRead(hdr) => io::eval_hdr_read_expr(hdr, state),
         Expr::JsonConstructor(json) => constructors::eval_json_constructor(json, state, context, w),

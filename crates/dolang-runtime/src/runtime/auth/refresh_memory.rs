@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use chrono::Utc;
 
 use crate::error::Error;
+use crate::runtime::gc::LazyGcWindow;
 
 use super::{RefreshTokenRecord, RefreshTokenStore};
 
@@ -11,18 +12,15 @@ const REVOKED_RETENTION_SECONDS: i64 = 300;
 
 pub struct RefreshTokenStoreMemory {
     tokens: HashMap<String, RefreshTokenRecord>,
-    next_gc_at: i64,
-    gc_interval_seconds: i64,
+    gc_window: LazyGcWindow,
     revoked_retention_seconds: i64,
 }
 
 impl Default for RefreshTokenStoreMemory {
     fn default() -> Self {
-        let now = Utc::now().timestamp();
         Self {
             tokens: HashMap::new(),
-            next_gc_at: now.saturating_add(REFRESH_GC_INTERVAL_SECONDS),
-            gc_interval_seconds: REFRESH_GC_INTERVAL_SECONDS,
+            gc_window: LazyGcWindow::new(REFRESH_GC_INTERVAL_SECONDS),
             revoked_retention_seconds: REVOKED_RETENTION_SECONDS,
         }
     }
@@ -72,14 +70,14 @@ impl RefreshTokenStore for RefreshTokenStoreMemory {
 
 impl RefreshTokenStoreMemory {
     fn maybe_prune_stale(&mut self, now: i64) {
-        if now < self.next_gc_at {
+        if !self.gc_window.is_due(now) {
             return;
         }
 
         let revoked_retention_seconds = self.revoked_retention_seconds;
         self.tokens
             .retain(|_, record| should_retain_record(record, now, revoked_retention_seconds));
-        self.next_gc_at = now.saturating_add(self.gc_interval_seconds);
+        self.gc_window.mark_ran(now);
     }
 }
 
@@ -166,7 +164,7 @@ mod tests {
     #[test]
     fn memory_refresh_store_defers_batch_prune_until_gc_window() {
         let mut store = RefreshTokenStoreMemory::default();
-        store.next_gc_at = i64::MAX;
+        store.gc_window.set_next_gc_at_for_test(i64::MAX);
         store.tokens.insert(
             "expired".to_string(),
             RefreshTokenRecord {
@@ -213,7 +211,7 @@ mod tests {
     #[test]
     fn memory_refresh_store_prunes_when_gc_window_opens() {
         let mut store = RefreshTokenStoreMemory::default();
-        store.next_gc_at = 0;
+        store.gc_window.set_next_gc_at_for_test(0);
         store.tokens.insert(
             "expired".to_string(),
             RefreshTokenRecord {

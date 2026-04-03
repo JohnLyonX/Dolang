@@ -152,6 +152,22 @@ pub fn validate_runtime_auth_config(config: &RuntimeAuthConfig) -> Result<(), Au
         other => return Err(AuthConfigError::InvalidDefaultScheme(other.to_string())),
     }
 
+    if config.session_enabled {
+        let same_site = validated_same_site(&config.session_cookie_same_site)?;
+        if same_site == "None" && !config.session_cookie_secure {
+            return Err(AuthConfigError::SameSiteNoneRequiresSecure);
+        }
+
+        if !matches!(
+            config.session_rotation.as_str(),
+            "off" | "on_login" | "always"
+        ) {
+            return Err(AuthConfigError::InvalidSessionRotation(
+                config.session_rotation.clone(),
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -235,16 +251,28 @@ fn path_matches(rule: &RuntimeAuthorizationRule, path: &str) -> bool {
 fn rule_priority(rule: &RuntimeAuthorizationRule) -> (usize, usize, std::cmp::Reverse<usize>) {
     let path_specificity = rule.path.trim_end_matches('*').len();
     let exact_bonus = usize::from(!rule.path.ends_with('*'));
-    (path_specificity, exact_bonus, std::cmp::Reverse(rule.declaration_index))
+    (
+        path_specificity,
+        exact_bonus,
+        std::cmp::Reverse(rule.declaration_index),
+    )
 }
 
 fn normalize_same_site(value: &str) -> &'static str {
-    if value.eq_ignore_ascii_case("strict") {
-        "Strict"
+    validated_same_site(value).unwrap_or("Lax")
+}
+
+fn validated_same_site(value: &str) -> Result<&'static str, AuthConfigError> {
+    if value.eq_ignore_ascii_case("lax") {
+        Ok("Lax")
+    } else if value.eq_ignore_ascii_case("strict") {
+        Ok("Strict")
     } else if value.eq_ignore_ascii_case("none") {
-        "None"
+        Ok("None")
     } else {
-        "Lax"
+        Err(AuthConfigError::InvalidSessionCookieSameSite(
+            value.to_string(),
+        ))
     }
 }
 
@@ -263,5 +291,45 @@ mod tests {
 
         let error = validate_runtime_auth_config(&config).expect_err("config should fail");
         assert!(error.to_string().contains("JWT secret"));
+    }
+
+    #[test]
+    fn validate_auth_config_rejects_invalid_same_site_value() {
+        let config = RuntimeAuthConfig {
+            enabled: true,
+            session_enabled: true,
+            session_cookie_same_site: "invalid".to_string(),
+            ..RuntimeAuthConfig::default()
+        };
+
+        let error = validate_runtime_auth_config(&config).expect_err("config should fail");
+        assert!(error.to_string().contains("same_site"));
+    }
+
+    #[test]
+    fn validate_auth_config_rejects_same_site_none_without_secure_cookie() {
+        let config = RuntimeAuthConfig {
+            enabled: true,
+            session_enabled: true,
+            session_cookie_same_site: "none".to_string(),
+            session_cookie_secure: false,
+            ..RuntimeAuthConfig::default()
+        };
+
+        let error = validate_runtime_auth_config(&config).expect_err("config should fail");
+        assert!(error.to_string().contains("SameSite=None"));
+    }
+
+    #[test]
+    fn validate_auth_config_rejects_invalid_session_rotation() {
+        let config = RuntimeAuthConfig {
+            enabled: true,
+            session_enabled: true,
+            session_rotation: "sometimes".to_string(),
+            ..RuntimeAuthConfig::default()
+        };
+
+        let error = validate_runtime_auth_config(&config).expect_err("config should fail");
+        assert!(error.to_string().contains("session rotation"));
     }
 }

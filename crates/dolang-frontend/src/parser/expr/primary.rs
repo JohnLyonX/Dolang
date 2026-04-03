@@ -5,10 +5,11 @@ use crate::ast::{
     JsonConstructor, ListLiteral, MapLiteral, NullLiteral, NumberLiteral, ResConstructor, Span,
     StringLiteral, StructConstructor, VarLookup,
 };
+use crate::diagnostics::{Diagnostic, codes};
 use crate::error::Error;
 use crate::token::Type;
 
-use super::{ExprParser, parse_expr_tokens_with_src, parse_fstring_segments};
+use super::{ExprParser, parse_fstring_segments};
 
 impl<'a> ExprParser<'a> {
     pub fn parse_primary(&mut self) -> Result<Box<Expr>, Error> {
@@ -180,39 +181,25 @@ impl<'a> ExprParser<'a> {
 
     fn parse_file_write_expr(&mut self, tok: crate::token::Token) -> Result<Box<Expr>, Error> {
         let start = tok.pos;
+        if tok.literal == "$>>"
+            && self.pos + 1 < self.tokens.len()
+            && self.tokens[self.pos].typ == Type::Ident
+            && self.tokens[self.pos].literal == "FILE"
+            && self.tokens[self.pos + 1].typ == Type::LParen
+        {
+            return Err(self.legacy_file_write_error(start));
+        }
+
         if tok.literal != "$>>FILE" {
             return Err(self.error("unexpected token in expression"));
         }
-
-        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
-            return Err(self.error_expected("expected '(' after $>>FILE", "("));
-        }
-        self.pos += 1;
-
-        let path = self.parse_simple_argument("expected file path")?;
-        let mode = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
-            self.pos += 1;
-            self.parse_optional_simple_argument()
-        } else {
-            None
-        };
-
-        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
-            return Err(self.error_expected("expected ')'", ")"));
-        }
-        self.pos += 1;
-
-        Ok(Box::new(Expr::FileWrite(crate::ast::FileWriteExpr {
-            span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
-            path,
-            mode,
-        })))
+        Err(self.legacy_file_write_error(start))
     }
 
     fn parse_read_expr(&mut self, tok: crate::token::Token) -> Result<Box<Expr>, Error> {
         let start = tok.pos;
         if tok.literal == "$<<FILE" {
-            return self.parse_file_read_expr(start);
+            return Err(self.legacy_file_read_error(start));
         }
 
         if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Ident {
@@ -220,8 +207,7 @@ impl<'a> ExprParser<'a> {
         }
         let mode_name = self.tokens[self.pos].literal.clone();
         if mode_name == "FILE" {
-            self.pos += 1;
-            return self.parse_file_read_expr(start);
+            return Err(self.legacy_file_read_error(start));
         }
         if mode_name != "ENV" && mode_name != "LINE" {
             return Err(self.error_expected("expected ENV or LINE or FILE", &mode_name));
@@ -275,30 +261,42 @@ impl<'a> ExprParser<'a> {
         })))
     }
 
-    fn parse_file_read_expr(&mut self, start: usize) -> Result<Box<Expr>, Error> {
-        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::LParen {
-            return Err(self.error_expected("expected '(' after FILE", "("));
-        }
-        self.pos += 1;
-
-        let path = self.parse_simple_argument("expected file path")?;
-        let mode = if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::Comma {
-            self.pos += 1;
-            self.parse_optional_simple_argument()
+    fn legacy_file_write_error(&self, pos: usize) -> Error {
+        let (line, column) = if self.src.is_empty() {
+            (1, 1)
         } else {
-            None
+            crate::parser::calc_line_col(self.src, pos)
         };
+        Error::Diagnostic(
+            Diagnostic::error(
+                codes::PARSE_LEGACY_FILE_SYNTAX,
+                "legacy file syntax `$>>FILE(...)` has been removed",
+            )
+            .with_location(line, column)
+            .with_span(Span::from_token(pos))
+            .with_note("replace `$>>FILE(path, content)` with `std.fs.write(path, content)`")
+            .with_note(
+                "replace append/delete cases with `std.fs.append(...)` / `std.fs.delete(...)`",
+            ),
+        )
+    }
 
-        if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::RParen {
-            return Err(self.error_expected("expected ')'", ")"));
-        }
-        self.pos += 1;
-
-        Ok(Box::new(Expr::FileRead(crate::ast::FileReadExpr {
-            span: Span::new(start, self.tokens[self.pos - 1].pos + 1),
-            path,
-            mode,
-        })))
+    fn legacy_file_read_error(&self, pos: usize) -> Error {
+        let (line, column) = if self.src.is_empty() {
+            (1, 1)
+        } else {
+            crate::parser::calc_line_col(self.src, pos)
+        };
+        Error::Diagnostic(
+            Diagnostic::error(
+                codes::PARSE_LEGACY_FILE_SYNTAX,
+                "legacy file syntax `$<<FILE(...)` has been removed",
+            )
+            .with_location(line, column)
+            .with_span(Span::from_token(pos))
+            .with_note("replace `$<<FILE(path)` with `std.fs.read_text(path)`")
+            .with_note("replace `$<<FILE(path, \"LINES\")` with `std.fs.read_lines(path)`"),
+        )
     }
 
     fn parse_config_read_expr(&mut self, start: usize) -> Result<Box<Expr>, Error> {
@@ -499,34 +497,5 @@ impl<'a> ExprParser<'a> {
             status,
             body,
         })))
-    }
-
-    fn parse_simple_argument(&mut self, error_message: &str) -> Result<Box<Expr>, Error> {
-        if self.pos < self.tokens.len()
-            && (self.tokens[self.pos].typ == Type::String
-                || self.tokens[self.pos].typ == Type::FString
-                || self.tokens[self.pos].typ == Type::Ident)
-        {
-            let token = self.tokens[self.pos].clone();
-            self.pos += 1;
-            parse_expr_tokens_with_src(&[token], self.src)
-        } else {
-            Err(self.error_expected(error_message, "string or identifier"))
-        }
-    }
-
-    fn parse_optional_simple_argument(&mut self) -> Option<Box<Expr>> {
-        if self.pos < self.tokens.len()
-            && (self.tokens[self.pos].typ == Type::String
-                || self.tokens[self.pos].typ == Type::FString
-                || self.tokens[self.pos].typ == Type::Ident
-                || self.tokens[self.pos].typ == Type::Number)
-        {
-            let token = self.tokens[self.pos].clone();
-            self.pos += 1;
-            parse_expr_tokens_with_src(&[token], self.src).ok()
-        } else {
-            None
-        }
     }
 }

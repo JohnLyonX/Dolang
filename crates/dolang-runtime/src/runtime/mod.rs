@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod backend;
 pub mod context;
+pub(crate) mod gc;
 pub mod http;
 pub mod intrinsics;
 pub mod loader;
@@ -19,3 +20,6 @@ pub use loader::{
     resolve_project_root,
 };
 pub use program::{ProgramState, execute_program_with_writer, execute_source_with_writer};
+
+#[cfg(test)]
+mod gc_tests;

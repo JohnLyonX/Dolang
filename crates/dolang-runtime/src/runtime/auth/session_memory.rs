@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use chrono::Utc;
 
 use crate::error::Error;
+use crate::runtime::gc::LazyGcWindow;
 
 use super::{SessionRecord, SessionStore};
 
@@ -11,17 +12,14 @@ const SESSION_GC_INTERVAL_SECONDS: i64 = 60;
 #[derive(Debug)]
 pub struct MemorySessionStore {
     sessions: HashMap<String, SessionRecord>,
-    next_gc_at: i64,
-    gc_interval_seconds: i64,
+    gc_window: LazyGcWindow,
 }
 
 impl Default for MemorySessionStore {
     fn default() -> Self {
-        let now = Utc::now().timestamp();
         Self {
             sessions: HashMap::new(),
-            next_gc_at: now.saturating_add(SESSION_GC_INTERVAL_SECONDS),
-            gc_interval_seconds: SESSION_GC_INTERVAL_SECONDS,
+            gc_window: LazyGcWindow::new(SESSION_GC_INTERVAL_SECONDS),
         }
     }
 }
@@ -64,13 +62,13 @@ impl SessionStore for MemorySessionStore {
 
 impl MemorySessionStore {
     fn maybe_prune_expired(&mut self, now: i64) {
-        if now < self.next_gc_at {
+        if !self.gc_window.is_due(now) {
             return;
         }
 
         self.sessions
             .retain(|_, session| is_session_active(session, now));
-        self.next_gc_at = now.saturating_add(self.gc_interval_seconds);
+        self.gc_window.mark_ran(now);
     }
 }
 
@@ -164,7 +162,7 @@ mod tests {
     #[test]
     fn memory_store_defers_batch_prune_until_gc_window() {
         let mut store = MemorySessionStore::default();
-        store.next_gc_at = i64::MAX;
+        store.gc_window.set_next_gc_at_for_test(i64::MAX);
         store.sessions.insert(
             "expired".to_string(),
             SessionRecord {
@@ -189,7 +187,7 @@ mod tests {
     #[test]
     fn memory_store_prunes_when_gc_window_opens() {
         let mut store = MemorySessionStore::default();
-        store.next_gc_at = 0;
+        store.gc_window.set_next_gc_at_for_test(0);
         store.sessions.insert(
             "expired".to_string(),
             SessionRecord {

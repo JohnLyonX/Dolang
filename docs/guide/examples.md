@@ -6,6 +6,8 @@
 > 当前可运行配方请改读 [18-patterns-and-recipes.md](18-patterns-and-recipes.md)。
 > 本页仅保留零散旧示例和迁移线索；遇到和主线冲突的写法，应以编号章节、reference 和 spec 为准。
 
+认证相关的最新可运行样例见 [examples/http-auth](/Users/liangzhanbo/CodeStudio/dolang/examples/http-auth)。
+
 本章节提供真实使用场景的示例，帮助你快速上手 Dolang。
 
 ---
@@ -253,25 +255,24 @@ $try {
 
 ## 9. 读写文件
 
-**读取文件**
-
 ```dolang
-$ content = $<<FILE("data.txt");
-$>> content;
+$mod std.fs;
 
-// 按行读取
-$ lines = $<<FILE("data.txt", "lines");
+fs.write("output.txt", "Hello, Dolang!");
+fs.append("output.txt", "\nSecond line");
+
+$ content = fs.read_text("output.txt");
+$ lines = fs.read_lines("output.txt");
+
+$>> content;
 $for line in lines {
     $>> line;
 }
+
+fs.delete("output.txt");
 ```
 
-**写入文件**
-
-```dolang
-$>>FILE("output.txt", "Hello, Dolang!");           // 覆盖写入
-$>>FILE("log.txt", "new entry\n", "A");            // 追加写入
-```
+旧的 `$>>FILE(...)` / `$<<FILE(...)` 仍可在兼容窗口中看到，但新代码应优先改用 `std.fs`。
 
 ---
 
@@ -298,7 +299,7 @@ $>> math.random_int(1, 6);  // 骰子：1~6
 $mod std.fs;
 
 fs.mkdir_all("/tmp/dolang/test");
-fs.write_text("/tmp/dolang/test/hello.txt", "hi");
+fs.write("/tmp/dolang/test/hello.txt", "hi");
 $ content = fs.read_text("/tmp/dolang/test/hello.txt");
 $>> content;    // hi
 ```

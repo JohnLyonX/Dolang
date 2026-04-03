@@ -5,12 +5,13 @@
 Dolang 项目根目录使用 `package.toml` 作为 manifest。当前正式支持的字段只有这些：
 
 ```toml
+[project]
 name = "demo"
 version = "0.1.0"
 entry = "main.dol"
 
 [server]
-host = "0.0.0.0"
+host = "127.0.0.1"
 port = 8080
 
 [env]
@@ -22,12 +23,17 @@ acme = "0.1.0"
 
 字段说明：
 
-- `name`: 项目名，当前为必填
-- `version`: 项目版本
-- `entry`: 项目入口文件，默认 `main.dol`
+- `[project].name`: 项目名，当前为必填
+- `[project].version`: 项目版本
+- `[project].entry`: 项目入口文件，默认 `main.dol`
 - `[server]`: serve/test 模式使用的服务配置
 - `[env]`: 通过 `$<<CONFIG()` 可读取的项目配置项
 - `[dependencies]`: 预留给第三方依赖解析的依赖清单
+
+兼容性说明：
+
+- 当前实现仍兼容旧写法：顶层 `name` / `version` / `entry`
+- 新项目推荐使用 `[project]` 作为规范写法
 
 ## Module Resolution Order
 
@@ -53,9 +59,11 @@ Dolang 当前的模块解析顺序是：
 ## Entry Resolution
 
 - 当 CLI 传入的是文件路径时，直接把该文件作为入口
+  - `dolang run <file.dol>` 按脚本模式执行，不读取上层 `package.toml`
+  - 脚本所在目录就是该次运行的 root
 - 当 CLI 传入的是目录时：
   - 先定位项目根
-  - 再读取 `package.toml` 的 `entry`
+  - 再读取 `package.toml` 的 `[project].entry`
   - 如果没有 manifest，则默认使用 `main.dol`
 
 ## Relative Imports

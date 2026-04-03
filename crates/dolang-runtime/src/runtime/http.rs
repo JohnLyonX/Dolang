@@ -6,7 +6,8 @@ use crate::error::Error;
 use crate::interpreter::exec::validate_declared_return_type;
 use crate::interpreter::{DolangValue, HttpRoute, exec_http_handler};
 use crate::runtime::auth::{
-    Principal, RuntimeAuthorizationRule, SessionStore, SessionStoreBackend, verify_jwt,
+    Principal, RuntimeAuthorizationRule, SessionStore, SessionStoreBackend, csrf_token_from_claims,
+    ensure_session_csrf_token, verify_jwt,
 };
 
 use super::{ProgramState, RuntimeContext};
@@ -165,6 +166,8 @@ fn apply_request_auth(
         return Err("__auth_forbidden__".to_string());
     }
 
+    enforce_csrf_if_needed(route, input, context)?;
+
     Ok(())
 }
 
@@ -180,6 +183,8 @@ fn apply_session_auth(context: &RuntimeContext, session_id: &str) -> Result<(), 
     let Some(mut session) = session else {
         return Ok(());
     };
+    let had_csrf_token = csrf_token_from_claims(&session.claims).is_some();
+    ensure_session_csrf_token(&mut session.claims);
 
     let now = Utc::now().timestamp();
     let expired = session.expires_at <= now
@@ -222,7 +227,7 @@ fn apply_session_auth(context: &RuntimeContext, session_id: &str) -> Result<(), 
                 auth.set_pending_clear_cookie(false);
             })
             .map_err(|err| err.to_string())?;
-    } else if auth_config.session_idle_timeout_seconds > 0 {
+    } else if auth_config.session_idle_timeout_seconds > 0 || !had_csrf_token {
         context
             .with_request_auth_context_mut(|auth| {
                 auth.queue_session_update(session.clone());
@@ -244,6 +249,48 @@ fn apply_session_auth(context: &RuntimeContext, session_id: &str) -> Result<(), 
             auth.set_principal(Some(principal));
         })
         .map_err(|err| err.to_string())
+}
+
+fn enforce_csrf_if_needed(
+    route: &HttpRoute,
+    input: &HandlerInput,
+    context: &RuntimeContext,
+) -> Result<(), String> {
+    if !requires_csrf_protection(&route.method) {
+        return Ok(());
+    }
+
+    let (principal_scheme, expected_token) = context
+        .with_request_auth_context(|auth| {
+            (
+                auth.principal().map(|principal| principal.scheme.clone()),
+                auth.current_session()
+                    .and_then(|session| csrf_token_from_claims(&session.claims)),
+            )
+        })
+        .map_err(|err| err.to_string())?;
+
+    if principal_scheme.as_deref() != Some("session") {
+        return Ok(());
+    }
+
+    let Some(expected_token) = expected_token else {
+        return Err("__auth_forbidden__: invalid csrf token".to_string());
+    };
+    let provided_token = input
+        .headers
+        .get("x-csrf-token")
+        .or_else(|| input.headers.get("X-CSRF-Token"));
+
+    if provided_token.is_some_and(|token| token == &expected_token) {
+        Ok(())
+    } else {
+        Err("__auth_forbidden__: invalid csrf token".to_string())
+    }
+}
+
+fn requires_csrf_protection(method: &str) -> bool {
+    matches!(method, "POST" | "PUT" | "PATCH" | "DELETE")
 }
 
 fn apply_bearer_auth(context: &RuntimeContext, token: &str) -> Result<(), String> {

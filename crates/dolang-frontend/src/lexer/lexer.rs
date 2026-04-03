@@ -260,19 +260,9 @@ impl Lexer {
     fn read_dollar(&mut self, start: usize) -> Result<Token, Diagnostic> {
         // Order matters: match longer sequences first to avoid prefix collisions
 
-        if self.match_seq("$>>FILE") {
-            self.advance_n(7);
-            return Ok(Token::new(Type::Print, "$>>FILE", start));
-        }
-
         if self.match_seq("$>>") {
             self.advance_n(3);
             return Ok(Token::new(Type::Print, "$>>", start));
-        }
-
-        if self.match_seq("$<<FILE") {
-            self.advance_n(7);
-            return Ok(Token::new(Type::Read, "$<<FILE", start));
         }
 
         if self.match_seq("$<<CONFIG") {

@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::interpreter::{HttpRoute, StaticRoute};
 use crate::runtime::RuntimeContext;
 
@@ -13,5 +14,5 @@ pub trait HttpBackend {
         context: RuntimeContext,
         host: &str,
         port: u16,
-    ) -> impl std::future::Future<Output = ()> + Send;
+    ) -> impl std::future::Future<Output = Result<(), Error>> + Send;
 }

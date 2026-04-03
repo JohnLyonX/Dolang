@@ -9,6 +9,7 @@ use crate::module::{
     resolve_project_root as resolve_manifest_project_root,
 };
 use crate::parser;
+use crate::runtime::auth::validate_runtime_auth_config;
 
 use super::{RuntimeContext, RuntimeMode};
 
@@ -70,6 +71,8 @@ pub fn load_context_and_program(
     let mut context = RuntimeContext::new(mode, project_root.clone());
     crate::stdlib_native::register_stdlib_native_modules(&mut context);
     context.set_project_config(manifest);
+    validate_runtime_auth_config(context.runtime_auth_config())
+        .map_err(|err| Error::Interpreter(err.to_string()))?;
     context.set_current_file(Some(main_file.to_string_lossy().to_string()));
 
     let program = load_program_from_path(&main_file)?;

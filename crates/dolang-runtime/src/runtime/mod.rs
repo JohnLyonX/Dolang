@@ -1,12 +1,15 @@
+pub mod auth;
 pub mod backend;
 pub mod context;
 pub mod http;
 pub mod intrinsics;
 pub mod loader;
 pub mod program;
+pub(crate) mod sql_intrinsics;
+pub(crate) mod sql_registry;
 
 pub use context::{RuntimeContext, RuntimeMode};
-pub use http::{HandlerInput, execute_http_route};
+pub use http::{HandlerInput, execute_http_route, execute_http_route_in_context};
 pub use intrinsics::{
     IntrinsicCall, IntrinsicId, IntrinsicRegistry, NativeFn, NativeFnMap, NativeModuleRegistry,
     RuntimePolicy,

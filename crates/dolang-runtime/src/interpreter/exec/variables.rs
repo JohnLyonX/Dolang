@@ -21,14 +21,7 @@ pub(super) fn handle_var_decl(
         )));
     }
 
-    match check_eval_result(eval_expr(
-        &stmt.value,
-        &state.env,
-        &mut state.fns,
-        context,
-        w,
-        false,
-    )) {
+    match check_eval_result(eval_expr(&stmt.value, state, context, w, false)) {
         Ok(val) => {
             if let Some(ref type_str) = stmt.type_annotation {
                 let expected_type = match parse_type_annotation(type_str) {
@@ -50,7 +43,7 @@ pub(super) fn handle_var_decl(
                 }
                 state.type_env.insert(stmt.name.clone(), expected_type);
             }
-            state.env.insert(stmt.name.clone(), val);
+            state.insert_env(stmt.name.clone(), val);
             Flow::Normal
         }
         Err(err) => Flow::Err(err),
@@ -63,21 +56,14 @@ pub(super) fn handle_const_decl(
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Flow {
-    if state.env.contains_key(&stmt.name) {
+    if state.env_contains_key(&stmt.name) {
         return Flow::Err(Error::Interpreter(format!(
             "constant '{}' is already defined",
             stmt.name
         )));
     }
 
-    match check_eval_result(eval_expr(
-        &stmt.value,
-        &state.env,
-        &mut state.fns,
-        context,
-        w,
-        false,
-    )) {
+    match check_eval_result(eval_expr(&stmt.value, state, context, w, false)) {
         Ok(val) => {
             if let Some(ref type_str) = stmt.type_annotation {
                 let expected_type = match parse_type_annotation(type_str) {
@@ -100,7 +86,7 @@ pub(super) fn handle_const_decl(
                 state.type_env.insert(stmt.name.clone(), expected_type);
             }
             state.const_env.insert(stmt.name.clone(), true);
-            state.env.insert(stmt.name.clone(), val);
+            state.insert_env(stmt.name.clone(), val);
             Flow::Normal
         }
         Err(err) => Flow::Err(err),
@@ -115,7 +101,7 @@ pub(super) fn handle_assign_stmt(
 ) -> Flow {
     if let Expr::MethodCall(target) = &*stmt.name {
         // TypedInstance field assignment: instance.field = val
-        let var_name = match eval_expr(&target.object, &state.env, &mut state.fns, context, w, true) {
+        let var_name = match eval_expr(&target.object, state, context, w, true) {
             Ok(DolangValue::Str(s)) => s,
             Ok(_) => {
                 return Flow::Err(Error::InvalidAssignment(Some(
@@ -125,21 +111,14 @@ pub(super) fn handle_assign_stmt(
             Err(err) => return Flow::Err(err),
         };
 
-        let val = match check_eval_result(eval_expr(
-            &stmt.value,
-            &state.env,
-            &mut state.fns,
-            context,
-            w,
-            false,
-        )) {
+        let val = match check_eval_result(eval_expr(&stmt.value, state, context, w, false)) {
             Ok(v) => v,
             Err(err) => return Flow::Err(err),
         };
 
         // Determine stored key and expected field type (accounting for @HIDE fields)
         let (stored_key, expected_field_type) = {
-            let existing = match state.env.get(&var_name) {
+            let existing = match state.lookup_env(&var_name) {
                 Some(e) => e,
                 None => {
                     return Flow::Err(Error::Interpreter(format!(
@@ -150,16 +129,19 @@ pub(super) fn handle_assign_stmt(
             };
             if let DolangValue::TypedInstance { type_name, fields } = existing {
                 let shape_opt = context.get_type(type_name);
-                let field_def = shape_opt.and_then(|s| {
-                    s.fields.iter().find(|f| f.name == target.method).cloned()
-                });
+                let field_def = shape_opt
+                    .and_then(|s| s.fields.iter().find(|f| f.name == target.method).cloned());
                 let expected_type = field_def.as_ref().map(|f| f.type_name.clone());
                 let key = match field_def {
                     Some(f) if f.hidden => format!("_{}", target.method),
                     _ => {
                         if !fields.contains_key(&target.method) {
                             let hk = format!("_{}", target.method);
-                            if fields.contains_key(&hk) { hk } else { target.method.clone() }
+                            if fields.contains_key(&hk) {
+                                hk
+                            } else {
+                                target.method.clone()
+                            }
                         } else {
                             target.method.clone()
                         }
@@ -201,7 +183,8 @@ pub(super) fn handle_assign_stmt(
             }
         }
 
-        if let Some(DolangValue::TypedInstance { fields, .. }) = state.env.get_mut(&var_name) {
+        state.invalidate_env_snapshot();
+        if let Some(DolangValue::TypedInstance { fields, .. }) = state.get_env_mut(&var_name) {
             fields.insert(stored_key, val);
         }
 
@@ -209,7 +192,7 @@ pub(super) fn handle_assign_stmt(
     }
 
     if let Expr::IndexAccess(idx) = &*stmt.name {
-        let var_name = match eval_expr(&idx.object, &state.env, &mut state.fns, context, w, true) {
+        let var_name = match eval_expr(&idx.object, state, context, w, true) {
             Ok(DolangValue::Str(s)) => s,
             Ok(_) => {
                 return Flow::Err(Error::InvalidAssignment(Some(
@@ -219,24 +202,17 @@ pub(super) fn handle_assign_stmt(
             Err(err) => return Flow::Err(err),
         };
 
-        let idx_val = match eval_expr(&idx.index, &state.env, &mut state.fns, context, w, false) {
+        let idx_val = match eval_expr(&idx.index, state, context, w, false) {
             Ok(val) => val,
             Err(err) => return Flow::Err(err),
         };
 
-        let val = match check_eval_result(eval_expr(
-            &stmt.value,
-            &state.env,
-            &mut state.fns,
-            context,
-            w,
-            false,
-        )) {
+        let val = match check_eval_result(eval_expr(&stmt.value, state, context, w, false)) {
             Ok(val) => val,
             Err(err) => return Flow::Err(err),
         };
 
-        let existing = match state.env.get(&var_name) {
+        let existing = match state.lookup_env(&var_name) {
             Some(existing) => existing,
             None => {
                 return Flow::Err(Error::Interpreter(format!(
@@ -268,13 +244,13 @@ pub(super) fn handle_assign_stmt(
 
                 let mut new_list = list.clone();
                 new_list[index] = val;
-                state.env.insert(var_name, DolangValue::List(new_list));
+                state.insert_env(var_name, DolangValue::List(new_list));
             }
             DolangValue::Map(map) => {
                 let key = idx_val.to_string();
                 let mut new_map = map.clone();
                 new_map.insert(key, val);
-                state.env.insert(var_name, DolangValue::Map(new_map));
+                state.insert_env(var_name, DolangValue::Map(new_map));
             }
             _ => {
                 return Flow::Err(Error::Interpreter(format!(
@@ -287,7 +263,7 @@ pub(super) fn handle_assign_stmt(
         return Flow::Normal;
     }
 
-    let name = match eval_expr(&stmt.name, &state.env, &mut state.fns, context, w, true) {
+    let name = match eval_expr(&stmt.name, state, context, w, true) {
         Ok(DolangValue::Str(s)) => s,
         Ok(_) => {
             return Flow::Err(Error::InvalidAssignment(Some(
@@ -296,14 +272,7 @@ pub(super) fn handle_assign_stmt(
         }
         Err(err) => return Flow::Err(err),
     };
-    let val = match check_eval_result(eval_expr(
-        &stmt.value,
-        &state.env,
-        &mut state.fns,
-        context,
-        w,
-        false,
-    )) {
+    let val = match check_eval_result(eval_expr(&stmt.value, state, context, w, false)) {
         Ok(val) => val,
         Err(err) => return Flow::Err(err),
     };
@@ -329,7 +298,7 @@ pub(super) fn handle_assign_stmt(
         }
     }
 
-    state.env.insert(name, val);
+    state.insert_env(name, val);
     Flow::Normal
 }
 
@@ -344,14 +313,7 @@ pub(super) fn handle_expr_stmt(
             return handle_mut_method_call(expr, call, state, context, w);
         }
     }
-    match check_eval_result(eval_expr(
-        expr,
-        &state.env,
-        &mut state.fns,
-        context,
-        w,
-        false,
-    )) {
+    match check_eval_result(eval_expr(expr, state, context, w, false)) {
         Ok(_) => Flow::Normal,
         Err(err) => Flow::Err(err),
     }
@@ -376,13 +338,14 @@ fn handle_mut_method_call(
 
     let mut arg_vals = Vec::new();
     for arg in &call.args {
-        match eval_expr(arg, &state.env, &mut state.fns, context, w, false) {
+        match eval_expr(arg, state, context, w, false) {
             Ok(v) => arg_vals.push(v),
             Err(err) => return Flow::Err(err),
         }
     }
 
-    let receiver = match state.env.get_mut(&var_name) {
+    state.invalidate_env_snapshot();
+    let receiver = match state.get_env_mut(&var_name) {
         Some(r) => r,
         None => {
             return Flow::Err(Error::Interpreter(format!(

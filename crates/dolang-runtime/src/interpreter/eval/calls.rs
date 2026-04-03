@@ -1,45 +1,43 @@
 use crate::ast::{Expr, FnCallExpr, MethodCall};
 use crate::diagnostics::codes;
 use crate::error::Error;
-use crate::runtime::RuntimeContext;
+use crate::runtime::{ProgramState, RuntimeContext};
 
-use super::super::env::{Env, FnEnv};
 use super::super::value::DolangValue;
 use super::eval_expr;
 
 pub fn eval_method_call(
     e: &Expr,
     call: &MethodCall,
-    env: &Env,
-    fns: &mut FnEnv,
+    state: &mut ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Result<DolangValue, Error> {
-    let obj_val = eval_expr(&call.object, env, fns, context, w, false)?;
+    let obj_val = eval_expr(&call.object, state, context, w, false)?;
 
     if let DolangValue::ModuleProxy {
-        exports,
-        fns: module_fns,
-        native_exports,
-        module_env,
+        state: module_state,
         ..
     } = &obj_val
     {
         let method_name = &call.method;
+        let exports = &module_state.exports;
+        let module_fns = &module_state.fns;
+        let native_exports = &module_state.native_exports;
+        let module_env = module_state.module_env.as_ref();
 
         let mut arg_vals = Vec::new();
         for arg in &call.args {
-            arg_vals.push(eval_expr(arg, env, fns, context, w, false)?);
+            arg_vals.push(eval_expr(arg, state, context, w, false)?);
         }
 
         if let Some(fn_def) = exports.get(method_name) {
             let fn_def = fn_def.clone();
-            let mut module_scope_fns = fns.clone();
-            module_scope_fns.extend(module_fns.clone());
             return match super::super::exec::call_module_fn(
                 &fn_def,
                 &arg_vals,
-                &mut module_scope_fns,
+                &mut state.fns,
+                module_fns,
                 module_env,
                 context,
                 w,
@@ -73,7 +71,7 @@ pub fn eval_method_call(
 
     let mut arg_vals = Vec::new();
     for arg in &call.args {
-        arg_vals.push(eval_expr(arg, env, fns, context, w, false)?);
+        arg_vals.push(eval_expr(arg, state, context, w, false)?);
     }
 
     if super::super::builtins::is_method_mutating(&call.method) {
@@ -115,17 +113,16 @@ pub fn eval_method_call(
 pub fn eval_fn_call(
     e: &Expr,
     call: &FnCallExpr,
-    env: &Env,
-    fns: &mut FnEnv,
+    state: &mut ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Result<DolangValue, Error> {
     let mut arg_vals = Vec::new();
     for arg in &call.args {
-        arg_vals.push(eval_expr(arg, env, fns, context, w, false)?);
+        arg_vals.push(eval_expr(arg, state, context, w, false)?);
     }
 
-    let fn_name = if let Some(var_val) = env.get(&call.name) {
+    let fn_name = if let Some(var_val) = state.lookup_env(&call.name) {
         match var_val {
             DolangValue::Str(s) => s.clone(),
             _ => {
@@ -140,8 +137,8 @@ pub fn eval_fn_call(
         call.name.clone()
     };
 
-    if let Some(fn_def) = fns.get(&fn_name).cloned() {
-        match super::super::exec::call_fn(&fn_def, &arg_vals, fns, context, w) {
+    if let Some(fn_def) = state.lookup_fn(&fn_name) {
+        match super::super::exec::call_fn(&fn_def, &arg_vals, &mut state.fns, context, w) {
             Ok(Some(val)) => Ok(val),
             Ok(None) => Ok(DolangValue::Null),
             Err(err) => Err(err),

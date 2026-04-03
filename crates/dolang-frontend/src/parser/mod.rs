@@ -173,7 +173,10 @@ $GET("/items") list() {
             rendered.contains(codes::PARSE_SET_HDR_INVALID_SYNTAX),
             "{rendered}"
         );
-        assert!(rendered.contains("@SET_HDR expects a config object"), "{rendered}");
+        assert!(
+            rendered.contains("@SET_HDR expects a config object"),
+            "{rendered}"
+        );
     }
 
     #[test]
@@ -214,7 +217,10 @@ $GET("/items") list() {
             rendered.contains(codes::PARSE_SET_HDR_INVALID_SYNTAX),
             "{rendered}"
         );
-        assert!(rendered.contains("expected string header name"), "{rendered}");
+        assert!(
+            rendered.contains("expected string header name"),
+            "{rendered}"
+        );
     }
 
     #[test]

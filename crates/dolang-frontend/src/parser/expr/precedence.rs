@@ -191,7 +191,11 @@ impl<'a> ExprParser<'a> {
                     let next_is_terminator = self.pos >= self.tokens.len()
                         || matches!(
                             self.tokens[self.pos].typ,
-                            Type::Dot | Type::Semicolon | Type::Comma | Type::RParen | Type::RBracket
+                            Type::Dot
+                                | Type::Semicolon
+                                | Type::Comma
+                                | Type::RParen
+                                | Type::RBracket
                         );
                     if next_is_terminator {
                         expr = Box::new(Expr::MethodCall(MethodCall {

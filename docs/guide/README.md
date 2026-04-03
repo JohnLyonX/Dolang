@@ -87,6 +87,7 @@ docs/guide/
 - [cli-cheatsheet.md](appendix/cli-cheatsheet.md)
 - [module-resolution.md](appendix/module-resolution.md)
 - [common-errors.md](appendix/common-errors.md)
+- [sql-quickstart.md](appendix/sql-quickstart.md)
 
 迁移期旧页面：
 
@@ -105,6 +106,7 @@ Reference 快速入口：
 - [../reference/project-system.md](../reference/project-system.md)
 - [../reference/http.md](../reference/http.md)
 - [../reference/stdlib-api.md](../reference/stdlib-api.md)
+- [../reference/sql-database.md](../reference/sql-database.md)
 
 ## 主线章节
 

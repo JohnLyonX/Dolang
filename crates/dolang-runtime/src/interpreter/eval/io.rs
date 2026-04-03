@@ -1,17 +1,15 @@
 use crate::ast::{ConfigReadExpr, Expr, ExprRead, FileReadExpr, FileWriteExpr, HdrReadExpr};
 use crate::diagnostics::codes;
 use crate::error::Error;
-use crate::runtime::{RuntimeContext, intrinsics::ids};
+use crate::runtime::{ProgramState, RuntimeContext, intrinsics::ids};
 
-use super::super::env::{Env, FnEnv};
 use super::super::value::DolangValue;
 use super::eval_expr;
 
 pub fn eval_read_expr(
     e: &Expr,
     read_expr: &ExprRead,
-    env: &Env,
-    fns: &mut FnEnv,
+    state: &mut ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Result<DolangValue, Error> {
@@ -20,7 +18,7 @@ pub fn eval_read_expr(
     match read_expr.mode {
         crate::ast::ReadMode::Env => {
             let key = if let Some(ref prompt_expr) = read_expr.prompt {
-                eval_expr(prompt_expr, env, fns, context, w, false)?.to_string()
+                eval_expr(prompt_expr, state, context, w, false)?.to_string()
             } else {
                 return Err(super::runtime_error(
                     e,
@@ -43,7 +41,7 @@ pub fn eval_read_expr(
         }
         crate::ast::ReadMode::Line => {
             if let Some(ref prompt_expr) = read_expr.prompt {
-                let prompt_val = eval_expr(prompt_expr, env, fns, context, w, false)?;
+                let prompt_val = eval_expr(prompt_expr, state, context, w, false)?;
                 let _ = write!(w, "{prompt_val}");
                 let _ = w.flush();
             }
@@ -72,12 +70,11 @@ pub fn eval_read_expr(
 pub fn eval_file_read_expr(
     e: &Expr,
     file_read: &FileReadExpr,
-    env: &Env,
-    fns: &mut FnEnv,
+    state: &mut ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Result<DolangValue, Error> {
-    let path_val = eval_expr(&file_read.path, env, fns, context, w, false)?;
+    let path_val = eval_expr(&file_read.path, state, context, w, false)?;
     let path_str = match path_val {
         DolangValue::Str(s) => s,
         _ => {
@@ -90,7 +87,7 @@ pub fn eval_file_read_expr(
     };
 
     let mode_str = if let Some(mode_expr) = &file_read.mode {
-        Some(eval_expr(mode_expr, env, fns, context, w, false)?.to_string())
+        Some(eval_expr(mode_expr, state, context, w, false)?.to_string())
     } else {
         None
     };
@@ -104,12 +101,11 @@ pub fn eval_file_read_expr(
 pub fn eval_file_write_expr(
     e: &Expr,
     file_write: &FileWriteExpr,
-    env: &Env,
-    fns: &mut FnEnv,
+    state: &mut ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Result<DolangValue, Error> {
-    let path_val = eval_expr(&file_write.path, env, fns, context, w, false)?;
+    let path_val = eval_expr(&file_write.path, state, context, w, false)?;
     let path_str = match path_val {
         DolangValue::Str(s) => s,
         _ => {
@@ -122,7 +118,7 @@ pub fn eval_file_write_expr(
     };
 
     let mode_str = if let Some(mode_expr) = &file_write.mode {
-        Some(eval_expr(mode_expr, env, fns, context, w, false)?.to_string())
+        Some(eval_expr(mode_expr, state, context, w, false)?.to_string())
     } else {
         None
     };
@@ -143,9 +139,9 @@ pub fn eval_config_read_expr(
         .map_err(|err| super::runtime_error(e, codes::RUNTIME_GENERIC, err.to_string()))
 }
 
-pub fn eval_hdr_read_expr(hdr: &HdrReadExpr, env: &Env) -> Result<DolangValue, Error> {
+pub fn eval_hdr_read_expr(hdr: &HdrReadExpr, state: &ProgramState) -> Result<DolangValue, Error> {
     let header_key = hdr.header_name.to_lowercase();
-    if let Some(DolangValue::Json(headers)) = env.get("__headers__") {
+    if let Some(DolangValue::Json(headers)) = state.lookup_env("__headers__") {
         if let Some(value) = headers.get(&header_key) {
             return Ok(value.clone());
         }

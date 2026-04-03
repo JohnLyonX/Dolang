@@ -8,6 +8,7 @@ Dolang 提供了完整的 HTTP 超函数支持，用于快速构建 Web API 服�
 - [返回类型](#返回类型)
 - [HTTP 块](#http-块)
 - [请求上下文](#请求上下文)
+- [Serve 认证与授权](#serve-认证与授权)
 - [响应返回](#响应返回)
 - [模块挂载](#模块挂载)
 - [测试模式](#测试模式)
@@ -218,6 +219,233 @@ $POST("/users") create_user() -> JSON {
     $ name = body["name"];
     $# $JSON { "created": true, "name": name };
 }
+```
+
+### `std.auth.*` 请求级上下文
+
+`serve` 模式下启用 `[server.auth]` 后，运行时会先解析当前请求的认证态，再执行 handler。
+
+可在 handler 中使用：
+
+- `std.auth.session.current()`
+- `std.auth.session.exists()`
+- `std.auth.jwt.current()`
+- `std.auth.guard.principal()`
+- `std.auth.guard.authenticated()`
+
+这些 API 读取的是当前请求上下文中的 principal / session / JWT claims，不需要手动重复解析请求头。
+
+---
+
+## Serve 认证与授权
+
+### 配置入口
+
+认证和授权通过 `package.toml` 中的 `[server.auth]` 配置启用：
+
+```toml
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie", "bearer"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+ttl_seconds = 86400
+idle_timeout_seconds = 7200
+
+[server.auth.session.store]
+driver = "postgres"
+
+[server.auth.session.store.postgres]
+url_env = "SESSION_DATABASE_URL"
+table = "auth_sessions"
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS256"
+secret_env = "JWT_SECRET"
+access_ttl_seconds = 3600
+refresh_ttl_seconds = 2592000
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+roles_any = ["admin"]
+```
+
+`algorithm` 当前支持：
+
+- `HS256`
+- `HS384`
+- `HS512`
+
+当前实现支持的 session store driver：
+
+- `memory`
+- `sqlite`
+- `postgres`
+
+### 当前请求入口
+
+请求进入 handler 前，runtime 会按 `identity_sources` 顺序解析认证态：
+
+- `cookie`
+  - 从请求 `Cookie` 中读取配置的 `cookie_name`
+  - 查 session store，构造当前 principal
+- `bearer`
+  - 从 `Authorization: Bearer <token>` 读取 JWT
+  - 校验签名、`issuer`、`audience`，构造当前 principal
+
+如果没有命中任何身份来源，则当前请求视为匿名请求。
+
+### 当前路由授权规则
+
+当前已接通并有集成测试覆盖的规则：
+
+- `require = "authenticated"`
+- `roles_any = ["admin", ...]`
+- `roles_all = ["editor", "publisher", ...]`
+- `permissions_any = ["post:create", ...]`
+- `permissions_all = ["post:create", "post:publish", ...]`
+- `claims_all = { team_id = "t_001", ... }`
+
+规则匹配当前支持：
+
+- `method = "*"` 匹配任意 HTTP method
+- `path = "/admin/*"` 这种前缀通配
+- 多条规则同时命中时，优先使用更具体的路径规则；同等具体度下按声明顺序选择更早的规则
+
+返回语义：
+
+- 未登录或凭证无效：HTTP `401`
+- 已登录但不满足角色要求：HTTP `403`
+
+认证与授权失败响应体当前统一为：
+
+```json
+{
+  "status": 401,
+  "code": "auth_unauthorized",
+  "message": "authentication required"
+}
+```
+
+```json
+{
+  "status": 403,
+  "code": "auth_forbidden",
+  "message": "forbidden"
+}
+```
+
+### Session 登录与受保护路由示例
+
+```dao
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+
+$GET("/admin") admin() -> JSON {
+    $# {"ok": true};
+}
+```
+
+```toml
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+
+[server.auth.session.store]
+driver = "memory"
+
+[server.auth.authorization]
+enabled = true
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+```
+
+调用 `/login` 后，运行时会写入 `Set-Cookie`；后续请求带上该 cookie 才能访问受保护路由。
+
+### Bearer Token 示例
+
+```dao
+$mod std.auth.jwt;
+
+$GET("/token") token() -> JSON {
+    $ token = jwt.sign({
+        "sub": "user_1",
+        "roles": ["admin"],
+        "permissions": ["post:create"]
+    });
+    $# {"token": token};
+}
+```
+
+配合：
+
+```http
+Authorization: Bearer <token>
+```
+
+即可访问启用了 bearer 认证入口的受保护路由。
+
+### Refresh Token
+
+refresh token 当前不自动进入 bearer 请求认证入口，而是通过标准库显式签发与校验：
+
+```dao
+$mod std.auth.jwt;
+
+$ refresh = jwt.sign_refresh({
+    "sub": "user_1",
+    "roles": ["admin"],
+    "permissions": ["post:create"]
+});
+
+$ claims = jwt.verify_refresh(refresh);
+```
+
+`jwt.refresh_pair(refresh_token)` 现在会执行 refresh token 轮换消费：
+
+- 第一次使用旧 refresh token 刷新成功
+- 第二次复用同一个旧 refresh token 会返回 HTTP `401`
+
+当前 runtime 还会把 refresh token 元数据持久化到 auth store backend；使用 `sqlite` / `postgres` driver 时，refresh token 的有效性与撤销状态会跨服务重启保留。
+
+项目层也可以显式撤销 refresh token：
+
+```dao
+$mod std.auth.jwt;
+
+jwt.revoke_refresh(refresh_token);
 ```
 
 ---

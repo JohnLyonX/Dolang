@@ -125,18 +125,16 @@ pub fn start_live_http_server_from_context(context: RuntimeContext) -> String {
 }
 
 pub fn try_start_live_http_server_from_context(context: RuntimeContext) -> Result<String, String> {
-    let routes = context.routes().to_vec();
-    let static_routes = context.static_routes().to_vec();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("free port should exist");
     let port = listener.local_addr().expect("listener addr").port();
     let (startup_tx, startup_rx) = mpsc::channel();
 
     thread::spawn(move || {
         let mut backend = AxumBackend::new();
-        for route in routes {
+        for route in context.routes().iter().cloned() {
             backend.register_route(route);
         }
-        for static_route in static_routes {
+        for static_route in context.static_routes().iter().cloned() {
             backend.register_static(static_route);
         }
 

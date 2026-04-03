@@ -21,6 +21,8 @@ native 模块：
 - `std.time`
 - `std.uuid`
 - `std.http`
+- `std.sqlite`
+- `std.postgres`
 
 纯 `.dol` 模块：
 
@@ -84,6 +86,13 @@ $ obj = json.set({"name": "Tom"}, "age", 25);
 
 - 服务端语法：第 15、16 章
 - 客户端模块：`std.http`
+
+### SQL 与数据库
+
+- 模块：`std.sqlite`、`std.postgres`
+- 值方法：`Connection.query(...)`、`Connection.execute(...)`、`Connection.close()`
+- 快速上手：[appendix/sql-quickstart.md](appendix/sql-quickstart.md)
+- 完整说明：[../reference/sql-database.md](../reference/sql-database.md)
 
 ## 查表去哪里
 

@@ -3,16 +3,18 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::ast::{ModDeclStmt, Span, Spanned, StaticStmt};
 use crate::diagnostics::{Diagnostic, codes};
 use crate::error::Error;
 use crate::module::{ModuleResolver, ResolvedModule};
+use crate::runtime::context::ModuleNamespaceCacheEntry;
 use crate::runtime::{ProgramState, RuntimeContext, execute_program_with_writer};
 
-use super::super::StaticRoute;
 use super::super::env::{Env, FnEnv};
 use super::super::value::DolangValue;
+use super::super::{ModuleNamespace, StaticRoute};
 use super::Flow;
 
 pub(super) fn handle_mod_decl(
@@ -48,13 +50,15 @@ pub(super) fn handle_mod_decl(
         }
         let module_value = DolangValue::ModuleProxy {
             path: stmt.path.clone(),
-            exports: FnEnv::new(),
-            fns: FnEnv::new(),
-            native_exports: native_exports.clone(),
-            module_env: Env::new(),
-            visible_user_types: HashSet::new(),
+            state: Arc::new(ModuleNamespace {
+                exports: FnEnv::new(),
+                fns: FnEnv::new(),
+                native_exports: native_exports.clone(),
+                module_env: Arc::new(Env::new()),
+                visible_user_types: Arc::new(HashSet::new()),
+            }),
         };
-        state.env.insert(namespace, module_value);
+        state.insert_env(namespace, module_value);
         return Flow::Normal;
     } else {
         return Flow::Err(module_error(
@@ -190,55 +194,125 @@ fn build_module_namespace(
     context: &mut RuntimeContext,
     w: &mut dyn Write,
 ) -> Result<DolangValue, Error> {
-    let content = fs::read_to_string(&resolved.file_path).map_err(|err| {
+    let cache_key = resolved.file_path.to_string_lossy().into_owned();
+    if let Some(cached) = context.cached_module_namespace(&cache_key).map_err(|err| {
         Error::Interpreter(format!(
-            "cannot read module '{}': {}",
+            "module cache error for '{}': {}",
             resolved.module_path, err
         ))
-    })?;
-
-    let module_stmts = crate::parser::parse(&content).map_err(|err| {
-        Error::Interpreter(format!(
-            "parse error in module '{}': {}",
-            resolved.module_path, err
-        ))
-    })?;
-
-    // 保存并切换 current_file，使模块内的相对 $mod 解析正确
-    let prev_file = context.current_file().map(ToOwned::to_owned);
-    context.set_current_file(Some(resolved.file_path.to_string_lossy().to_string()));
-
-    // 完整执行模块文件，捕获执行后的状态
-    let mut module_state = ProgramState::new();
-    let exec_result = execute_program_with_writer(&module_stmts, &mut module_state, context, w);
-
-    // 恢复 current_file
-    context.set_current_file(prev_file);
-
-    exec_result.map_err(|err| {
-        Error::Interpreter(format!(
-            "error in module '{}': {}",
-            resolved.module_path, err
-        ))
-    })?;
-
-    // 从执行后的 fns 提取导出（is_public == true 的函数）
-    let fns = module_state.fns.clone();
-    let mut exports = FnEnv::new();
-    for (name, fn_decl) in &fns {
-        if fn_decl.decl.is_public {
-            exports.insert(name.clone(), fn_decl.clone());
+    })? {
+        match cached {
+            ModuleNamespaceCacheEntry::Ready(cached) => {
+                return Ok(DolangValue::ModuleProxy {
+                    path: resolved.module_path.clone(),
+                    state: cached,
+                });
+            }
+            ModuleNamespaceCacheEntry::Loading { module_path } => {
+                return Err(Error::Interpreter(format!(
+                    "circular module import detected: '{}' re-imports '{}' while it is already loading",
+                    current_module_hint(context),
+                    module_path
+                )));
+            }
         }
     }
 
-    Ok(DolangValue::ModuleProxy {
-        path: resolved.module_path.clone(),
-        exports,
-        fns,
-        native_exports: crate::runtime::NativeFnMap::new(),
-        module_env: module_state.env,
-        visible_user_types: HashSet::new(),
-    })
+    context
+        .mark_module_namespace_loading(cache_key.clone(), resolved.module_path.clone())
+        .map_err(|err| {
+            Error::Interpreter(format!(
+                "module cache error for '{}': {}",
+                resolved.module_path, err
+            ))
+        })?;
+
+    let module_result = (|| -> Result<DolangValue, Error> {
+        let content = fs::read_to_string(&resolved.file_path).map_err(|err| {
+            Error::Interpreter(format!(
+                "cannot read module '{}': {}",
+                resolved.module_path, err
+            ))
+        })?;
+
+        let module_stmts = crate::parser::parse(&content).map_err(|err| {
+            Error::Interpreter(format!(
+                "parse error in module '{}': {}",
+                resolved.module_path, err
+            ))
+        })?;
+
+        // 保存并切换 current_file，使模块内的相对 $mod 解析正确
+        let prev_file = context.current_file().map(ToOwned::to_owned);
+        context.set_current_file(Some(resolved.file_path.to_string_lossy().to_string()));
+
+        // 完整执行模块文件，捕获执行后的状态
+        let mut module_state = ProgramState::new();
+        let exec_result = execute_program_with_writer(&module_stmts, &mut module_state, context, w);
+
+        // 恢复 current_file
+        context.set_current_file(prev_file);
+
+        exec_result.map_err(|err| {
+            Error::Interpreter(format!(
+                "error in module '{}': {}",
+                resolved.module_path, err
+            ))
+        })?;
+
+        // 从执行后的 fns 提取导出（is_public == true 的函数）
+        let fns = module_state.fns.clone();
+        let mut exports = FnEnv::new();
+        for (name, fn_decl) in &fns {
+            if fn_decl.decl.is_public {
+                exports.insert(name.clone(), fn_decl.clone());
+            }
+        }
+
+        let state = Arc::new(ModuleNamespace {
+            exports,
+            fns,
+            native_exports: crate::runtime::NativeFnMap::new(),
+            module_env: Arc::new(module_state.env),
+            visible_user_types: Arc::new(HashSet::new()),
+        });
+        context
+            .cache_module_namespace(cache_key.clone(), Arc::clone(&state))
+            .map_err(|err| {
+                Error::Interpreter(format!(
+                    "module cache error for '{}': {}",
+                    resolved.module_path, err
+                ))
+            })?;
+
+        Ok(DolangValue::ModuleProxy {
+            path: resolved.module_path.clone(),
+            state,
+        })
+    })();
+
+    if module_result.is_err() {
+        let _ = context.clear_module_namespace_cache_entry(&cache_key);
+    }
+
+    module_result
+}
+
+fn current_module_hint(context: &RuntimeContext) -> String {
+    let Some(current_file) = context.current_file() else {
+        return "<entrypoint>".to_string();
+    };
+
+    let current_path = Path::new(current_file);
+    if let Ok(relative) = current_path.strip_prefix(context.project_root()) {
+        let mut relative = relative.to_string_lossy().replace('\\', "/");
+        if relative.ends_with(".dol") {
+            relative.truncate(relative.len() - 4);
+        }
+        return relative.replace('/', ".");
+    }
+
+    current_file.to_string()
 }
 
 fn register_module_namespace(
@@ -274,7 +348,7 @@ fn register_module_namespace(
         )));
     }
 
-    state.env.insert(namespace_name.to_string(), module_value);
+    state.insert_env(namespace_name.to_string(), module_value);
     Ok(())
 }
 

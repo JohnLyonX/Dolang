@@ -15,14 +15,7 @@ pub(super) fn handle_print_stmt(
     w: &mut dyn Write,
 ) -> Flow {
     let use_stderr = stmt.target == crate::ast::PrintTarget::Stderr;
-    match check_eval_result(eval_expr(
-        &stmt.value,
-        &state.env,
-        &mut state.fns,
-        context,
-        w,
-        false,
-    )) {
+    match check_eval_result(eval_expr(&stmt.value, state, context, w, false)) {
         Ok(val) => {
             if use_stderr {
                 eprintln!("{}", val);
@@ -46,7 +39,7 @@ pub(super) fn handle_read_stmt(
     match stmt.mode {
         crate::ast::ReadMode::Env => {
             let key_val = if let Some(ref prompt_expr) = stmt.prompt {
-                match eval_expr(prompt_expr, &state.env, &mut state.fns, context, w, false) {
+                match eval_expr(prompt_expr, state, context, w, false) {
                     Ok(val) => val,
                     Err(err) => return Flow::Err(err),
                 }
@@ -70,7 +63,7 @@ pub(super) fn handle_read_stmt(
         }
         crate::ast::ReadMode::Line => {
             if let Some(ref prompt_expr) = stmt.prompt {
-                match eval_expr(prompt_expr, &state.env, &mut state.fns, context, w, false) {
+                match eval_expr(prompt_expr, state, context, w, false) {
                     Ok(prompt_val) => {
                         if write!(w, "{}", prompt_val).is_err() || w.flush().is_err() {
                             return Flow::Err(Error::InvalidStatement(None));
@@ -100,14 +93,7 @@ pub(super) fn handle_file_write_stmt(
     context: &mut RuntimeContext,
     w: &mut dyn Write,
 ) -> Flow {
-    let path_val = match check_eval_result(eval_expr(
-        &stmt.path,
-        &state.env,
-        &mut state.fns,
-        context,
-        w,
-        false,
-    )) {
+    let path_val = match check_eval_result(eval_expr(&stmt.path, state, context, w, false)) {
         Ok(val) => val,
         Err(err) => return Flow::Err(err),
     };
@@ -118,14 +104,7 @@ pub(super) fn handle_file_write_stmt(
     };
 
     let mode_str = if let Some(mode_expr) = &stmt.mode {
-        match check_eval_result(eval_expr(
-            mode_expr,
-            &state.env,
-            &mut state.fns,
-            context,
-            w,
-            false,
-        )) {
+        match check_eval_result(eval_expr(mode_expr, state, context, w, false)) {
             Ok(val) => Some(val.to_string()),
             Err(_) => None,
         }
@@ -142,17 +121,11 @@ pub(super) fn handle_file_write_stmt(
         }
         Some("W") | Some("w") | Some("A") | Some("a") | None => {
             if let Some(content_expr) = &stmt.content {
-                let content_val = match check_eval_result(eval_expr(
-                    content_expr,
-                    &state.env,
-                    &mut state.fns,
-                    context,
-                    w,
-                    false,
-                )) {
-                    Ok(val) => val,
-                    Err(err) => return Flow::Err(err),
-                };
+                let content_val =
+                    match check_eval_result(eval_expr(content_expr, state, context, w, false)) {
+                        Ok(val) => val,
+                        Err(err) => return Flow::Err(err),
+                    };
 
                 let content_str = match content_val {
                     DolangValue::Str(s) => s,
@@ -205,14 +178,7 @@ pub(super) fn handle_file_read_stmt(
     context: &mut RuntimeContext,
     w: &mut dyn Write,
 ) -> Flow {
-    let path_val = match check_eval_result(eval_expr(
-        &stmt.path,
-        &state.env,
-        &mut state.fns,
-        context,
-        w,
-        false,
-    )) {
+    let path_val = match check_eval_result(eval_expr(&stmt.path, state, context, w, false)) {
         Ok(val) => val,
         Err(err) => return Flow::Err(err),
     };
@@ -248,15 +214,7 @@ pub(super) fn handle_file_read_stmt(
     }
 
     let mode_val = if let Some(mode_expr) = &stmt.mode {
-        check_eval_result(eval_expr(
-            mode_expr,
-            &state.env,
-            &mut state.fns,
-            context,
-            w,
-            false,
-        ))
-        .ok()
+        check_eval_result(eval_expr(mode_expr, state, context, w, false)).ok()
     } else {
         None
     };
@@ -276,6 +234,6 @@ pub(super) fn handle_file_read_stmt(
         Err(err) => return Flow::Err(err),
     };
 
-    state.env.insert("__FILE_READ_RESULT__".to_string(), result);
+    state.insert_env("__FILE_READ_RESULT__".to_string(), result);
     Flow::Normal
 }

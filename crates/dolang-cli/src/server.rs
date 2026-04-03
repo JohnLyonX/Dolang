@@ -43,8 +43,7 @@ pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
         }
     }
 
-    let routes = context.routes().to_vec();
-    if routes.is_empty() {
+    if context.routes().is_empty() {
         println!("No HTTP routes registered.");
         return;
     }
@@ -62,11 +61,10 @@ pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
         context.print_routes();
         println!();
     } else {
-        for route in &routes {
+        for route in context.routes() {
             println!("  {} {} -> {}", route.method, route.path, route.name);
         }
-        let static_routes = context.static_routes().to_vec();
-        for sr in &static_routes {
+        for sr in context.static_routes() {
             println!("  STATIC {} -> {}", sr.url_prefix, sr.module_path);
         }
     }
@@ -75,10 +73,10 @@ pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
 
     // Hand off all routes to the backend
     let mut backend = AxumBackend::new();
-    for route in routes {
+    for route in context.routes().iter().cloned() {
         backend.register_route(route);
     }
-    for sr in context.static_routes().to_vec() {
+    for sr in context.static_routes().iter().cloned() {
         backend.register_static(sr);
     }
 

@@ -7,9 +7,8 @@ mod operators;
 use crate::ast::Expr;
 use crate::diagnostics::{Diagnostic, codes};
 use crate::error::Error;
-use crate::runtime::RuntimeContext;
+use crate::runtime::{ProgramState, RuntimeContext};
 
-use super::env::{Env, FnEnv};
 use super::value::DolangValue;
 
 pub fn format_number(n: f64) -> String {
@@ -92,8 +91,7 @@ fn undefined_variable_error(expr: &Expr, name: &str) -> Error {
 
 pub fn eval_expr(
     e: &Expr,
-    env: &Env,
-    fns: &mut FnEnv,
+    state: &mut ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
     as_identifier: bool,
@@ -104,34 +102,24 @@ pub fn eval_expr(
         Expr::Bool(b) => literals::eval_bool(b),
         Expr::Null(_) => Ok(DolangValue::Null),
         Expr::StringLiteral(s) => literals::eval_string_literal(s),
-        Expr::FString(fs) => literals::eval_fstring(fs, env, fns, context, w),
-        Expr::ListLiteral(list) => literals::eval_list_literal(list, env, fns, context, w),
-        Expr::MapLiteral(map) => literals::eval_map_literal(map, env, fns, context, w),
-        Expr::VarLookup(v) => literals::eval_var_lookup(e, v, env, as_identifier),
-        Expr::FnLiteral(lit) => literals::eval_fn_literal(lit, fns),
-        Expr::IndexAccess(idx) => operators::eval_index_access(e, idx, env, fns, context, w),
-        Expr::Unary(u) => operators::eval_unary(e, u, env, fns, context, w, as_identifier),
-        Expr::Binary(b) => operators::eval_binary(e, b, env, fns, context, w, as_identifier),
-        Expr::MethodCall(call) => calls::eval_method_call(e, call, env, fns, context, w),
-        Expr::FnCall(call) => calls::eval_fn_call(e, call, env, fns, context, w),
-        Expr::Read(read_expr) => io::eval_read_expr(e, read_expr, env, fns, context, w),
-        Expr::FileRead(file_read) => io::eval_file_read_expr(e, file_read, env, fns, context, w),
-        Expr::FileWrite(file_write) => {
-            io::eval_file_write_expr(e, file_write, env, fns, context, w)
-        }
+        Expr::FString(fs) => literals::eval_fstring(fs, state, context, w),
+        Expr::ListLiteral(list) => literals::eval_list_literal(list, state, context, w),
+        Expr::MapLiteral(map) => literals::eval_map_literal(map, state, context, w),
+        Expr::VarLookup(v) => literals::eval_var_lookup(e, v, state, as_identifier),
+        Expr::FnLiteral(lit) => literals::eval_fn_literal(lit, state),
+        Expr::IndexAccess(idx) => operators::eval_index_access(e, idx, state, context, w),
+        Expr::Unary(u) => operators::eval_unary(e, u, state, context, w, as_identifier),
+        Expr::Binary(b) => operators::eval_binary(e, b, state, context, w, as_identifier),
+        Expr::MethodCall(call) => calls::eval_method_call(e, call, state, context, w),
+        Expr::FnCall(call) => calls::eval_fn_call(e, call, state, context, w),
+        Expr::Read(read_expr) => io::eval_read_expr(e, read_expr, state, context, w),
+        Expr::FileRead(file_read) => io::eval_file_read_expr(e, file_read, state, context, w),
+        Expr::FileWrite(file_write) => io::eval_file_write_expr(e, file_write, state, context, w),
         Expr::ConfigRead(config) => io::eval_config_read_expr(e, config, context),
-        Expr::HdrRead(hdr) => io::eval_hdr_read_expr(hdr, env),
-        Expr::JsonConstructor(json) => {
-            constructors::eval_json_constructor(json, env, fns, context, w)
-        }
-        Expr::HtmlConstructor(html) => {
-            constructors::eval_html_constructor(html, env, fns, context, w)
-        }
-        Expr::ResConstructor(res) => {
-            constructors::eval_res_constructor(e, res, env, fns, context, w)
-        }
-        Expr::TypeInstance(ctor) => {
-            constructors::eval_struct_constructor(ctor, env, fns, context, w)
-        }
+        Expr::HdrRead(hdr) => io::eval_hdr_read_expr(hdr, state),
+        Expr::JsonConstructor(json) => constructors::eval_json_constructor(json, state, context, w),
+        Expr::HtmlConstructor(html) => constructors::eval_html_constructor(html, state, context, w),
+        Expr::ResConstructor(res) => constructors::eval_res_constructor(e, res, state, context, w),
+        Expr::TypeInstance(ctor) => constructors::eval_struct_constructor(ctor, state, context, w),
     }
 }

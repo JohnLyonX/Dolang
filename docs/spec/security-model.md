@@ -24,6 +24,7 @@ Phase 11 的目标不是立即实现沙箱，而是先把当前真实行为文�
 - 标准输入读取
 - HTTP 服务暴露
 - HTTP 出站请求
+- 数据库连接与 SQL 查询
 - 模块文件加载
 
 下面分别记录当前边界。
@@ -103,6 +104,16 @@ Dolang 当前支持：
 - 暴露静态文件目录
 - 通过 `@SET_HDR(...)` 配置 HTTP 响应头
 - 通过 `@CORS(...)` 配置全局、HTTP 块级或路由级 CORS 响应策略
+- 通过 `package.toml` 的 `[server.auth]` 配置启用请求级认证与授权
+
+当前 `serve` 认证入口支持：
+
+- Cookie Session
+- `Authorization: Bearer <token>` JWT
+- 基于路由规则的最小授权检查（认证态、角色）
+
+运行时会在每个请求开始时解析认证态，并把结果注入请求级 auth context。
+`std.auth.session`、`std.auth.jwt`、`std.auth.guard` 都从这个请求级上下文读取当前 principal / session / claims。
 
 HTTP handler 默认可访问当前运行时中已经开放的能力，包括：
 
@@ -113,11 +124,22 @@ HTTP handler 默认可访问当前运行时中已经开放的能力，包括：
 
 ### 当前边界
 
-- 没有请求级权限隔离
+- 没有请求级能力沙箱
 - 没有 route sandbox
 - 没有静态资源目录白名单之外的额外约束机制
 - 没有把 handler 与普通脚本能力区分开
 - `@SET_HDR(...)` 与 `@CORS(...)` 当前只影响 HTTP 响应元数据，不提供新的权限控制或隔离能力
+- 当前 auth 只提供统一的认证态注入与最小路由授权，不等于 capability-based permission system
+- 当前 route auth 规则已接通：
+  - `require = "authenticated"`
+  - `roles_any = [...]`
+  - `roles_all = [...]`
+  - `permissions_any = [...]`
+  - `permissions_all = [...]`
+  - `claims_all = { ... }`
+
+- 路由授权规则支持更具体规则覆盖更宽泛规则，例如前缀规则 `/admin/*` 可被更具体的 `/admin/health` 覆盖
+- Session store 当前可落到内存、SQLite、Postgres，但这些后端都运行在宿主进程已有文件系统 / 网络权限之上
 
 ### 风险说明
 
@@ -148,6 +170,33 @@ Dolang 当前通过 `std.http` 原生模块支持同步 HTTP 客户端调用，�
 ### 风险说明
 
 出站 HTTP 请求会把脚本能力从“读写本地资源”扩展到“主动访问外部系统”。这意味着脚本可以把本地文件、环境变量或计算结果发送到远端服务，因此属于明确的副作用入口。
+
+## 数据库连接与 SQL 查询
+
+### 当前行为
+
+Dolang 当前通过原生模块提供数据库访问能力，包括：
+
+- `std.sqlite`
+- `std.postgres`
+- `Connection.query(...)`
+- `Connection.execute(...)`
+- `Connection.close()`
+
+这些能力底层走 runtime intrinsic 层，再由 `std.*` 模块暴露给脚本。`std.sqlite` 可访问本地 SQLite 文件或 `:memory:` 数据库；`std.postgres` 会直接使用宿主进程可达的 PostgreSQL 网络连接能力。
+
+### 当前边界
+
+- 数据库路径、连接串与 SQL 语句都由脚本提供
+- `std.sqlite` 的访问范围默认受宿主进程文件系统权限约束
+- `std.postgres` 的访问范围默认受宿主进程网络可达范围约束
+- 没有按驱动、主机、端口、库名或文件路径做白名单限制
+- 没有按模块、运行模式或 HTTP handler 区分数据库权限
+- 连接、查询、绑定和关闭错误会作为普通运行时错误返回，可由 `$try/$catch` 捕获
+
+### 风险说明
+
+数据库能力同时把脚本扩展到“读写本地数据库文件”和“访问外部数据库服务”。这意味着脚本不仅可以读取敏感业务数据，也可以修改持久化状态，因此属于明确的副作用入口。
 
 ## 模块加载与文件系统边界
 
@@ -184,6 +233,7 @@ Dolang 当前支持：
 - 标准输入读取
 - HTTP 服务监听与路由暴露
 - HTTP 出站请求
+- 数据库连接与查询
 - 模块文件加载
 
 ## 未来可能受限的能力
@@ -194,6 +244,7 @@ Dolang 当前支持：
 - 环境变量读取范围
 - HTTP handler 能力范围
 - HTTP 出站请求目标范围
+- 数据库连接目标范围
 - 模块加载可访问路径
 - 静态文件暴露范围
 

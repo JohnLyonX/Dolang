@@ -8,6 +8,7 @@ pub mod json;
 pub mod list;
 pub mod map;
 pub mod number;
+pub mod sql_connection;
 pub mod str_methods;
 
 use crate::error::Error;
@@ -62,10 +63,7 @@ pub fn dispatch(
             "type '{}' exposes fields only; '{}' is not a built-in method",
             type_name, method
         ))),
-        DolangValue::Connection { .. } => Err(Error::Interpreter(format!(
-            "Connection has no method '{}'",
-            method
-        ))),
+        DolangValue::Connection { .. } => sql_connection::call(receiver, method, args, context),
         DolangValue::Null => Err(Error::Interpreter(format!(
             "cannot call method '{}' on null",
             method
@@ -115,6 +113,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
+    use crate::runtime::intrinsics::ids;
     use crate::runtime::{RuntimeContext, RuntimeMode};
 
     #[test]
@@ -137,5 +136,55 @@ mod tests {
 
         assert_eq!(upper, DolangValue::Str("DOLANG".to_string()));
         assert_eq!(len, DolangValue::Int(2));
+    }
+
+    #[test]
+    fn dispatches_connection_methods() {
+        let context = RuntimeContext::new(RuntimeMode::Test, PathBuf::from("."));
+        let conn = context
+            .call_intrinsic(
+                ids::SQL_SQLITE_CONNECT,
+                &[DolangValue::Str(":memory:".to_string())],
+            )
+            .expect("sqlite connection should open");
+
+        dispatch(
+            &conn,
+            "execute",
+            &[
+                DolangValue::Str("CREATE TABLE users (id INTEGER, name TEXT)".to_string()),
+                DolangValue::List(vec![]),
+            ],
+            &context,
+        )
+        .expect("table creation should work");
+
+        dispatch(
+            &conn,
+            "execute",
+            &[
+                DolangValue::Str("INSERT INTO users (id, name) VALUES (?, ?)".to_string()),
+                DolangValue::List(vec![
+                    DolangValue::Int(1),
+                    DolangValue::Str("Ada".to_string()),
+                ]),
+            ],
+            &context,
+        )
+        .expect("insert should work");
+
+        let rows = dispatch(
+            &conn,
+            "query",
+            &[
+                DolangValue::Str("SELECT id, name FROM users WHERE id = ?".to_string()),
+                DolangValue::List(vec![DolangValue::Int(1)]),
+            ],
+            &context,
+        )
+        .expect("query should work");
+
+        assert_eq!(format!("{rows}"), "[{id: 1, name: Ada}]");
+        dispatch(&conn, "close", &[], &context).expect("close should work");
     }
 }

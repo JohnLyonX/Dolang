@@ -20,6 +20,90 @@ pub struct ProjectConfig {
 pub struct ServerConfig {
     pub port: u16,
     pub host: String,
+    pub auth: AuthConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AuthConfig {
+    pub enabled: bool,
+    pub default_scheme: String,
+    pub identity_sources: Vec<String>,
+    pub session: SessionConfig,
+    pub jwt: JwtConfig,
+    pub authorization: AuthorizationConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SessionConfig {
+    pub enabled: bool,
+    pub cookie_name: String,
+    pub cookie_secure: bool,
+    pub cookie_http_only: bool,
+    pub cookie_same_site: String,
+    pub cookie_path: String,
+    pub ttl_seconds: i64,
+    pub idle_timeout_seconds: i64,
+    pub rotation: String,
+    pub store: SessionStoreConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SessionStoreConfig {
+    pub driver: String,
+    pub sqlite: SqliteSessionStoreConfig,
+    pub postgres: PostgresSessionStoreConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SqliteSessionStoreConfig {
+    pub path: String,
+    pub table: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PostgresSessionStoreConfig {
+    pub url: String,
+    pub url_env: String,
+    pub table: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct JwtConfig {
+    pub enabled: bool,
+    pub issuer: String,
+    pub audience: String,
+    pub algorithm: String,
+    pub secret: String,
+    pub secret_env: String,
+    pub access_ttl_seconds: i64,
+    pub refresh_ttl_seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AuthorizationConfig {
+    pub enabled: bool,
+    pub default: String,
+    pub rules: Vec<AuthorizationRuleConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AuthorizationRuleConfig {
+    pub method: String,
+    pub path: String,
+    pub require: String,
+    pub roles_any: Vec<String>,
+    pub roles_all: Vec<String>,
+    pub permissions_any: Vec<String>,
+    pub permissions_all: Vec<String>,
+    pub claims_all: HashMap<String, String>,
 }
 
 impl Default for ProjectConfig {
@@ -40,6 +124,106 @@ impl Default for ServerConfig {
         Self {
             port: 8080,
             host: "0.0.0.0".to_string(),
+            auth: AuthConfig::default(),
+        }
+    }
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            default_scheme: "session".to_string(),
+            identity_sources: vec!["cookie".to_string()],
+            session: SessionConfig::default(),
+            jwt: JwtConfig::default(),
+            authorization: AuthorizationConfig::default(),
+        }
+    }
+}
+
+impl Default for SessionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            cookie_name: "dolang_session".to_string(),
+            cookie_secure: false,
+            cookie_http_only: true,
+            cookie_same_site: "lax".to_string(),
+            cookie_path: "/".to_string(),
+            ttl_seconds: 86_400,
+            idle_timeout_seconds: 7_200,
+            rotation: "on_login".to_string(),
+            store: SessionStoreConfig::default(),
+        }
+    }
+}
+
+impl Default for SessionStoreConfig {
+    fn default() -> Self {
+        Self {
+            driver: "memory".to_string(),
+            sqlite: SqliteSessionStoreConfig::default(),
+            postgres: PostgresSessionStoreConfig::default(),
+        }
+    }
+}
+
+impl Default for SqliteSessionStoreConfig {
+    fn default() -> Self {
+        Self {
+            path: ".dolang/auth.sqlite3".to_string(),
+            table: "auth_sessions".to_string(),
+        }
+    }
+}
+
+impl Default for PostgresSessionStoreConfig {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            url_env: String::new(),
+            table: "auth_sessions".to_string(),
+        }
+    }
+}
+
+impl Default for JwtConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            issuer: String::new(),
+            audience: String::new(),
+            algorithm: "HS256".to_string(),
+            secret: String::new(),
+            secret_env: String::new(),
+            access_ttl_seconds: 3_600,
+            refresh_ttl_seconds: 2_592_000,
+        }
+    }
+}
+
+impl Default for AuthorizationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            default: "public".to_string(),
+            rules: Vec::new(),
+        }
+    }
+}
+
+impl Default for AuthorizationRuleConfig {
+    fn default() -> Self {
+        Self {
+            method: String::new(),
+            path: String::new(),
+            require: String::new(),
+            roles_any: Vec::new(),
+            roles_all: Vec::new(),
+            permissions_any: Vec::new(),
+            permissions_all: Vec::new(),
+            claims_all: HashMap::new(),
         }
     }
 }
@@ -65,5 +249,79 @@ impl ProjectConfig {
 
     pub fn get(&self, key: &str) -> Option<&str> {
         self.env.get(key).map(|s| s.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ProjectConfig;
+
+    #[test]
+    fn parse_project_config_with_auth_settings() {
+        let config = ProjectConfig::parse_toml(
+            r#"
+name = "auth-demo"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie", "bearer"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+ttl_seconds = 86400
+idle_timeout_seconds = 7200
+
+[server.auth.session.store]
+driver = "postgres"
+
+[server.auth.session.store.postgres]
+url_env = "SESSION_DATABASE_URL"
+table = "auth_sessions"
+
+[server.auth.jwt]
+enabled = true
+issuer = "demo"
+audience = "api"
+algorithm = "HS256"
+secret_env = "JWT_SECRET"
+access_ttl_seconds = 3600
+refresh_ttl_seconds = 86400
+"#,
+        )
+        .expect("config should parse");
+
+        assert!(config.server.auth.enabled);
+        assert_eq!(config.server.auth.default_scheme, "session");
+        assert_eq!(
+            config.server.auth.identity_sources,
+            vec!["cookie", "bearer"]
+        );
+        assert_eq!(config.server.auth.session.store.driver, "postgres");
+        assert_eq!(config.server.auth.jwt.secret_env, "JWT_SECRET");
+    }
+
+    #[test]
+    fn parse_project_config_defaults_auth_to_disabled() {
+        let config = ProjectConfig::parse_toml(
+            r#"
+name = "plain-http"
+version = "0.1.0"
+entry = "main.dol"
+"#,
+        )
+        .expect("config should parse");
+
+        assert!(!config.server.auth.enabled);
+        assert_eq!(config.server.auth.default_scheme, "session");
+        assert_eq!(config.server.auth.identity_sources, vec!["cookie"]);
+        assert_eq!(config.server.auth.session.store.driver, "memory");
     }
 }

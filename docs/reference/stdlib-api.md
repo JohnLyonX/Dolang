@@ -188,6 +188,106 @@ user["email"] = "tom@example.com";
 | `env.set(key, value)` | `Null` | 设置环境变量 | Preview |
 | `env.remove(key)` | `Null` | 删除环境变量 | Preview |
 
+### `std.auth.session`
+
+| 函数 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `session.current()` | `Map\|Null` | 返回当前请求 session | Preview |
+| `session.exists()` | `Bool` | 当前请求是否已有 session | Preview |
+| `session.id()` | `String\|Null` | 返回当前 session id | Preview |
+| `session.create(payload)` | `Map` | 创建 session，写入 store，并在响应阶段附加 `Set-Cookie` | Preview |
+| `session.get(key)` | `Any\|Null` | 读取当前 session claims 中某个键 | Preview |
+| `session.set(key, value)` | `Null` | 更新当前 session claims 并持久化 | Preview |
+| `session.delete(key)` | `Null` | 删除当前 session claims 中某个键并持久化 | Preview |
+| `session.rotate()` | `Map` | 轮换 session id，更新 store 并附加新的 `Set-Cookie` | Preview |
+| `session.destroy()` | `Null` | 删除当前 session，并在响应阶段清除 cookie | Preview |
+
+`session.create(payload)` 当前要求 `payload` 至少包含：
+
+- `subject: String`
+
+可选字段：
+
+- `roles: List<String>`
+- `permissions: List<String>`
+- `claims: Map`
+
+返回结构包含：
+
+- `id`
+- `subject`
+- `scheme`
+- `roles`
+- `permissions`
+- `claims`
+- `session_id`
+- `expires_at`
+- `idle_timeout_at`
+
+### `std.auth.jwt`
+
+| 函数 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `jwt.sign(payload)` | `String` | 使用 `[server.auth.jwt]` 默认配置签发 token | Preview |
+| `jwt.verify(token)` | `Map` | 校验 token 并返回 claims | Preview |
+| `jwt.sign_refresh(payload)` | `String` | 使用 `[server.auth.jwt]` 的 `refresh_ttl_seconds` 签发 refresh token | Preview |
+| `jwt.verify_refresh(token)` | `Map` | 校验 refresh token 并返回 claims | Preview |
+| `jwt.refresh_pair(refresh_token)` | `Map` | 消费 refresh token 并签发新的 access/refresh pair；旧 refresh token 不能重复使用 | Preview |
+| `jwt.revoke_refresh(refresh_token)` | `Null` | 主动失效一个 refresh token，后续再使用会被拒绝 | Preview |
+| `jwt.current()` | `Map\|Null` | 返回当前请求 bearer token 的 claims | Preview |
+| `jwt.bearer()` | `String\|Null` | 返回当前请求 bearer token 原文 | Preview |
+
+`jwt.sign(payload)` 当前要求 `payload` 至少包含：
+
+- `sub: String`
+
+可选字段：
+
+- `roles: List<String>`
+- `permissions: List<String>`
+- 其他字段会作为额外 claims 进入 token
+
+返回 claims 当前还会包含：
+
+- `token_use`
+
+`[server.auth.jwt].algorithm` 当前支持 `HS256`、`HS384`、`HS512`。
+
+### `std.auth.password`
+
+| 函数 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `password.hash(password)` | `String` | 生成密码哈希 | Preview |
+| `password.verify(password, hash)` | `Bool` | 校验密码与哈希是否匹配 | Preview |
+
+### `std.auth.guard`
+
+| 函数 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `guard.principal()` | `Map\|Null` | 返回当前请求 principal | Preview |
+| `guard.authenticated()` | `Bool` | 当前请求是否已认证 | Preview |
+| `guard.has_role(role)` | `Bool` | principal 是否拥有某个角色 | Preview |
+| `guard.has_any_role(roles)` | `Bool` | principal 是否命中任一角色 | Preview |
+| `guard.has_all_roles(roles)` | `Bool` | principal 是否同时拥有全部角色 | Preview |
+| `guard.has_permission(permission)` | `Bool` | principal 是否拥有某个权限 | Preview |
+| `guard.has_any_permission(permissions)` | `Bool` | principal 是否命中任一权限 | Preview |
+| `guard.has_all_permissions(permissions)` | `Bool` | principal 是否同时拥有全部权限 | Preview |
+| `guard.require_role(role)` | `Null` | 角色缺失时报错 | Preview |
+| `guard.require_any_role(roles)` | `Null` | 任一角色都不满足时报错 | Preview |
+| `guard.require_all_roles(roles)` | `Null` | 任一必需角色缺失时报错 | Preview |
+| `guard.require_permission(permission)` | `Null` | 权限缺失时报错 | Preview |
+| `guard.require_any_permission(permissions)` | `Null` | 任一权限都不满足时报错 | Preview |
+| `guard.require_all_permissions(permissions)` | `Null` | 任一必需权限缺失时报错 | Preview |
+
+`guard.principal()` 当前返回结构包含：
+
+- `subject`
+- `scheme`
+- `roles`
+- `permissions`
+- `claims`
+- `session_id`
+
 ### `std.path`
 
 | 函数 | 返回值 | 说明 | 稳定性 |
@@ -254,6 +354,54 @@ user["email"] = "tom@example.com";
 | `check.type_of(val)` | `String` | 获取值的类型名 | Stable |
 | `check.is_null(val)` | `Bool` | 是否为 `null` | Stable |
 | `check.identity(val)` | `Any` | 恒等函数，原样返回 | Preview |
+
+### `std.sqlite`
+
+更完整的 SQL 使用说明、HTTP 中使用、占位符约定与当前边界，见 [sql-database.md](sql-database.md)。
+如果你只想先跑通一个数据库例子，先看 [../guide/appendix/sql-quickstart.md](../guide/appendix/sql-quickstart.md)。
+
+| 函数 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `sqlite.connect(path)` | `Connection` | 打开 SQLite 数据库并返回连接句柄 | Preview |
+
+`Connection` 在 SQLite 路径下支持：
+
+| 方法 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `conn.query(sql, params)` | `List<Map>` | 执行查询并返回结果行列表 | Preview |
+| `conn.execute(sql, params)` | `Int` | 执行写操作并返回影响行数 | Preview |
+| `conn.close()` | `Null` | 关闭连接句柄 | Preview |
+
+说明：
+
+- SQLite 占位符沿用原生 `?`
+- 当前仅支持 `Int` / `Float` / `String` / `Bool` / `Null` 作为绑定参数
+- 结果列中的 `BLOB` 当前会报错，不会自动转换
+
+### `std.postgres`
+
+更完整的 SQL 使用说明、HTTP 中使用、占位符约定与当前边界，见 [sql-database.md](sql-database.md)。
+如果你只想先跑通一个数据库例子，先看 [../guide/appendix/sql-quickstart.md](../guide/appendix/sql-quickstart.md)。
+
+| 函数 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `postgres.connect(conninfo)` | `Connection` | 打开 PostgreSQL 连接并返回连接句柄 | Preview |
+
+`Connection` 在 PostgreSQL 路径下支持：
+
+| 方法 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `conn.query(sql, params)` | `List<Map>` | 执行查询并返回结果行列表 | Preview |
+| `conn.execute(sql, params)` | `Int` | 执行写操作并返回影响行数 | Preview |
+| `conn.close()` | `Null` | 关闭连接句柄 | Preview |
+
+说明：
+
+- PostgreSQL 占位符沿用原生 `$1`, `$2`, ...`
+- `conninfo` 接受 PostgreSQL 连接配置字符串，不只限 URL；例如 `postgresql://...` 或 `host=... dbname=... user=...`
+- 当前仅支持常见标量参数类型；`Null` 绑定当前会显式报错，要求调用方先提供明确类型
+- 不支持的 PostgreSQL 列类型当前会显式报错，不做隐式字符串化
+- 如果遇到 `numeric` / `int4` 等兼容边界，优先在 SQL 中显式 `cast`
 
 ### `std.time`
 

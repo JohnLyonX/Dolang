@@ -37,6 +37,11 @@ runtime intrinsic 层用于承接所有直接触达宿主 OS / 进程环境的�
 - `FsIsDir`
 - `EnvGet`
 - `ConfigGet`
+- `SqlSqliteConnect`
+- `SqlPostgresConnect`
+- `SqlQuery`
+- `SqlExecute`
+- `SqlClose`
 
 ## 当前调用原则
 
@@ -61,6 +66,13 @@ language surface / builtin
 - `std.fs.read_text()` -> `FsReadText`
 - `std.env.get()` -> `EnvGet`
 - `std.config.get()` -> `ConfigGet`
+- `std.sqlite.connect()` -> `SqlSqliteConnect`
+- `std.postgres.connect()` -> `SqlPostgresConnect`
+- `Connection.query()` / `Connection.execute()` / `Connection.close()` -> `SqlQuery` / `SqlExecute` / `SqlClose`
+
+数据库连接能力现在也遵循同一规则：先进入 runtime intrinsic 层，再由 `std.sqlite` / `std.postgres` 暴露为脚本 API。
+
+如果你要单独看 SQL 这条链路的对象模型、`serve` 模式修复和当前边界，请继续看 [sql-runtime.md](sql-runtime.md)。
 
 ## 变更规则
 

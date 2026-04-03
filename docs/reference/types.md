@@ -552,7 +552,7 @@ $>> {"a":1}.type();    // 输出: Map
 
 ## 自定义类型 `$Type`
 
-使用 `$Type` 定义数据形状，描述 JSON 结构。类型只是**形状描述**，不创建新的运行时类型，底层仍然是 JSON Map。
+使用 `$Type` 定义用户类型与结构形状。当前主线里，这不再只是文档层描述；当函数或 HTTP handler 声明返回 `User` 或 `List<User>` 时，runtime 会校验实际值是否为对应的 `TypedInstance`。
 
 ```dolang
 $Type User {
@@ -573,6 +573,22 @@ $Type User {
 
 **无 getter / setter**，无私有字段，无方法。
 
+如果你只是要返回普通 JSON，对外仍然可以写 `-> JSON`。但如果声明返回用户类型，实际值应写成：
+
+```dolang
+$Type User {
+    id: Int
+    name: Str
+}
+
+$fn get_user() -> User {
+    $# User {
+        id: 1,
+        name: "Alice",
+    };
+}
+```
+
 ---
 
 ### 历史写法提示：`-> JSON<User>`
@@ -583,7 +599,7 @@ $Type User {
 
 - `-> JSON` 表示响应格式
 - `-> List<T>` 表示集合返回
-- `$Type` 只用于结构说明
+- `$Type` 用于结构说明，也参与当前主线的用户类型返回校验
 
 如果你在旧材料里看到 `JSON<User>`，应回到 [../guide/09-gradual-typing.md](../guide/09-gradual-typing.md) 采用当前口径。
 

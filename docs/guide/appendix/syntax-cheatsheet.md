@@ -92,7 +92,12 @@ $Type User {
 }
 
 $fn list_users() -> List<User> {
-    $# [{"id": 1, "name": "Alice"}];
+    $# [
+        User {
+            id: 1,
+            name: "Alice",
+        }
+    ];
 }
 ```
 

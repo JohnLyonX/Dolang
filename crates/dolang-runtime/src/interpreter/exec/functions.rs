@@ -7,17 +7,19 @@ use super::super::value::DolangValue;
 use super::{Flow, exec_block};
 
 pub(super) fn handle_fn_decl(stmt: &FnDeclStmt, state: &mut ProgramState) -> Flow {
-    if state.fns.contains_key(&stmt.name) {
+    if state.lookup_fn(&stmt.name).is_some() {
         return Flow::Err(Error::Interpreter(format!(
             "function '{}' is already defined",
             stmt.name
         )));
     }
+    let module_env = state.capture_env_snapshot();
     state.fns.insert(
         stmt.name.clone(),
         RuntimeFn {
             decl: stmt.clone(),
             source_file: None,
+            module_env,
         },
     );
     Flow::Normal
@@ -51,16 +53,15 @@ pub fn call_fn(
     }
 
     let mut local_state = ProgramState::new();
+    local_state.set_env_fallback(fn_def.module_env.clone());
 
     for (param, arg) in fn_decl.params.iter().zip(args.iter()) {
-        local_state.env.insert(param.clone(), arg.clone());
+        local_state.insert_env(param.clone(), arg.clone());
     }
 
     if let Some(var_param) = &fn_decl.variadic_param {
         let extra_args: Vec<DolangValue> = args[min_params..].to_vec();
-        local_state
-            .env
-            .insert(var_param.clone(), DolangValue::List(extra_args));
+        local_state.insert_env(var_param.clone(), DolangValue::List(extra_args));
     }
 
     local_state.fns = fns.clone();
@@ -92,7 +93,8 @@ pub fn call_fn(
 pub fn call_module_fn(
     fn_def: &RuntimeFn,
     args: &[DolangValue],
-    fns: &mut FnEnv,
+    caller_fns: &mut FnEnv,
+    module_fns: &FnEnv,
     module_env: &crate::interpreter::env::Env,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
@@ -119,26 +121,22 @@ pub fn call_module_fn(
 
     let mut local_state = ProgramState::new();
 
-    // 预注入模块环境（导入的模块代理、常量等）
-    local_state
-        .env
-        .extend(module_env.iter().map(|(k, v)| (k.clone(), v.clone())));
+    // 模块环境作为只读 fallback，本地绑定按需覆写。
+    local_state.set_env_fallback(std::sync::Arc::new(module_env.clone()));
 
     // 参数绑定（覆盖同名的模块环境变量）
     for (param, arg) in fn_decl.params.iter().zip(args.iter()) {
-        local_state.env.insert(param.clone(), arg.clone());
+        local_state.insert_env(param.clone(), arg.clone());
     }
     if let Some(var_param) = &fn_decl.variadic_param {
         let extra = args[min_params..].to_vec();
-        local_state
-            .env
-            .insert(var_param.clone(), DolangValue::List(extra));
+        local_state.insert_env(var_param.clone(), DolangValue::List(extra));
     }
 
-    local_state.fns = fns.clone();
+    local_state.fns = module_fns.clone();
+    local_state.set_fn_fallback(caller_fns.clone());
 
     let flow = exec_block(&fn_decl.body, &mut local_state, context, w);
-    *fns = local_state.fns.clone();
 
     match flow {
         Flow::Return(val) => {
@@ -212,6 +210,13 @@ fn validate_expected_type(
         "map" => validate_builtin_type(kind, name, "Map", ValueType::Map, value),
         "response" => validate_builtin_type(kind, name, "Response", ValueType::Response, value),
         "json" => {
+            if let DolangValue::Response {
+                body: Some(body), ..
+            } = value
+            {
+                return validate_expected_type(kind, name, "Json", body.as_ref(), context);
+            }
+
             let actual_type = get_value_type(value);
             if matches!(
                 actual_type,

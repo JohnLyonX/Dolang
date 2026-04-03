@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+
 pub mod builtins;
 pub mod env;
 pub mod eval;
@@ -5,9 +8,37 @@ pub mod exec;
 pub mod value;
 
 pub use crate::ast::CorsConfig;
+use crate::runtime::NativeFnMap;
 pub use env::{Env, FnEnv, parse_type_annotation, type_name};
 pub use exec::exec;
 pub use value::DolangValue;
+
+#[derive(Debug, Clone, Default)]
+pub struct RouteModuleState {
+    pub env: Env,
+    pub fns: FnEnv,
+}
+
+#[derive(Clone, Default)]
+pub struct ModuleNamespace {
+    pub exports: FnEnv,
+    pub fns: FnEnv,
+    pub native_exports: NativeFnMap,
+    pub module_env: Arc<Env>,
+    pub visible_user_types: Arc<HashSet<String>>,
+}
+
+impl std::fmt::Debug for ModuleNamespace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ModuleNamespace")
+            .field("exports", &self.exports.len())
+            .field("fns", &self.fns.len())
+            .field("native_exports", &self.native_exports.len())
+            .field("module_env", &self.module_env.len())
+            .field("visible_user_types", &self.visible_user_types.len())
+            .finish()
+    }
+}
 
 /// HTTP route entry for route registry
 #[derive(Debug, Clone)]
@@ -22,12 +53,20 @@ pub struct HttpRoute {
     pub parent_cors: Option<CorsConfig>,
     pub response_headers: Vec<(String, String)>,
     pub body: Vec<crate::ast::Stmt>,
-    /// Module-level variables (e.g. imported modules via $mod) captured
-    /// when this route's file was loaded. Seeded into handler state at
-    /// request time so that `hello.selectUser(...)` etc. resolve correctly.
-    pub module_env: Env,
-    /// Module-level functions ($fn) captured from the route's source file.
-    pub module_fns: FnEnv,
+    /// Shared module-level variables/functions captured when the route's
+    /// source file was loaded. Request execution clones out of this shared
+    /// snapshot to preserve isolation without duplicating the snapshot per route.
+    pub module_state: Arc<RouteModuleState>,
+}
+
+impl HttpRoute {
+    pub fn module_env(&self) -> &Env {
+        &self.module_state.env
+    }
+
+    pub fn module_fns(&self) -> &FnEnv {
+        &self.module_state.fns
+    }
 }
 
 /// Static file serving entry

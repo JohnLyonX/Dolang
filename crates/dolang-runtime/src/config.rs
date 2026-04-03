@@ -1,1 +1,5 @@
-pub use crate::module::manifest::{ProjectConfig, ServerConfig};
+pub use crate::module::manifest::{
+    AuthConfig, AuthorizationConfig, AuthorizationRuleConfig, JwtConfig,
+    PostgresSessionStoreConfig, ProjectConfig, ServerConfig, SessionConfig, SessionStoreConfig,
+    SqliteSessionStoreConfig,
+};

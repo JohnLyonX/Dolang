@@ -5,15 +5,18 @@ use dolang::diagnostics::{Diagnostic, codes};
 use dolang::error::Error;
 use dolang::interpreter::CorsConfig;
 use indexmap::IndexMap;
-use std::collections::HashSet;
 use serde_json::Value as JsonValue;
+use std::collections::HashSet;
 use std::net::TcpListener;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 
 use dolang::interpreter::{DolangValue, HttpRoute, StaticRoute};
-use dolang::runtime::{HandlerInput, RuntimeContext, backend::HttpBackend, execute_http_route};
+use dolang::runtime::{
+    HandlerInput, RuntimeContext, backend::HttpBackend, execute_http_route_in_context,
+};
 
 pub struct AxumBackend {
     routes: Vec<HttpRoute>,
@@ -145,6 +148,51 @@ fn append_response_headers(
     response
 }
 
+fn append_auth_response_headers(
+    mut response: axum::response::Response,
+    context: &RuntimeContext,
+) -> axum::response::Response {
+    if let Ok(Some(cookie)) =
+        context.with_request_auth_context(|auth| auth.pending_cookie().map(str::to_string))
+        && let Ok(value) = HeaderValue::from_str(&cookie)
+    {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, value);
+    }
+
+    if let Ok(true) = context.with_request_auth_context(|auth| auth.pending_clear_cookie()) {
+        if let Ok(value) =
+            HeaderValue::from_str(&context.runtime_auth_config().clear_cookie_header_value())
+        {
+            response
+                .headers_mut()
+                .append(axum::http::header::SET_COOKIE, value);
+        }
+    }
+
+    response
+}
+
+fn auth_error_body(status: u16, code: &str, message: &str) -> serde_json::Value {
+    serde_json::json!({
+        "status": status,
+        "code": code,
+        "message": message
+    })
+}
+
+fn auth_error_message(err_msg: &str, marker: &str, fallback: &str) -> String {
+    err_msg
+        .split_once(marker)
+        .map(|(_, rest)| rest)
+        .and_then(|rest| rest.strip_prefix(':').or(Some(rest)))
+        .map(str::trim)
+        .filter(|message| !message.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
 async fn serve_router(router: axum::Router, listener: tokio::net::TcpListener) {
     axum::serve(listener, router).await.unwrap();
 }
@@ -155,6 +203,8 @@ fn build_router(
     context: RuntimeContext,
 ) -> Result<axum::Router, Error> {
     validate_runtime_context(&context)?;
+    let global_cors = context.global_cors().cloned();
+    let shared_context = Arc::new(context);
     let mut router = axum::Router::new();
 
     for route in routes {
@@ -164,23 +214,21 @@ fn build_router(
         let (resolved_cors, cors_warnings) = resolve_cors(
             route.cors.as_ref(),
             route.parent_cors.as_ref(),
-            context.global_cors(),
+            global_cors.as_ref(),
         )?;
         emit_diagnostics(&cors_warnings);
         let cors_layer = build_cors_layer(resolved_cors.as_ref());
-        let (response_headers, header_warnings) = normalize_response_headers(
-            &route.response_headers,
-            &route.method,
-            &path_str,
-        );
+        let (response_headers, header_warnings) =
+            normalize_response_headers(&route.response_headers, &route.method, &path_str);
         emit_diagnostics(&header_warnings);
         let route_definition = route;
-        let handler_context = context.clone();
+        let handler_context = Arc::clone(&shared_context);
 
         let handler = move |req: axum::extract::Request| {
             let route_definition = route_definition.clone();
-            let handler_context = handler_context.clone();
+            let handler_context = Arc::clone(&handler_context);
             async move {
+                let mut request_context = handler_context.clone_for_request_execution();
                 let uri = req.uri();
                 let mut input = HandlerInput::new(uri.path());
                 input.query = uri.query().map(str::to_string);
@@ -205,9 +253,36 @@ fn build_router(
                 }
 
                 let (_should_continue, result, error) =
-                    execute_http_route(&route_definition, &input, &handler_context);
+                    execute_http_route_in_context(&route_definition, &input, &mut request_context);
 
                 if let Some(err_msg) = error {
+                    if err_msg == "__auth_unauthorized__"
+                        || err_msg.contains("__auth_unauthorized__")
+                    {
+                        let message = auth_error_message(
+                            &err_msg,
+                            "__auth_unauthorized__",
+                            "authentication required",
+                        );
+                        return (
+                            axum::http::StatusCode::UNAUTHORIZED,
+                            axum::response::Json(auth_error_body(
+                                401,
+                                "auth_unauthorized",
+                                &message,
+                            )),
+                        )
+                            .into_response();
+                    }
+                    if err_msg == "__auth_forbidden__" || err_msg.contains("__auth_forbidden__") {
+                        let message =
+                            auth_error_message(&err_msg, "__auth_forbidden__", "forbidden");
+                        return (
+                            axum::http::StatusCode::FORBIDDEN,
+                            axum::response::Json(auth_error_body(403, "auth_forbidden", &message)),
+                        )
+                            .into_response();
+                    }
                     if err_msg == "exit" {
                         return (
                             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -223,9 +298,19 @@ fn build_router(
                         .into_response();
                 }
 
+                if let Err(err) = request_context.commit_pending_auth_side_effects() {
+                    eprintln!("[ERROR] {err}");
+                    return (
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        axum::response::Json(serde_json::json!({"error": err.to_string()})),
+                    )
+                        .into_response();
+                }
+
                 let return_type = handler_return_type.as_deref().unwrap_or("JSON");
                 let response = build_http_response(result, return_type);
-                append_response_headers(response, &response_headers)
+                let response = append_response_headers(response, &response_headers);
+                append_auth_response_headers(response, &request_context)
             }
         };
 
@@ -432,8 +517,10 @@ fn resolve_cors(
             return Ok((Some(normalized), warnings));
         }
 
-        if let Some((fallback_name, _)) =
-            levels.iter().skip(index + 1).find(|(_, candidate)| candidate.is_some())
+        if let Some((fallback_name, _)) = levels
+            .iter()
+            .skip(index + 1)
+            .find(|(_, candidate)| candidate.is_some())
         {
             warnings.push(
                 Diagnostic::warning(
@@ -571,7 +658,10 @@ mod tests {
             "/health",
         );
 
-        assert_eq!(headers, vec![("X-Valid".to_string(), "visible".to_string())]);
+        assert_eq!(
+            headers,
+            vec![("X-Valid".to_string(), "visible".to_string())]
+        );
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].code, codes::CONFIG_HDR_INVALID);
         assert_eq!(warnings[0].severity, Severity::Warning);
@@ -604,7 +694,11 @@ mod tests {
             resolved.expect("resolved").origins,
             vec!["https://parent.example.com".to_string()]
         );
-        assert!(warnings.iter().any(|warning| warning.code == codes::CONFIG_CORS_INVALID));
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.code == codes::CONFIG_CORS_INVALID)
+        );
     }
 
     #[test]

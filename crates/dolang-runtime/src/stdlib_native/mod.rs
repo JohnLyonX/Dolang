@@ -1,17 +1,25 @@
+mod auth_guard;
+mod auth_jwt;
+mod auth_password;
+mod auth_session;
 mod env;
 mod fs;
 mod http_client;
 mod json;
 mod math;
 mod postgres;
-mod str;
 mod sqlite;
+mod str;
 mod time;
 mod uuid;
 
 use super::RuntimeContext;
 
 pub fn register_stdlib_native_modules(context: &mut RuntimeContext) {
+    auth_session::register(context);
+    auth_jwt::register(context);
+    auth_password::register(context);
+    auth_guard::register(context);
     fs::register(context);
     env::register(context);
     http_client::register(context);
@@ -27,8 +35,8 @@ pub fn register_stdlib_native_modules(context: &mut RuntimeContext) {
 #[cfg(test)]
 mod tests {
     use super::register_stdlib_native_modules;
-    use crate::interpreter::{builtins, DolangValue};
-    use crate::runtime::{execute_source_with_writer, ProgramState, RuntimeContext, RuntimeMode};
+    use crate::interpreter::{DolangValue, builtins};
+    use crate::runtime::{ProgramState, RuntimeContext, RuntimeMode, execute_source_with_writer};
     use std::path::PathBuf;
     use std::sync::{Mutex, OnceLock};
 
@@ -96,6 +104,17 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_registration_exposes_auth_modules() {
+        let mut context = test_context();
+        register_stdlib_native_modules(&mut context);
+
+        assert!(context.native_module("std.auth.session").is_some());
+        assert!(context.native_module("std.auth.jwt").is_some());
+        assert!(context.native_module("std.auth.password").is_some());
+        assert!(context.native_module("std.auth.guard").is_some());
+    }
+
+    #[test]
     fn sqlite_module_connects_and_flows_into_connection_builtins() {
         let mut context = test_context();
         register_stdlib_native_modules(&mut context);
@@ -107,8 +126,7 @@ mod tests {
             .get("connect")
             .expect("std.sqlite should export connect");
 
-        let conn = connect
-            .as_ref()(&[DolangValue::Str(":memory:".to_string())], &context)
+        let conn = connect.as_ref()(&[DolangValue::Str(":memory:".to_string())], &context)
             .expect("sqlite connect should succeed");
 
         builtins::dispatch(
@@ -227,7 +245,7 @@ mod tests {
         );
         assert_sample_sql_registry_empty(
             &failure_context,
-            "failed query should close the postgres connection"
+            "failed query should close the postgres connection",
         );
 
         restore_database_url(previous);

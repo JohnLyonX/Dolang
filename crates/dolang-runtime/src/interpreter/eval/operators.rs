@@ -1,23 +1,21 @@
 use crate::ast::{BinaryExpr, Expr, IndexAccess, UnaryExpr};
 use crate::diagnostics::codes;
 use crate::error::Error;
-use crate::runtime::RuntimeContext;
+use crate::runtime::{ProgramState, RuntimeContext};
 use crate::token::Type;
 
-use super::super::env::{Env, FnEnv};
 use super::super::value::DolangValue;
 use super::eval_expr;
 
 pub fn eval_index_access(
     e: &Expr,
     idx: &IndexAccess,
-    env: &Env,
-    fns: &mut FnEnv,
+    state: &mut ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Result<DolangValue, Error> {
-    let obj_val = eval_expr(&idx.object, env, fns, context, w, false)?;
-    let idx_val = eval_expr(&idx.index, env, fns, context, w, false)?;
+    let obj_val = eval_expr(&idx.object, state, context, w, false)?;
+    let idx_val = eval_expr(&idx.index, state, context, w, false)?;
 
     match obj_val {
         DolangValue::List(list) => {
@@ -63,13 +61,12 @@ pub fn eval_index_access(
 pub fn eval_unary(
     e: &Expr,
     u: &UnaryExpr,
-    env: &Env,
-    fns: &mut FnEnv,
+    state: &mut ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
     as_identifier: bool,
 ) -> Result<DolangValue, Error> {
-    let right = eval_expr(&u.right, env, fns, context, w, as_identifier)?;
+    let right = eval_expr(&u.right, state, context, w, as_identifier)?;
     match u.op {
         Type::Not => Ok(DolangValue::Bool(!right.is_truthy())),
         Type::Minus => match right {
@@ -92,14 +89,13 @@ pub fn eval_unary(
 pub fn eval_binary(
     e: &Expr,
     b: &BinaryExpr,
-    env: &Env,
-    fns: &mut FnEnv,
+    state: &mut ProgramState,
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
     as_identifier: bool,
 ) -> Result<DolangValue, Error> {
-    let left = eval_expr(&b.left, env, fns, context, w, as_identifier)?;
-    let right = eval_expr(&b.right, env, fns, context, w, as_identifier)?;
+    let left = eval_expr(&b.left, state, context, w, as_identifier)?;
+    let right = eval_expr(&b.right, state, context, w, as_identifier)?;
 
     match b.op {
         Type::Plus => match (&left, &right) {

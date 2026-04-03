@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::ast::{HttpBlockStmt, HttpFnStmt};
 use crate::error::Error;
@@ -8,7 +9,7 @@ use crate::error::Error;
 use crate::module::ModuleResolver;
 use crate::runtime::{ProgramState, RuntimeContext, RuntimeMode};
 
-use super::super::{DolangValue, HttpRoute, exec_http_handler};
+use super::super::{DolangValue, HttpRoute, RouteModuleState, exec_http_handler};
 use super::Flow;
 
 pub(super) fn handle_http_fn(
@@ -17,6 +18,10 @@ pub(super) fn handle_http_fn(
     context: &mut RuntimeContext,
     w: &mut dyn Write,
 ) -> Flow {
+    let module_state = Arc::new(RouteModuleState {
+        env: state.env.clone(),
+        fns: state.fns.clone(),
+    });
     let route = HttpRoute {
         method: stmt.method.clone(),
         path: stmt.path.clone(),
@@ -28,8 +33,7 @@ pub(super) fn handle_http_fn(
         parent_cors: None,
         response_headers: headers_to_pairs(&stmt.headers),
         body: stmt.body.clone(),
-        module_env: state.env.clone(),
-        module_fns: state.fns.clone(),
+        module_state,
     };
 
     if let Err(err) = maybe_probe_http_handler(&route, context) {
@@ -51,6 +55,10 @@ pub(super) fn handle_http_block(
     context: &mut RuntimeContext,
     w: &mut dyn Write,
 ) -> Flow {
+    let module_state = Arc::new(RouteModuleState {
+        env: state.env.clone(),
+        fns: state.fns.clone(),
+    });
     if let Some(link_module) = &stmt.link {
         let prefix = stmt.prefix.as_deref().unwrap_or("");
         let module_routes = match load_module_routes(link_module, context) {
@@ -117,8 +125,7 @@ pub(super) fn handle_http_block(
                 &headers_to_pairs(&route_stmt.headers),
             ),
             body: route_stmt.body.clone(),
-            module_env: state.env.clone(),
-            module_fns: state.fns.clone(),
+            module_state: Arc::clone(&module_state),
         };
         if let Err(err) = maybe_probe_http_handler(&route, context) {
             return Flow::Err(err);
@@ -141,7 +148,7 @@ pub(super) fn handle_http_block(
 /// handler bodies can resolve module-namespaced calls (e.g. `hello.selectUser`).
 fn load_module_routes(
     module_path: &str,
-    context: &RuntimeContext,
+    context: &mut RuntimeContext,
 ) -> Result<Vec<HttpRoute>, Error> {
     use crate::parser;
     use crate::runtime::{ProgramState, execute_program_with_writer};
@@ -184,7 +191,7 @@ fn load_module_routes(
 
     // Execute the module fully in an isolated clone of the context.
     // This processes $mod, $fn, and $GET/$POST/... declarations.
-    let mut module_context = context.clone();
+    let mut module_context = context.clone_for_isolated_execution();
     module_context.set_current_file(Some(resolved.file_path.to_string_lossy().to_string()));
 
     // Track how many routes existed before execution so we can isolate
@@ -202,13 +209,23 @@ fn load_module_routes(
         Error::Interpreter(format!("error loading module '{}': {}", module_path, err))
     })?;
 
-    // Routes registered by this module, with module-level env/fns attached
-    // so that handler bodies can resolve $mod-imported namespaces.
+    // Linked router modules can import `$Type` definitions from other files.
+    // Request execution clones the parent RuntimeContext, not the isolated
+    // module_context used during `.link()` loading, so merge newly registered
+    // types back into the parent context before returning the routes.
+    context.merge_types_from(&module_context);
+
+    // Routes registered by this module share one module-level snapshot so that
+    // handler bodies can resolve $mod-imported namespaces without duplicating
+    // the full module env/fn graph per route.
+    let module_state = Arc::new(RouteModuleState {
+        env: module_state.env,
+        fns: module_state.fns,
+    });
     let routes: Vec<HttpRoute> = module_context.routes()[routes_before..]
         .iter()
         .map(|route| HttpRoute {
-            module_env: module_state.env.clone(),
-            module_fns: module_state.fns.clone(),
+            module_state: Arc::clone(&module_state),
             ..route.clone()
         })
         .collect();
@@ -235,23 +252,21 @@ fn probe_http_handler_return_type(
     route: &HttpRoute,
     context: &RuntimeContext,
 ) -> Result<(), Error> {
-    let mut probe_context = context.clone();
+    let mut probe_context = context.clone_for_isolated_execution();
     let mut probe_state = ProgramState::new();
 
-    probe_state.env.extend(route.module_env.clone());
-    probe_state.fns.extend(route.module_fns.clone());
+    probe_state.extend_env(route.module_env().clone());
+    probe_state.fns.extend(route.module_fns().clone());
 
     for param in &route.params {
-        probe_state
-            .env
-            .insert(param.clone(), DolangValue::Str("__dummy__".to_string()));
+        probe_state.insert_env(param.clone(), DolangValue::Str("__dummy__".to_string()));
     }
 
-    probe_state.env.insert(
+    probe_state.insert_env(
         "__headers__".to_string(),
         DolangValue::Json(indexmap::IndexMap::new()),
     );
-    probe_state.env.insert(
+    probe_state.insert_env(
         "body".to_string(),
         default_probe_body(route.return_type.as_deref()),
     );

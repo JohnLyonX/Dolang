@@ -49,19 +49,10 @@ pub(super) fn handle_return_stmt(
     w: &mut dyn std::io::Write,
 ) -> Flow {
     match &stmt.value {
-        Some(expr) => {
-            match check_eval_result(eval_expr(
-                expr,
-                &state.env,
-                &mut state.fns,
-                context,
-                w,
-                false,
-            )) {
-                Ok(val) => Flow::Return(Some(val)),
-                Err(err) => Flow::Err(err),
-            }
-        }
+        Some(expr) => match check_eval_result(eval_expr(expr, state, context, w, false)) {
+            Ok(val) => Flow::Return(Some(val)),
+            Err(err) => Flow::Err(err),
+        },
         None => Flow::Return(None),
     }
 }
@@ -73,14 +64,7 @@ pub(super) fn handle_if_stmt(
     w: &mut dyn std::io::Write,
 ) -> Flow {
     for branch in &stmt.branches {
-        let cond_val = check_eval_result(eval_expr(
-            &branch.condition,
-            &state.env,
-            &mut state.fns,
-            context,
-            w,
-            false,
-        ));
+        let cond_val = check_eval_result(eval_expr(&branch.condition, state, context, w, false));
         match cond_val {
             Ok(cond_val) => {
                 if cond_val.is_truthy() {
@@ -100,14 +84,7 @@ pub(super) fn handle_while_stmt(
     w: &mut dyn std::io::Write,
 ) -> Flow {
     loop {
-        let cond = check_eval_result(eval_expr(
-            &stmt.condition,
-            &state.env,
-            &mut state.fns,
-            context,
-            w,
-            false,
-        ));
+        let cond = check_eval_result(eval_expr(&stmt.condition, state, context, w, false));
         match cond {
             Ok(ref c) if c.is_truthy() => {}
             Ok(_) => break,
@@ -159,14 +136,7 @@ pub(super) fn handle_for_stmt(
 
     loop {
         if let Some(cond_expr) = &stmt.condition {
-            let cond = check_eval_result(eval_expr(
-                cond_expr,
-                &state.env,
-                &mut state.fns,
-                context,
-                w,
-                false,
-            ));
+            let cond = check_eval_result(eval_expr(cond_expr, state, context, w, false));
             match cond {
                 Ok(ref c) if c.is_truthy() => {}
                 Ok(_) => break,
@@ -199,14 +169,7 @@ pub(super) fn handle_for_in_stmt(
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Flow {
-    let iterable_val = match eval_expr(
-        &stmt.iterable,
-        &state.env,
-        &mut state.fns,
-        context,
-        w,
-        false,
-    ) {
+    let iterable_val = match eval_expr(&stmt.iterable, state, context, w, false) {
         Ok(val) => val,
         Err(err) => return Flow::Err(err),
     };
@@ -214,7 +177,7 @@ pub(super) fn handle_for_in_stmt(
     match iterable_val {
         DolangValue::List(list) => {
             for item in list {
-                state.env.insert(stmt.var.clone(), item.clone());
+                state.insert_env(stmt.var.clone(), item.clone());
                 match exec_block(&stmt.body, state, context, w) {
                     Flow::Break => break,
                     Flow::Exit => return Flow::Exit,
@@ -227,9 +190,7 @@ pub(super) fn handle_for_in_stmt(
         }
         DolangValue::Map(map) => {
             for key in map.keys() {
-                state
-                    .env
-                    .insert(stmt.var.clone(), DolangValue::Str(key.clone()));
+                state.insert_env(stmt.var.clone(), DolangValue::Str(key.clone()));
                 match exec_block(&stmt.body, state, context, w) {
                     Flow::Break => break,
                     Flow::Exit => return Flow::Exit,
@@ -242,9 +203,7 @@ pub(super) fn handle_for_in_stmt(
         }
         DolangValue::Str(s) => {
             for ch in s.chars() {
-                state
-                    .env
-                    .insert(stmt.var.clone(), DolangValue::Str(ch.to_string()));
+                state.insert_env(stmt.var.clone(), DolangValue::Str(ch.to_string()));
                 match exec_block(&stmt.body, state, context, w) {
                     Flow::Break => break,
                     Flow::Exit => return Flow::Exit,

@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::RuntimeContext;
+use super::{RuntimeContext, sql_intrinsics};
 
 /// String-keyed intrinsic identifier — open for extension without modifying core.
 pub type IntrinsicId = &'static str;
@@ -29,6 +29,11 @@ pub mod ids {
     pub const FS_RENAME: &str = "fs.rename";
     pub const ENV_GET: &str = "env.get";
     pub const CONFIG_GET: &str = "config.get";
+    pub const SQL_SQLITE_CONNECT: &str = "sql.sqlite.connect";
+    pub const SQL_POSTGRES_CONNECT: &str = "sql.postgres.connect";
+    pub const SQL_QUERY: &str = "sql.query";
+    pub const SQL_EXECUTE: &str = "sql.execute";
+    pub const SQL_CLOSE: &str = "sql.close";
 }
 
 pub type IntrinsicCall = fn(&[DolangValue], &RuntimeContext) -> Result<DolangValue, Error>;
@@ -96,6 +101,11 @@ impl IntrinsicRegistry {
         self.register(ids::FS_RENAME, fs_rename);
         self.register(ids::ENV_GET, env_get);
         self.register(ids::CONFIG_GET, config_get);
+        self.register(ids::SQL_SQLITE_CONNECT, sql_intrinsics::sqlite_connect);
+        self.register(ids::SQL_POSTGRES_CONNECT, sql_intrinsics::postgres_connect);
+        self.register(ids::SQL_QUERY, sql_intrinsics::sql_query);
+        self.register(ids::SQL_EXECUTE, sql_intrinsics::sql_execute);
+        self.register(ids::SQL_CLOSE, sql_intrinsics::sql_close);
     }
 }
 

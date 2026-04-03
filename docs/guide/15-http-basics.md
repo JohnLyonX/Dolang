@@ -50,8 +50,14 @@ $Type User {
 
 $GET("/users") list_users() -> List<User> {
     $# [
-        {"id": 1, "name": "Alice"},
-        {"id": 2, "name": "Bob"}
+        User {
+            id: 1,
+            name: "Alice",
+        },
+        User {
+            id: 2,
+            name: "Bob",
+        }
     ];
 }
 ```

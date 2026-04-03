@@ -4,13 +4,19 @@ mod support;
 use std::fs;
 use std::process::Command;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use dolang::interpreter::DolangValue;
 use dolang::module::ProjectConfig;
 use dolang::parser;
-use dolang::runtime::{ProgramState, RuntimeContext, RuntimeMode, execute_program_with_writer};
+use dolang::runtime::RuntimeMode;
+use dolang::runtime::auth::{RuntimeAuthConfig, SessionStore, sign_jwt};
+use dolang::runtime::{
+    HandlerInput, ProgramState, RuntimeContext, execute_http_route_in_context,
+    execute_program_with_writer,
+};
 
 use integration::{assert_fixture_stdout, assert_route_string};
 use support::{
@@ -20,12 +26,65 @@ use support::{
     try_start_live_http_server_from_context,
 };
 
+fn write_temp_auth_project(package_toml: &str, main_dol: &str) -> std::path::PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-auth-{unique}"));
+    fs::create_dir_all(&project_dir).expect("project dir");
+    fs::write(project_dir.join("package.toml"), package_toml).expect("package.toml");
+    fs::write(project_dir.join("main.dol"), main_dol).expect("main.dol");
+    project_dir
+}
+
 #[test]
 fn runtime_fixtures_cover_core_semantics() {
     assert_fixture_stdout("fixtures/runtime/variables_consts.dol", "3\n10\n");
     assert_fixture_stdout("fixtures/runtime/type_annotations.dol", "Int\nString\n");
     assert_fixture_stdout("fixtures/runtime/functions_control_flow.dol", "pass\n");
     assert_fixture_stdout("fixtures/runtime/collections_builtins.dol", "3\ntrue\n2\n");
+}
+
+#[test]
+fn auth_stdlib_fixtures_cover_core_flows() {
+    assert_fixture_stdout(
+        "spec/valid/stdlib/auth_jwt_flow.dol",
+        "user_1\nadmin\npost:create\n",
+    );
+    assert_fixture_stdout(
+        "spec/valid/stdlib/auth_jwt_refresh_flow.dol",
+        "refresh\nuser_1\n",
+    );
+    assert_fixture_stdout(
+        "spec/valid/stdlib/auth_jwt_pair_flow.dol",
+        "access\nrefresh\nuser_1\n",
+    );
+    assert_fixture_stdout(
+        "spec/valid/stdlib/auth_session_flow.dol",
+        "user_1\ntrue\ntrue\nadmin\n",
+    );
+    assert_fixture_stdout(
+        "spec/valid/stdlib/auth_session_mutation_flow.dol",
+        "t_001\nc_001\nnull\ntrue\n",
+    );
+    assert_fixture_stdout(
+        "spec/valid/stdlib/auth_guard_flow.dol",
+        "false\ntrue\ntrue\ntrue\ntrue\nuser_1\n",
+    );
+}
+
+#[test]
+fn auth_guard_require_role_fixture_fails() {
+    let outcome = run_fixture(
+        "spec/invalid/stdlib/auth_guard_require_role_fails.dol",
+        RuntimeMode::Test,
+    );
+
+    let error = outcome
+        .error
+        .expect("auth guard failure fixture should fail");
+    assert!(error.contains("auth.guard.require_role: missing required role 'admin'"));
 }
 
 #[test]
@@ -164,6 +223,1663 @@ fn live_http_route_headers_are_emitted() {
         Some("route")
     );
 
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_session_protected_route_returns_401_without_cookie() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-session"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+ttl_seconds = 86400
+
+[server.auth.session.store]
+driver = "memory"
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+"#,
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+
+$GET("/admin") admin() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+    let response = http_get(&base_url, "/admin");
+    let response_json: serde_json::Value =
+        serde_json::from_str(&response.body).expect("response should be json");
+
+    assert_eq!(response.status, 401);
+    assert_eq!(response_json["status"], 401);
+    assert_eq!(response_json["code"], "auth_unauthorized");
+    assert_eq!(response_json["message"], "authentication required");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_login_sets_cookie_and_allows_protected_route() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-session"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+ttl_seconds = 86400
+
+[server.auth.session.store]
+driver = "memory"
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+"#,
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+
+$GET("/admin") admin() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let login = http_get(&base_url, "/login");
+    let session_cookie = login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("login should set cookie");
+    let admin =
+        http_request_with_headers("GET", &base_url, "/admin", &[("Cookie", &session_cookie)]);
+
+    assert_eq!(login.status, 200);
+    assert_eq!(admin.status, 200);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_bearer_token_allows_protected_route() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-bearer"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS256"
+secret = "dolang-dev-secret"
+access_ttl_seconds = 3600
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+roles_any = ["admin"]
+"#,
+        r#"
+$mod std.auth.jwt;
+
+$GET("/token") token() -> JSON {
+    $ token = jwt.sign({
+        "sub": "user_1",
+        "roles": ["admin"],
+        "permissions": ["post:create"]
+    });
+    $# {"token": token};
+}
+
+$GET("/admin") admin() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let token_response = http_get(&base_url, "/token");
+    let token_json: serde_json::Value =
+        serde_json::from_str(&token_response.body).expect("token body should be json");
+    let token = token_json["token"]
+        .as_str()
+        .expect("token should be string");
+    let response = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/admin",
+        &[("Authorization", &format!("Bearer {token}"))],
+    );
+
+    assert_eq!(response.status, 200);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_role_guard_returns_403_for_authenticated_but_unauthorized_user() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-bearer"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS256"
+secret = "dolang-dev-secret"
+access_ttl_seconds = 3600
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+roles_any = ["admin"]
+"#,
+        r#"
+$mod std.auth.jwt;
+
+$GET("/token") token() -> JSON {
+    $ token = jwt.sign({
+        "sub": "user_2",
+        "roles": ["viewer"],
+        "permissions": []
+    });
+    $# {"token": token};
+}
+
+$GET("/admin") admin() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let token_response = http_get(&base_url, "/token");
+    let token_json: serde_json::Value =
+        serde_json::from_str(&token_response.body).expect("token body should be json");
+    let token = token_json["token"]
+        .as_str()
+        .expect("token should be string");
+    let response = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/admin",
+        &[("Authorization", &format!("Bearer {token}"))],
+    );
+    let response_json: serde_json::Value =
+        serde_json::from_str(&response.body).expect("response should be json");
+
+    assert_eq!(response.status, 403);
+    assert_eq!(response_json["status"], 403);
+    assert_eq!(response_json["code"], "auth_forbidden");
+    assert_eq!(response_json["message"], "forbidden");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_authorization_default_authenticated_requires_login() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-default"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+ttl_seconds = 86400
+
+[server.auth.session.store]
+driver = "memory"
+
+[server.auth.authorization]
+enabled = true
+default = "authenticated"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/login"
+require = "public"
+"#,
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": [],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+
+$GET("/me") me() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let unauthorized = http_get(&base_url, "/me");
+    let login = http_get(&base_url, "/login");
+    let unauthorized_json: serde_json::Value =
+        serde_json::from_str(&unauthorized.body).expect("response should be json");
+    let session_cookie = login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("login should set cookie");
+    let authorized =
+        http_request_with_headers("GET", &base_url, "/me", &[("Cookie", &session_cookie)]);
+
+    assert_eq!(unauthorized.status, 401);
+    assert_eq!(unauthorized_json["status"], 401);
+    assert_eq!(unauthorized_json["code"], "auth_unauthorized");
+    assert_eq!(unauthorized_json["message"], "authentication required");
+    assert_eq!(authorized.status, 200);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_permission_guard_returns_403_for_missing_required_permission() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-permissions"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS256"
+secret = "dolang-dev-secret"
+access_ttl_seconds = 3600
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/publish"
+require = "authenticated"
+permissions_all = ["post:create", "post:publish"]
+"#,
+        r#"
+$mod std.auth.jwt;
+
+$GET("/token") token() -> JSON {
+    $ token = jwt.sign({
+        "sub": "user_1",
+        "roles": ["editor"],
+        "permissions": ["post:create"]
+    });
+    $# {"token": token};
+}
+
+$GET("/publish") publish() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let token_response = http_get(&base_url, "/token");
+    let token_json: serde_json::Value =
+        serde_json::from_str(&token_response.body).expect("token body should be json");
+    let token = token_json["token"]
+        .as_str()
+        .expect("token should be string");
+    let response = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/publish",
+        &[("Authorization", &format!("Bearer {token}"))],
+    );
+    let response_json: serde_json::Value =
+        serde_json::from_str(&response.body).expect("response should be json");
+
+    assert_eq!(response.status, 403);
+    assert_eq!(response_json["status"], 403);
+    assert_eq!(response_json["code"], "auth_forbidden");
+    assert_eq!(response_json["message"], "forbidden");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_login_and_logout_emit_configured_cookie_headers() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-cookie"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "demo_session"
+cookie_secure = true
+cookie_http_only = true
+cookie_same_site = "strict"
+cookie_path = "/"
+ttl_seconds = 900
+
+[server.auth.session.store]
+driver = "memory"
+"#,
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": [],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+
+$GET("/logout") logout() -> JSON {
+    session.destroy();
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let login = http_get(&base_url, "/login");
+    let login_cookie = login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("login should set cookie");
+    let logout =
+        http_request_with_headers("GET", &base_url, "/logout", &[("Cookie", &login_cookie)]);
+    let logout_cookie = logout
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("logout should clear cookie");
+
+    assert!(login_cookie.contains("demo_session=sess_"));
+    assert!(login_cookie.contains("Path=/"));
+    assert!(login_cookie.contains("Max-Age=900"));
+    assert!(login_cookie.contains("SameSite=Strict"));
+    assert!(login_cookie.contains("HttpOnly"));
+    assert!(login_cookie.contains("Secure"));
+
+    assert!(logout_cookie.contains("demo_session="));
+    assert!(logout_cookie.contains("Max-Age=0"));
+    assert!(logout_cookie.contains("SameSite=Strict"));
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_bearer_helpers_are_visible_in_request_context() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-bearer-context"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS256"
+secret = "dolang-dev-secret"
+access_ttl_seconds = 3600
+"#,
+        r#"
+$mod std.auth.jwt;
+
+$GET("/token") token() -> JSON {
+    $ token = jwt.sign({
+        "sub": "user_9",
+        "roles": ["reader"],
+        "permissions": ["post:read"]
+    });
+    $# {"token": token};
+}
+
+$GET("/whoami") whoami() -> JSON {
+    $# {
+        "sub": jwt.current()["sub"],
+        "bearer": jwt.bearer()
+    };
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let token_response = http_get(&base_url, "/token");
+    let token_json: serde_json::Value =
+        serde_json::from_str(&token_response.body).expect("token body should be json");
+    let token = token_json["token"]
+        .as_str()
+        .expect("token should be string");
+    let response = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/whoami",
+        &[("Authorization", &format!("Bearer {token}"))],
+    );
+    let response_json: serde_json::Value =
+        serde_json::from_str(&response.body).expect("response should be json");
+
+    assert_eq!(response.status, 200);
+    assert_eq!(response_json["sub"], "user_9");
+    assert_eq!(response_json["bearer"], token);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_refresh_pair_issues_new_access_token_for_protected_route() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-refresh-pair"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS256"
+secret = "dolang-dev-secret"
+access_ttl_seconds = 3600
+refresh_ttl_seconds = 86400
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+roles_any = ["admin"]
+"#,
+        r#"
+$mod std.auth.jwt;
+
+$GET("/login") login() -> JSON {
+    $# jwt.issue_pair({
+        "sub": "user_1",
+        "roles": ["admin"],
+        "permissions": ["post:create"]
+    });
+}
+
+$POST("/refresh") refresh() -> JSON {
+    $# jwt.refresh_pair(body["refresh_token"]);
+}
+
+$GET("/admin") admin() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let login = http_get(&base_url, "/login");
+    let login_json: serde_json::Value =
+        serde_json::from_str(&login.body).expect("login body should be json");
+    let refresh_token = login_json["refresh_token"]
+        .as_str()
+        .expect("refresh token should be string");
+
+    let refresh_body = serde_json::json!({ "refresh_token": refresh_token }).to_string();
+    let refresh = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/refresh",
+        &[("Content-Type", "application/json")],
+        Some(refresh_body.as_str()),
+    );
+    let refresh_json: serde_json::Value =
+        serde_json::from_str(&refresh.body).expect("refresh body should be json");
+    let access_token = refresh_json["access_token"]
+        .as_str()
+        .expect("access token should be string");
+
+    let admin = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/admin",
+        &[("Authorization", &format!("Bearer {access_token}"))],
+    );
+
+    assert_eq!(login.status, 200);
+    assert_eq!(refresh.status, 200);
+    assert_eq!(admin.status, 200);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_refresh_pair_rejects_reuse_of_old_refresh_token() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-refresh-rotation"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS256"
+secret = "dolang-dev-secret"
+access_ttl_seconds = 3600
+refresh_ttl_seconds = 86400
+"#,
+        r#"
+$mod std.auth.jwt;
+
+$GET("/login") login() -> JSON {
+    $# jwt.issue_pair({
+        "sub": "user_1",
+        "roles": ["admin"],
+        "permissions": ["post:create"]
+    });
+}
+
+$POST("/refresh") refresh() -> JSON {
+    $# jwt.refresh_pair(body["refresh_token"]);
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let login = http_get(&base_url, "/login");
+    let login_json: serde_json::Value =
+        serde_json::from_str(&login.body).expect("login body should be json");
+    let refresh_token = login_json["refresh_token"]
+        .as_str()
+        .expect("refresh token should be string");
+
+    let refresh_body = serde_json::json!({ "refresh_token": refresh_token }).to_string();
+    let first_refresh = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/refresh",
+        &[("Content-Type", "application/json")],
+        Some(refresh_body.as_str()),
+    );
+    let second_refresh = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/refresh",
+        &[("Content-Type", "application/json")],
+        Some(refresh_body.as_str()),
+    );
+    let second_refresh_json: serde_json::Value =
+        serde_json::from_str(&second_refresh.body).expect("response should be json");
+
+    assert_eq!(first_refresh.status, 200);
+    assert_eq!(second_refresh.status, 401);
+    assert_eq!(second_refresh_json["status"], 401);
+    assert_eq!(second_refresh_json["code"], "auth_unauthorized");
+    assert_eq!(second_refresh_json["message"], "invalid refresh token");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_sqlite_refresh_tokens_persist_and_can_be_revoked() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-auth-refresh-sqlite-{unique}"));
+    fs::create_dir_all(&project_dir).expect("project dir");
+    let sqlite_path = project_dir.join("auth.sqlite3");
+    fs::write(
+        project_dir.join("package.toml"),
+        format!(
+            r#"
+name = "auth-refresh-sqlite"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.session]
+enabled = true
+
+[server.auth.session.store]
+driver = "sqlite"
+
+[server.auth.session.store.sqlite]
+path = "{}"
+table = "auth_sessions"
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS256"
+secret = "dolang-dev-secret"
+access_ttl_seconds = 3600
+refresh_ttl_seconds = 86400
+"#,
+            sqlite_path.display()
+        ),
+    )
+    .expect("package.toml");
+    fs::write(
+        project_dir.join("main.dol"),
+        r#"
+$mod std.auth.jwt;
+
+$GET("/login") login() -> JSON {
+    $# jwt.issue_pair({
+        "sub": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    });
+}
+
+$POST("/refresh") refresh() -> JSON {
+    $# jwt.refresh_pair(body["refresh_token"]);
+}
+
+$POST("/revoke") revoke() -> JSON {
+    jwt.revoke_refresh(body["refresh_token"]);
+    $# {"ok": true};
+}
+"#,
+    )
+    .expect("main.dol");
+
+    let first_outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        first_outcome.error.is_none(),
+        "serve bootstrap should succeed"
+    );
+    let first_base_url = start_live_http_server_from_context(first_outcome.context);
+
+    let login = http_get(&first_base_url, "/login");
+    let login_json: serde_json::Value =
+        serde_json::from_str(&login.body).expect("login body should be json");
+    let first_refresh_token = login_json["refresh_token"]
+        .as_str()
+        .expect("refresh token should be string")
+        .to_string();
+
+    let second_outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        second_outcome.error.is_none(),
+        "serve restart should succeed"
+    );
+    let second_base_url = start_live_http_server_from_context(second_outcome.context);
+
+    let first_refresh_body =
+        serde_json::json!({ "refresh_token": first_refresh_token }).to_string();
+    let refreshed = http_request_with_headers_and_body(
+        "POST",
+        &second_base_url,
+        "/refresh",
+        &[("Content-Type", "application/json")],
+        Some(first_refresh_body.as_str()),
+    );
+    let refreshed_json: serde_json::Value =
+        serde_json::from_str(&refreshed.body).expect("refresh body should be json");
+    let second_refresh_token = refreshed_json["refresh_token"]
+        .as_str()
+        .expect("refresh token should be string")
+        .to_string();
+
+    let third_outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        third_outcome.error.is_none(),
+        "serve restart after refresh should succeed"
+    );
+    let third_base_url = start_live_http_server_from_context(third_outcome.context);
+
+    let revoke_body = serde_json::json!({ "refresh_token": second_refresh_token }).to_string();
+    let revoke = http_request_with_headers_and_body(
+        "POST",
+        &third_base_url,
+        "/revoke",
+        &[("Content-Type", "application/json")],
+        Some(revoke_body.as_str()),
+    );
+
+    let fourth_outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        fourth_outcome.error.is_none(),
+        "serve restart after revoke should succeed"
+    );
+    let fourth_base_url = start_live_http_server_from_context(fourth_outcome.context);
+
+    let revoked = http_request_with_headers_and_body(
+        "POST",
+        &fourth_base_url,
+        "/refresh",
+        &[("Content-Type", "application/json")],
+        Some(revoke_body.as_str()),
+    );
+    let revoked_json: serde_json::Value =
+        serde_json::from_str(&revoked.body).expect("response should be json");
+
+    assert_eq!(refreshed.status, 200);
+    assert_eq!(revoke.status, 200);
+    assert_eq!(revoked.status, 401);
+    assert_eq!(revoked_json["status"], 401);
+    assert_eq!(revoked_json["code"], "auth_unauthorized");
+    assert_eq!(revoked_json["message"], "invalid refresh token");
+    assert!(sqlite_path.exists(), "sqlite auth db should be created");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_bearer_auth_respects_hs512_algorithm_config() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-bearer-hs512"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS512"
+secret = "dolang-dev-secret"
+access_ttl_seconds = 3600
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+"#,
+        r#"
+$mod std.auth.jwt;
+
+$GET("/token") token() -> JSON {
+    $# {"token": jwt.sign({
+        "sub": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    })};
+}
+
+$GET("/admin") admin() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let token_response = http_get(&base_url, "/token");
+    let token_json: serde_json::Value =
+        serde_json::from_str(&token_response.body).expect("token body should be json");
+    let token = token_json["token"]
+        .as_str()
+        .expect("token should be string");
+    let response = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/admin",
+        &[("Authorization", &format!("Bearer {token}"))],
+    );
+
+    assert_eq!(response.status, 200);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn load_rejects_unsupported_jwt_algorithm() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-invalid-jwt-alg"
+version = "0.1.0"
+entry = "main.dol"
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.session]
+enabled = true
+
+[server.auth.jwt]
+enabled = true
+algorithm = "RS256"
+secret = "dolang-dev-secret"
+"#,
+        "$main() {}\n",
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+
+    assert!(
+        outcome
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("unsupported JWT algorithm"))
+    );
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_more_specific_authorization_rule_overrides_broader_prefix_rule() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-rule-priority"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+
+[server.auth.session.store]
+driver = "memory"
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin/*"
+require = "authenticated"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin/health"
+require = "public"
+"#,
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": [],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+
+$GET("/admin/health") health() -> JSON {
+    $# {"ok": true};
+}
+
+$GET("/admin/users") users() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let health = http_get(&base_url, "/admin/health");
+    let users = http_get(&base_url, "/admin/users");
+
+    assert_eq!(health.status, 200);
+    assert_eq!(users.status, 401);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_claims_based_authorization_requires_matching_claim_value() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-claims-guard"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang"
+audience = "dolang"
+algorithm = "HS256"
+secret = "dolang-dev-secret"
+access_ttl_seconds = 3600
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/team"
+require = "authenticated"
+claims_all = { team_id = "t_001" }
+"#,
+        r#"
+$mod std.auth.jwt;
+
+$GET("/token-ok") token_ok() -> JSON {
+    $# {"token": jwt.sign({
+        "sub": "user_1",
+        "roles": [],
+        "permissions": [],
+        "team_id": "t_001"
+    })};
+}
+
+$GET("/token-bad") token_bad() -> JSON {
+    $# {"token": jwt.sign({
+        "sub": "user_2",
+        "roles": [],
+        "permissions": [],
+        "team_id": "t_999"
+    })};
+}
+
+$GET("/team") team() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let ok_token_response = http_get(&base_url, "/token-ok");
+    let ok_token_json: serde_json::Value =
+        serde_json::from_str(&ok_token_response.body).expect("token body should be json");
+    let ok_token = ok_token_json["token"].as_str().expect("token should be string");
+
+    let bad_token_response = http_get(&base_url, "/token-bad");
+    let bad_token_json: serde_json::Value =
+        serde_json::from_str(&bad_token_response.body).expect("token body should be json");
+    let bad_token = bad_token_json["token"].as_str().expect("token should be string");
+
+    let allowed = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/team",
+        &[("Authorization", &format!("Bearer {ok_token}"))],
+    );
+    let denied = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/team",
+        &[("Authorization", &format!("Bearer {bad_token}"))],
+    );
+    let denied_json: serde_json::Value =
+        serde_json::from_str(&denied.body).expect("response should be json");
+
+    assert_eq!(allowed.status, 200);
+    assert_eq!(denied.status, 403);
+    assert_eq!(denied_json["code"], "auth_forbidden");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn request_session_mutation_is_not_committed_when_handler_errors() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-session-error"
+version = "0.1.0"
+entry = "main.dol"
+
+[server.auth]
+enabled = true
+
+[server.auth.session]
+enabled = true
+"#,
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": [],
+        "permissions": []
+    });
+    $throw "boom";
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        outcome.error.is_none(),
+        "route fixture bootstrap should succeed"
+    );
+
+    let route = route_by_signature(outcome.context.routes(), "GET", "/login")
+        .expect("login route should exist")
+        .clone();
+    let mut request_context = outcome.context.clone_for_request_execution();
+    let input = HandlerInput::new("/login");
+
+    let (_should_continue, _result, error) =
+        execute_http_route_in_context(&route, &input, &mut request_context);
+
+    assert_eq!(error.as_deref(), Some("uncaught throw: boom"));
+
+    let session_id = request_context
+        .with_request_auth_context(|auth| {
+            auth.current_session()
+                .map(|session| session.session_id.clone())
+        })
+        .expect("request auth context should be readable")
+        .expect("request should still see current session");
+    let stored = request_context
+        .with_session_store_mut(|store| store.get(&session_id))
+        .expect("session store should be readable");
+
+    assert!(stored.is_none(), "failed handler must not commit session");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_guard_require_role_returns_403_instead_of_500() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-guard-http"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+
+[server.auth.session.store]
+driver = "memory"
+"#,
+        r#"
+$mod std.auth.session;
+$mod std.auth.guard;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": ["viewer"],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+
+$GET("/admin") admin() -> JSON {
+    guard.require_role("admin");
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let login = http_get(&base_url, "/login");
+    let session_cookie = login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("login should set cookie");
+    let admin =
+        http_request_with_headers("GET", &base_url, "/admin", &[("Cookie", &session_cookie)]);
+
+    assert_eq!(admin.status, 403);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_session_disabled_rejects_session_stdlib_mutation() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-session-disabled"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = false
+cookie_name = "dolang_session"
+"#,
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": [],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let response = http_get(&base_url, "/login");
+
+    assert_eq!(response.status, 500);
+    assert!(
+        response
+            .headers
+            .iter()
+            .all(|(name, _)| !name.eq_ignore_ascii_case("set-cookie"))
+    );
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_jwt_disabled_rejects_bearer_auth_and_jwt_stdlib() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-jwt-disabled"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = false
+issuer = "dolang"
+audience = "dolang"
+secret = "dolang-dev-secret"
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+"#,
+        r#"
+$mod std.auth.jwt;
+
+$GET("/token") token() -> JSON {
+    $# {"token": jwt.sign({
+        "sub": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    })};
+}
+
+$GET("/admin") admin() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let token_response = http_get(&base_url, "/token");
+    assert_eq!(token_response.status, 500);
+
+    let token = sign_jwt(
+        &RuntimeAuthConfig {
+            enabled: true,
+            jwt_enabled: true,
+            jwt_secret: Some("dolang-dev-secret".to_string()),
+            issuer: "dolang".to_string(),
+            audience: "dolang".to_string(),
+            ..RuntimeAuthConfig::default()
+        },
+        "user_1",
+        &["admin".to_string()],
+        &[],
+        &Default::default(),
+    )
+    .expect("token should sign for test setup");
+    let admin = http_request_with_headers(
+        "GET",
+        &base_url,
+        "/admin",
+        &[("Authorization", &format!("Bearer {token}"))],
+    );
+
+    assert_eq!(admin.status, 401);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_session_rotation_always_rotates_cookie_on_authenticated_request() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-session-rotate"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+rotation = "always"
+
+[server.auth.session.store]
+driver = "memory"
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/me"
+require = "authenticated"
+"#,
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": [],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+
+$GET("/me") me() -> JSON {
+    $# {"id": session.id()};
+}
+"#,
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let login = http_get(&base_url, "/login");
+    let first_cookie = login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("login should set cookie");
+    let me = http_request_with_headers("GET", &base_url, "/me", &[("Cookie", &first_cookie)]);
+    let rotated_cookie = me
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("authenticated request should rotate cookie");
+
+    assert_eq!(me.status, 200);
+    assert_ne!(first_cookie, rotated_cookie);
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn load_rejects_default_bearer_scheme_when_jwt_is_disabled() {
+    let project_dir = write_temp_auth_project(
+        r#"
+name = "auth-invalid-default"
+version = "0.1.0"
+entry = "main.dol"
+
+[server.auth]
+enabled = true
+default_scheme = "bearer"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = false
+"#,
+        "$main() {}\n",
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+
+    assert!(
+        outcome
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("default scheme"))
+    );
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn live_http_sqlite_session_store_persists_login_flow() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-auth-sqlite-{unique}"));
+    fs::create_dir_all(&project_dir).expect("project dir");
+    let sqlite_path = project_dir.join("auth.sqlite3");
+    fs::write(
+        project_dir.join("package.toml"),
+        format!(
+            r#"
+name = "auth-sqlite"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "dolang_session"
+ttl_seconds = 86400
+
+[server.auth.session.store]
+driver = "sqlite"
+
+[server.auth.session.store.sqlite]
+path = "{}"
+table = "auth_sessions"
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin"
+require = "authenticated"
+"#,
+            sqlite_path.display()
+        ),
+    )
+    .expect("package.toml");
+    fs::write(
+        project_dir.join("main.dol"),
+        r#"
+$mod std.auth.session;
+
+$GET("/login") login() -> JSON {
+    session.create({
+        "subject": "user_1",
+        "roles": ["admin"],
+        "permissions": []
+    });
+    $# {"ok": true};
+}
+
+$GET("/admin") admin() -> JSON {
+    $# {"ok": true};
+}
+"#,
+    )
+    .expect("main.dol");
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "serve bootstrap should succeed");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let login = http_get(&base_url, "/login");
+    let session_cookie = login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("login should set cookie");
+    let admin =
+        http_request_with_headers("GET", &base_url, "/admin", &[("Cookie", &session_cookie)]);
+
+    assert_eq!(login.status, 200);
+    assert_eq!(admin.status, 200);
+    assert!(sqlite_path.exists(), "sqlite session db should be created");
     fs::remove_dir_all(&project_dir).expect("cleanup");
 }
 
@@ -327,14 +2043,14 @@ fn linked_module_routes_inherit_parent_block_headers() {
         .expect("clock should be valid")
         .as_nanos();
     let project_dir = std::env::temp_dir().join(format!("dolang-http-set-hdr-link-{unique}"));
-    fs::create_dir_all(project_dir.join("routers")).expect("routers dir");
+    fs::create_dir_all(project_dir.join("router")).expect("router dir");
     fs::write(
         project_dir.join("main.dol"),
-        "@SET_HDR({ \"X-Frame-Options\": \"DENY\" })\n$HTTP(\"/api\").link(\"routers.api\");\n",
+        "@SET_HDR({ \"X-Frame-Options\": \"DENY\" })\n$HTTP(\"/api\").link(\"router.api\");\n",
     )
     .expect("main");
     fs::write(
-        project_dir.join("routers/api.dol"),
+        project_dir.join("router/api.dol"),
         "$GET(\"/users\") list() -> String { $# \"ok\"; }\n",
     )
     .expect("router");
@@ -348,6 +2064,198 @@ fn linked_module_routes_inherit_parent_block_headers() {
         route.response_headers,
         vec![("X-Frame-Options".to_string(), "DENY".to_string())]
     );
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn linked_module_routes_share_module_state_snapshot() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-http-link-memory-{unique}"));
+    fs::create_dir_all(project_dir.join("router")).expect("router dir");
+    fs::write(
+        project_dir.join("main.dol"),
+        "$HTTP(\"/api\").link(\"router.api\");\n",
+    )
+    .expect("main");
+    fs::write(
+        project_dir.join("router/api.dol"),
+        "$fn render() -> String { $# \"ok\"; }\n\
+$GET(\"/health\") health() -> String { $# render(); }\n\
+$GET(\"/ready\") ready() -> String { $# render(); }\n",
+    )
+    .expect("router");
+
+    let outcome = support::run_program_at_path(&project_dir, RuntimeMode::Test);
+    assert!(outcome.error.is_none(), "http link should succeed");
+
+    let health = route_by_signature(outcome.context.routes(), "GET", "/api/health")
+        .expect("health route should exist");
+    let ready = route_by_signature(outcome.context.routes(), "GET", "/api/ready")
+        .expect("ready route should exist");
+
+    assert!(Arc::ptr_eq(&health.module_state, &ready.module_state));
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn linked_module_functions_share_captured_env_snapshot() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-http-fn-memory-{unique}"));
+    fs::create_dir_all(project_dir.join("router")).expect("router dir");
+    fs::write(
+        project_dir.join("main.dol"),
+        "$HTTP(\"/api\").link(\"router.api\");\n",
+    )
+    .expect("main");
+    fs::write(
+        project_dir.join("router/api.dol"),
+        "$ shared = \"ok\";\n\
+$fn render_health() -> String { $# shared; }\n\
+$fn render_ready() -> String { $# shared; }\n\
+$GET(\"/health\") health() -> String { $# render_health(); }\n\
+$GET(\"/ready\") ready() -> String { $# render_ready(); }\n",
+    )
+    .expect("router");
+
+    let outcome = support::run_program_at_path(&project_dir, RuntimeMode::Test);
+    assert!(outcome.error.is_none(), "http link should succeed");
+
+    let health = route_by_signature(outcome.context.routes(), "GET", "/api/health")
+        .expect("health route should exist");
+    let render_health = health
+        .module_state
+        .fns
+        .get("render_health")
+        .expect("render_health should exist");
+    let render_ready = health
+        .module_state
+        .fns
+        .get("render_ready")
+        .expect("render_ready should exist");
+
+    assert!(Arc::ptr_eq(
+        &render_health.module_env,
+        &render_ready.module_env
+    ));
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn repeated_imports_share_module_namespace_state() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-module-cache-{unique}"));
+    fs::create_dir_all(project_dir.join("features")).expect("features dir");
+    fs::create_dir_all(project_dir.join("common")).expect("common dir");
+    fs::write(
+        project_dir.join("main.dol"),
+        "$mod features.a;\n$mod features.b;\n",
+    )
+    .expect("main");
+    fs::write(
+        project_dir.join("features/a.dol"),
+        "$mod common.shared;\n$fn get() -> String { $# shared.name(); }\n",
+    )
+    .expect("a");
+    fs::write(
+        project_dir.join("features/b.dol"),
+        "$mod common.shared;\n$fn get() -> String { $# shared.name(); }\n",
+    )
+    .expect("b");
+    fs::write(
+        project_dir.join("common/shared.dol"),
+        "$fn name() -> String { $# \"shared\"; }\n",
+    )
+    .expect("shared");
+
+    let outcome = support::run_program_at_path(&project_dir, RuntimeMode::Test);
+    assert!(outcome.error.is_none(), "module imports should succeed");
+
+    let a_shared = match outcome.state.env.get("a").expect("a module should exist") {
+        DolangValue::ModuleProxy { state, .. } => match state
+            .module_env
+            .get("shared")
+            .expect("a.shared should exist")
+        {
+            DolangValue::ModuleProxy { state, .. } => Arc::clone(state),
+            other => panic!("expected module proxy for a.shared, got {other}"),
+        },
+        other => panic!("expected module proxy for a, got {other}"),
+    };
+    let b_shared = match outcome.state.env.get("b").expect("b module should exist") {
+        DolangValue::ModuleProxy { state, .. } => match state
+            .module_env
+            .get("shared")
+            .expect("b.shared should exist")
+        {
+            DolangValue::ModuleProxy { state, .. } => Arc::clone(state),
+            other => panic!("expected module proxy for b.shared, got {other}"),
+        },
+        other => panic!("expected module proxy for b, got {other}"),
+    };
+
+    assert!(Arc::ptr_eq(&a_shared, &b_shared));
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn circular_module_imports_fail_fast() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-mod-cycle-{unique}"));
+    fs::create_dir_all(project_dir.join("pkg")).expect("pkg dir");
+    fs::write(project_dir.join("main.dol"), "$mod pkg.a;\n").expect("main");
+    fs::write(project_dir.join("pkg/a.dol"), "$mod pkg.b;\n").expect("a");
+    fs::write(project_dir.join("pkg/b.dol"), "$mod pkg.a;\n").expect("b");
+
+    let outcome = support::run_program_at_path(&project_dir, RuntimeMode::Test);
+    let error = outcome
+        .error
+        .expect("circular imports should fail instead of recursing");
+    assert!(error.contains("circular module import"), "{error}");
+    assert!(error.contains("pkg.a"), "{error}");
+    assert!(error.contains("pkg.b"), "{error}");
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn function_calls_isolate_mutations_from_captured_env() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-fn-env-isolation-{unique}"));
+    fs::create_dir_all(&project_dir).expect("project dir");
+    fs::write(
+        project_dir.join("main.dol"),
+        "$ items = [1, 2];\n\
+$fn mutate() -> Int {\n\
+    items.push(3);\n\
+    $# items.len();\n\
+}\n\
+$>> mutate();\n\
+$>> items.len();\n",
+    )
+    .expect("main");
+
+    let outcome = support::run_program_at_path(&project_dir, RuntimeMode::Test);
+    assert!(outcome.error.is_none(), "function execution should succeed");
+    assert_eq!(outcome.stdout, "3\n2\n");
 
     fs::remove_dir_all(&project_dir).expect("cleanup");
 }
@@ -409,14 +2317,14 @@ fn linked_module_routes_inherit_parent_block_cors() {
         .expect("clock should be valid")
         .as_nanos();
     let project_dir = std::env::temp_dir().join(format!("dolang-http-cors-link-{unique}"));
-    fs::create_dir_all(project_dir.join("routers")).expect("routers dir");
+    fs::create_dir_all(project_dir.join("router")).expect("router dir");
     fs::write(
         project_dir.join("main.dol"),
-        "@CORS(\"*\")\n$main() {}\n\n@CORS({ origins: [\"https://api.example.com\"], methods: [\"GET\"] })\n$HTTP(\"/api\").link(\"routers.api\");\n",
+        "@CORS(\"*\")\n$main() {}\n\n@CORS({ origins: [\"https://api.example.com\"], methods: [\"GET\"] })\n$HTTP(\"/api\").link(\"router.api\");\n",
     )
     .expect("main");
     fs::write(
-        project_dir.join("routers/api.dol"),
+        project_dir.join("router/api.dol"),
         "$GET(\"/users\") list() -> String { $# \"ok\"; }\n",
     )
     .expect("router");
@@ -1169,14 +3077,14 @@ fn live_http_linked_module_routes_keep_prefixes() {
         .expect("clock should be valid")
         .as_nanos();
     let project_dir = std::env::temp_dir().join(format!("dolang-live-http-link-{unique}"));
-    fs::create_dir_all(project_dir.join("routers")).expect("routers dir");
+    fs::create_dir_all(project_dir.join("router")).expect("router dir");
     fs::write(
         project_dir.join("main.dol"),
-        "$HTTP(\"/v1\").link(\"routers.api\");\n",
+        "$HTTP(\"/v1\").link(\"router.api\");\n",
     )
     .expect("main");
     fs::write(
-        project_dir.join("routers/api.dol"),
+        project_dir.join("router/api.dol"),
         "$GET(\"/health\") health() -> String { $# \"ok\"; }\n",
     )
     .expect("router");
@@ -1309,14 +3217,14 @@ fn http_link_extracts_top_level_and_http_block_routes_only() {
         .expect("clock should be valid")
         .as_nanos();
     let project_dir = std::env::temp_dir().join(format!("dolang-http-link-{unique}"));
-    fs::create_dir_all(project_dir.join("routers")).expect("routers dir");
+    fs::create_dir_all(project_dir.join("router")).expect("router dir");
     fs::write(
         project_dir.join("main.dol"),
-        "$HTTP(\"/v1\").link(\"routers.api\");\n",
+        "$HTTP(\"/v1\").link(\"router.api\");\n",
     )
     .expect("main");
     fs::write(
-        project_dir.join("routers/api.dol"),
+        project_dir.join("router/api.dol"),
         "$fn helper() -> Int { $# 1; }\n$GET(\"/health\") health() -> String { $# \"ok\"; }\n$HTTP(\"/admin\") { $GET(\"/stats\") stats() -> String { $# \"stats\"; } }\n",
     )
     .expect("router");
@@ -1327,13 +3235,13 @@ fn http_link_extracts_top_level_and_http_block_routes_only() {
     assert!(route_by_signature(outcome.context.routes(), "GET", "/v1/admin/stats").is_some());
 
     fs::write(
-        project_dir.join("routers/empty.dol"),
+        project_dir.join("router/empty.dol"),
         "$fn helper() -> Int { $# 1; }\n",
     )
     .expect("empty router");
     fs::write(
         project_dir.join("main.dol"),
-        "$HTTP(\"/v1\").link(\"routers.empty\");\n",
+        "$HTTP(\"/v1\").link(\"router.empty\");\n",
     )
     .expect("main");
     let empty_outcome = support::run_program_at_path(&project_dir, RuntimeMode::Test);
@@ -1382,6 +3290,112 @@ APP_MODE = "serve"
 
     let loaded_config = ProjectConfig::load_from_dir(&project_dir).expect("manifest should parse");
     assert_eq!(loaded_config.get("APP_MODE"), Some("serve"));
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn serve_mode_postgres_route_can_query_and_close_connection_when_url_is_present() {
+    let Some(url) = std::env::var("DOLANG_TEST_POSTGRES_URL").ok() else {
+        return;
+    };
+
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-phase5-serve-postgres-{unique}"));
+    fs::create_dir_all(&project_dir).expect("temp project dir");
+
+    let manifest = r#"
+name = "phase5-serve-postgres"
+version = "0.1.0"
+entry = "main.dol"
+"#;
+    fs::write(project_dir.join("package.toml"), manifest).expect("manifest");
+    fs::write(
+        project_dir.join("main.dol"),
+        format!(
+            "$mod std.postgres;\n\n$GET(\"/users\") users() -> List<Map> {{\n    $ conn = postgres.connect(\"{url}\");\n    $ rows = conn.query(\"SELECT id, name, email, created_at::text AS created_at FROM users ORDER BY id\", []);\n    $>> conn.close();\n    $# rows;\n}}\n"
+        ),
+    )
+    .expect("main");
+
+    let outcome = support::run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        outcome.error.is_none(),
+        "serve postgres fixture should boot: {:?}",
+        outcome.error
+    );
+
+    let base_url = support::start_live_http_server_from_context(outcome.context);
+    let response = support::http_get(&base_url, "/users");
+
+    assert_eq!(response.status, 200);
+    assert!(
+        response.body.contains("\"Alice\""),
+        "body={}",
+        response.body
+    );
+    assert!(response.body.contains("\"Bob\""), "body={}", response.body);
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn serve_mode_linked_route_can_return_imported_user_type() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock should be valid")
+        .as_nanos();
+    let project_dir = std::env::temp_dir().join(format!("dolang-phase5-linked-type-{unique}"));
+    fs::create_dir_all(project_dir.join("router")).expect("router dir");
+    fs::create_dir_all(project_dir.join("services")).expect("services dir");
+    fs::create_dir_all(project_dir.join("data")).expect("data dir");
+
+    let manifest = r#"
+name = "phase5-linked-type"
+version = "0.1.0"
+entry = "main.dol"
+"#;
+    fs::write(project_dir.join("package.toml"), manifest).expect("manifest");
+    fs::write(
+        project_dir.join("main.dol"),
+        "$HTTP(\"/api\").link(\"router.users\");\n",
+    )
+    .expect("main");
+    fs::write(
+        project_dir.join("data/user_types.dol"),
+        "$Type User {\n    id: Int\n    name: String\n}\n",
+    )
+    .expect("types");
+    fs::write(
+        project_dir.join("services/user_service.dol"),
+        "$mod data.user_types;\n\n$fn get_user() -> User {\n    $# User {\n        id: 1,\n        name: \"Alice\",\n    };\n}\n",
+    )
+    .expect("service");
+    fs::write(
+        project_dir.join("router/users.dol"),
+        "$mod data.user_types;\n$mod services.user_service;\n\n$GET(\"/users\") get_users() -> User {\n    $# user_service.get_user();\n}\n",
+    )
+    .expect("router");
+
+    let outcome = support::run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        outcome.error.is_none(),
+        "linked typed fixture should boot: {:?}",
+        outcome.error
+    );
+
+    let base_url = support::start_live_http_server_from_context(outcome.context);
+    let response = support::http_get(&base_url, "/api/users");
+
+    assert_eq!(response.status, 200);
+    assert!(
+        response.body.contains("\"Alice\""),
+        "body={}",
+        response.body
+    );
 
     fs::remove_dir_all(&project_dir).expect("cleanup");
 }

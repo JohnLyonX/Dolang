@@ -75,7 +75,8 @@ impl<'a> ExprParser<'a> {
                         name: tok.literal,
                         args,
                     })))
-                } else if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::LBrace {
+                } else if self.pos < self.tokens.len() && self.tokens[self.pos].typ == Type::LBrace
+                {
                     self.parse_struct_constructor(tok.pos, tok.literal)
                 } else {
                     Ok(Box::new(Expr::VarLookup(VarLookup {
@@ -369,20 +370,18 @@ impl<'a> ExprParser<'a> {
         while self.pos < self.tokens.len() && self.tokens[self.pos].typ != Type::RBrace {
             // field name (identifier)
             if self.tokens[self.pos].typ != Type::Ident {
-                return Err(self.error_expected(
-                    "expected field name in struct constructor",
-                    "identifier",
-                ));
+                return Err(
+                    self.error_expected("expected field name in struct constructor", "identifier")
+                );
             }
             let field_name = self.tokens[self.pos].literal.clone();
             self.pos += 1;
 
             // colon
             if self.pos >= self.tokens.len() || self.tokens[self.pos].typ != Type::Colon {
-                return Err(self.error_expected(
-                    &format!("expected ':' after field '{}'", field_name),
-                    ":",
-                ));
+                return Err(
+                    self.error_expected(&format!("expected ':' after field '{}'", field_name), ":")
+                );
             }
             self.pos += 1;
 

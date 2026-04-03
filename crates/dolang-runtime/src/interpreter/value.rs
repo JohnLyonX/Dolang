@@ -8,8 +8,8 @@
 use crate::ast::Stmt;
 use indexmap::IndexMap;
 use std::borrow::Cow;
-use std::collections::HashSet;
 use std::fmt;
+use std::sync::Arc;
 
 /// Dolang 运行时值的类型安全表示
 #[derive(Clone)]
@@ -38,11 +38,7 @@ pub enum DolangValue {
     },
     ModuleProxy {
         path: String,
-        exports: super::env::FnEnv,                  // 对外可见函数
-        fns: super::env::FnEnv,                      // 模块内部完整函数表
-        native_exports: crate::runtime::NativeFnMap, // native 公开函数
-        module_env: super::env::Env,                 // 模块执行后的环境（导入的模块代理、常量等）
-        visible_user_types: HashSet<String>,
+        state: Arc<super::ModuleNamespace>,
     },
     TypedInstance {
         type_name: String,
@@ -349,7 +345,10 @@ mod tests {
     fn json_conversion_hides_typed_instance_private_fields() {
         let mut fields = IndexMap::new();
         fields.insert("name".to_string(), DolangValue::Str("alice".to_string()));
-        fields.insert("_password".to_string(), DolangValue::Str("secret".to_string()));
+        fields.insert(
+            "_password".to_string(),
+            DolangValue::Str("secret".to_string()),
+        );
         let json = value_to_json(&DolangValue::TypedInstance {
             type_name: "User".to_string(),
             fields,

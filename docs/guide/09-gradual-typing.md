@@ -74,8 +74,14 @@ $Type User {
 
 $fn list_users() -> List<User> {
     $# [
-        {"id": 1, "name": "Alice"},
-        {"id": 2, "name": "Bob"}
+        User {
+            id: 1,
+            name: "Alice",
+        },
+        User {
+            id: 2,
+            name: "Bob",
+        }
     ];
 }
 ```
@@ -101,6 +107,8 @@ $Type User {
 
 它最适合和 `List<T>`、接口返回说明、阅读文档时的结构表达配合使用。
 
+如果函数或 HTTP handler 声明返回 `User` 或 `List<User>`，实际返回值也应该是 `User { ... }` 实例，而不是形状相同的裸 `Map`。
+
 ## HTTP 返回里的 `List<T>`
 
 在 HTTP 章节里同样推荐这样写：
@@ -113,8 +121,14 @@ $Type User {
 
 $GET("/users") list_users() -> List<User> {
     $# [
-        {"id": 1, "name": "Alice"},
-        {"id": 2, "name": "Bob"}
+        User {
+            id: 1,
+            name: "Alice",
+        },
+        User {
+            id: 2,
+            name: "Bob",
+        }
     ];
 }
 ```

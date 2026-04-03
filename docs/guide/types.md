@@ -75,7 +75,7 @@ $fn log(msg) {
 
 ## 自定义类型 `$Type`
 
-使用 `$Type` 定义 JSON 数据形状（文档性质，不创建运行时类型）：
+使用 `$Type` 定义用户类型与结构形状：
 
 ```dolang
 $Type User {
@@ -90,6 +90,8 @@ $Type User {
 - 可选字段：在类型后加 `?`
 - 无 getter / setter，无私有字段，无方法
 
+当前主线里，`$Type` 已经不只是“文档标签”。如果函数或 HTTP handler 声明返回 `User` 或 `List<User>`，runtime 会校验实际返回值是否为对应的 `User { ... }` 实例。
+
 ### 与返回类型相关的迁移提醒
 
 旧文档里曾经把 `$Type` 和 `JSON<User>` 放在一起讲解。
@@ -99,6 +101,7 @@ $Type User {
 - 结构说明看 `$Type`
 - 普通 JSON 返回看 `-> JSON`
 - 集合返回看 `-> List<T>`
+- 如果声明返回 `T` 或 `List<T>`，实际值也应构造成 `T { ... }`
 
 主线说明以 [09-gradual-typing.md](09-gradual-typing.md) 为准。
 

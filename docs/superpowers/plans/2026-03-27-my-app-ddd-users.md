@@ -221,7 +221,7 @@ Expected: PASS
 - [ ] **Step 4: Commit the router wiring**
 
 ```bash
-git add my-app/main.dol my-app/routers/users_routers.dol
+git add my-app/main.dol my-app/router/users_routers.dol
 git commit -m "feat: expose my-app user ddd routes"
 ```
 

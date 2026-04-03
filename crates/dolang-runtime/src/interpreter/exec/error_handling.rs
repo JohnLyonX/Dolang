@@ -11,7 +11,7 @@ pub(super) fn handle_throw_stmt(
     context: &mut RuntimeContext,
     w: &mut dyn std::io::Write,
 ) -> Flow {
-    match eval_expr(&stmt.value, &state.env, &mut state.fns, context, w, false) {
+    match eval_expr(&stmt.value, state, context, w, false) {
         Ok(val) => Flow::Throw(val),
         Err(err) => Flow::Err(err),
     }
@@ -26,12 +26,12 @@ pub(super) fn handle_try_stmt(
     let flow = exec_block(&stmt.body, state, context, w);
     match flow {
         Flow::Throw(val) => {
-            state.env.insert(stmt.catch_var.clone(), val);
+            state.insert_env(stmt.catch_var.clone(), val);
             exec_block(&stmt.catch_body, state, context, w)
         }
         Flow::Err(err) => {
             let msg = DolangValue::Str(err.to_string());
-            state.env.insert(stmt.catch_var.clone(), msg);
+            state.insert_env(stmt.catch_var.clone(), msg);
             exec_block(&stmt.catch_body, state, context, w)
         }
         other => other,

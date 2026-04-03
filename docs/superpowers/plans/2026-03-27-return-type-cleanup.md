@@ -305,7 +305,7 @@ Expected: PASS with the new route/service contract
 - [ ] **Step 5: Commit the app migration**
 
 ```bash
-git add my-app/routers/users_routers.dol my-app/services/users_services.dol my-app/data/users_data.dol tests/integration_suite.rs
+git add my-app/router/users_routers.dol my-app/services/users_services.dol my-app/data/users_data.dol tests/integration_suite.rs
 git commit -m "refactor: migrate my-app to simplified return annotations"
 ```
 

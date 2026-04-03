@@ -2,6 +2,8 @@
 use super::value::DolangValue;
 use crate::ast::FnDeclStmt;
 use std::collections::HashMap;
+use std::ops::Deref;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Represents the type of a value (for type checking)
@@ -56,10 +58,60 @@ pub type ConstEnv = HashMap<String, bool>;
 pub struct RuntimeFn {
     pub decl: FnDeclStmt,
     pub source_file: Option<String>,
+    pub module_env: Arc<Env>,
 }
 
-/// Function environment: name -> runtime function metadata
-pub type FnEnv = HashMap<String, RuntimeFn>;
+/// Function environment with copy-on-write semantics so nested execution
+/// can cheaply share function tables until a declaration mutates them.
+#[derive(Debug, Clone, Default)]
+pub struct FnEnv(Arc<HashMap<String, RuntimeFn>>);
+
+impl FnEnv {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert(&mut self, name: String, runtime_fn: RuntimeFn) -> Option<RuntimeFn> {
+        Arc::make_mut(&mut self.0).insert(name, runtime_fn)
+    }
+
+    pub fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = (String, RuntimeFn)>,
+    {
+        Arc::make_mut(&mut self.0).extend(iter);
+    }
+
+    pub fn clear(&mut self) {
+        Arc::make_mut(&mut self.0).clear();
+    }
+}
+
+impl Deref for FnEnv {
+    type Target = HashMap<String, RuntimeFn>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+impl<'a> IntoIterator for &'a FnEnv {
+    type Item = (&'a String, &'a RuntimeFn);
+    type IntoIter = std::collections::hash_map::Iter<'a, String, RuntimeFn>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl IntoIterator for FnEnv {
+    type Item = (String, RuntimeFn);
+    type IntoIter = std::collections::hash_map::IntoIter<String, RuntimeFn>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Arc::unwrap_or_clone(self.0).into_iter()
+    }
+}
 
 /// Counter for generating unique anonymous function names
 static FN_COUNTER: AtomicUsize = AtomicUsize::new(0);

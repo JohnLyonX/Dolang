@@ -1,0 +1,126 @@
+* {
+  box-sizing: border-box;
+}
+
+body.news-site {
+  margin: 0;
+  font-family: "Source Serif 4", "Georgia", serif;
+  background:
+    radial-gradient(circle at top right, rgba(205, 232, 255, 0.35), transparent 24%),
+    linear-gradient(180deg, #f8f5ef 0%, #f4f1ea 48%, #ece7df 100%);
+  color: #1d2433;
+}
+
+.news-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 18px;
+}
+
+.news-hero.compact {
+  padding-bottom: 8px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font: 600 12px/1.2 "IBM Plex Sans", sans-serif;
+  color: #8e5c21;
+}
+
+.news-hero h1 {
+  margin: 0 0 12px;
+  max-width: 760px;
+  font-size: clamp(34px, 6vw, 64px);
+  line-height: 0.94;
+}
+
+.lede {
+  margin: 0;
+  max-width: 620px;
+  font: 400 18px/1.6 "IBM Plex Sans", sans-serif;
+  color: #4b566e;
+}
+
+.news-nav {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.news-nav a {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(255, 251, 244, 0.9);
+  border: 1px solid rgba(31, 43, 71, 0.12);
+  padding: 12px 16px;
+  color: #21304f;
+  text-decoration: none;
+  font: 600 14px/1 "IBM Plex Sans", sans-serif;
+}
+
+.news-main {
+  width: min(980px, calc(100% - 32px));
+  margin: 0 auto 48px;
+}
+
+.news-list {
+  display: grid;
+  gap: 18px;
+}
+
+.news-card,
+.news-article {
+  background: rgba(255, 252, 246, 0.94);
+  border: 1px solid rgba(31, 43, 71, 0.12);
+  border-radius: 24px;
+  padding: 22px;
+  box-shadow: 0 22px 42px rgba(31, 43, 71, 0.06);
+}
+
+.news-card h2,
+.news-article h1 {
+  margin: 0 0 12px;
+}
+
+.news-card a {
+  color: #16223b;
+  text-decoration: none;
+}
+
+.news-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  color: #7d5b31;
+  font: 600 13px/1.4 "IBM Plex Sans", sans-serif;
+}
+
+.news-summary,
+.news-body,
+.news-status {
+  font: 400 17px/1.7 "IBM Plex Sans", sans-serif;
+  color: #42506a;
+}
+
+.news-status {
+  margin-top: 16px;
+}
+
+@media (max-width: 860px) {
+  .news-hero {
+    flex-direction: column;
+    width: min(100% - 20px, 1180px);
+  }
+
+  .news-main {
+    width: min(100% - 20px, 980px);
+  }
+}

@@ -46,10 +46,27 @@ sample/
   auth-b2b-portal/
     package.toml
     main.dol
-    services/
-      auth.dol
-      users.dol
-      permissions.dol
+    config/
+      app_config.dol
+      database.dol
+    shared/
+      db/
+        queries.dol
+    domains/
+      auth/
+        data/
+          auth_user_types.dol
+          auth_user_queries.dol
+        services/
+          auth_user_service.dol
+          permission_service.dol
+          auth_service.dol
+      news/
+        data/
+          news_types.dol
+          news_queries.dol
+        services/
+          news_service.dol
     README.md
     scripts/
       smoke.sh
@@ -64,14 +81,19 @@ sample/
 - `main.dol`
   - HTTP 路由注册
   - 简单 handler 装配
-- `services/auth.dol`
+- `domains/auth/data/*`
+  - `$Type AuthUser` / `PublicUser`
+  - 用户查询 SQL
+- `domains/auth/services/auth_service.dol`
   - 登录、刷新、登出
   - session / jwt 协调逻辑
-- `services/users.dol`
-  - 用户查询
-  - 用户状态检查
-- `services/permissions.dol`
+- `domains/auth/services/permission_service.dol`
   - 从业务角色映射到 runtime principal roles / permissions
+- `domains/news/data/*`
+  - `$Type NewsArticleSummary` / `NewsArticle`
+  - 新闻查询 SQL
+- `domains/news/services/news_service.dol`
+  - 新闻业务装配
 - `scripts/smoke.sh`
   - 真实 curl 流程回归脚本
 
@@ -129,7 +151,11 @@ sample/
 
 - `role = "admin"`
   - roles: `["admin"]`
-  - permissions: `["project:create", "project:read", "audit:read"]`
+  - permissions: `["project:create", "project:read", "audit:read", "news:create", "news:edit", "news:publish", "news:delete"]`
+
+- `role = "editor"`
+  - roles: `["editor"]`
+  - permissions: `["news:create", "news:edit", "news:publish"]`
 
 - `role = "member"`
   - roles: `["member"]`
@@ -252,7 +278,8 @@ PASSWORD='password123' cargo run -- run sample/auth-b2b-portal/scripts/hash_pass
 - `app_users` 是 sample 项目自己的业务用户表
 - `auth_sessions` 必须和 runtime 当前 session store 字段兼容
 - `auth_refresh_tokens` 必须和 runtime 当前 refresh token store 字段兼容
-- `role` 当前建议只使用 `admin`、`member`
+- `news_categories` 与 `news_articles` 是 sample 的新闻业务表
+- `role` 当前建议使用 `admin`、`editor`、`member`
 - `claims_json` 当前保持 `TEXT`，不要改成 `JSONB`
 
 ```sql
@@ -273,6 +300,36 @@ CREATE INDEX IF NOT EXISTS idx_app_users_team_id
 
 CREATE INDEX IF NOT EXISTS idx_app_users_role
     ON app_users (role);
+
+CREATE TABLE IF NOT EXISTS news_categories (
+    category_id TEXT PRIMARY KEY,
+    slug TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS news_articles (
+    article_id TEXT PRIMARY KEY,
+    slug TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    body TEXT NOT NULL,
+    category_id TEXT NOT NULL REFERENCES news_categories(category_id),
+    status TEXT NOT NULL CHECK (status IN ('draft', 'published')),
+    author_user_id TEXT NOT NULL REFERENCES app_users(user_id),
+    published_at BIGINT,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_articles_status
+    ON news_articles (status);
+
+CREATE INDEX IF NOT EXISTS idx_news_articles_slug
+    ON news_articles (slug);
+
+CREATE INDEX IF NOT EXISTS idx_news_articles_category_id
+    ON news_articles (category_id);
 
 CREATE TABLE IF NOT EXISTS auth_sessions (
     session_id TEXT PRIMARY KEY,
@@ -329,6 +386,77 @@ INSERT INTO app_users (
         'Portal Member',
         'team_blue',
         'member'
+    ),
+    (
+        'user_editor_1',
+        'editor',
+        'REPLACE_WITH_ARGON2_HASH',
+        'Portal Editor',
+        'team_blue',
+        'editor'
+    );
+
+INSERT INTO news_categories (
+    category_id,
+    slug,
+    name,
+    sort_order
+) VALUES
+    ('cat_company', 'company', 'Company', 10),
+    ('cat_product', 'product', 'Product', 20),
+    ('cat_security', 'security', 'Security', 30);
+
+INSERT INTO news_articles (
+    article_id,
+    slug,
+    title,
+    summary,
+    body,
+    category_id,
+    status,
+    author_user_id,
+    published_at,
+    created_at,
+    updated_at
+) VALUES
+    (
+        'article_001',
+        'portal-launches-newsroom',
+        'Portal Launches Newsroom',
+        'A public newsroom is now available for customers and partners.',
+        'The Dolang sample newsroom is now live and demonstrates published article delivery.',
+        'cat_company',
+        'published',
+        'user_admin_1',
+        1735689600,
+        1735689600,
+        1735689600
+    ),
+    (
+        'article_002',
+        'spring-release-roundup',
+        'Spring Release Roundup',
+        'The product team shipped a compact release with auth and admin improvements.',
+        'This article exists to verify multiple public news cards and detail pages.',
+        'cat_product',
+        'published',
+        'user_editor_1',
+        1735776000,
+        1735776000,
+        1735776000
+    ),
+    (
+        'article_003',
+        'security-hardening-draft',
+        'Security Hardening Draft',
+        'This draft article should only be visible from the admin side before publish.',
+        'The draft state is used to verify publish and unpublish visibility rules.',
+        'cat_security',
+        'draft',
+        'user_editor_1',
+        NULL,
+        1735862400,
+        1735862400
     );
 ```
 

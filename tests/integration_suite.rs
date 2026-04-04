@@ -244,13 +244,23 @@ fn sample_auth_b2b_portal_exists_and_declares_postgres_auth_stores() {
     let project_dir = sample_project_path("auth-b2b-portal");
     let dol_files = [
         project_dir.join("main.dol"),
+        project_dir.join("config/app_config.dol"),
+        project_dir.join("config/database.dol"),
+        project_dir.join("shared/db/queries.dol"),
         project_dir.join("app/router/auth_router.dol"),
         project_dir.join("app/router/account_router.dol"),
         project_dir.join("app/router/admin_router.dol"),
         project_dir.join("app/router/project_router.dol"),
-        project_dir.join("services/auth.dol"),
-        project_dir.join("services/users.dol"),
-        project_dir.join("services/permissions.dol"),
+        project_dir.join("app/router/news_page_router.dol"),
+        project_dir.join("app/router/news_api_router.dol"),
+        project_dir.join("domains/auth/data/auth_user_types.dol"),
+        project_dir.join("domains/auth/data/auth_user_queries.dol"),
+        project_dir.join("domains/auth/services/permission_service.dol"),
+        project_dir.join("domains/auth/services/auth_user_service.dol"),
+        project_dir.join("domains/auth/services/auth_service.dol"),
+        project_dir.join("domains/news/data/news_types.dol"),
+        project_dir.join("domains/news/data/news_queries.dol"),
+        project_dir.join("domains/news/services/news_service.dol"),
     ];
 
     assert!(project_dir.exists(), "sample project should exist");
@@ -361,6 +371,111 @@ fn sample_auth_hash_helper_runs_without_project_auth_env() {
 }
 
 #[test]
+fn sample_auth_b2b_portal_news_plan_mentions_editor_and_news_tables() {
+    let readme =
+        fs::read_to_string(sample_project_path("auth-b2b-portal/README.md")).expect("readme");
+    let plan =
+        fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-auth-plan.md"))
+            .expect("plan");
+
+    assert!(readme.contains("editor"));
+    assert!(plan.contains("news_categories"));
+    assert!(plan.contains("news_articles"));
+    assert!(plan.contains("news:create"));
+    assert!(plan.contains("news:publish"));
+}
+
+#[test]
+fn sample_auth_b2b_portal_declares_news_routes_and_auth_rules() {
+    let project_dir = sample_project_path("auth-b2b-portal");
+    let main_source = fs::read_to_string(project_dir.join("main.dol")).expect("main");
+    let manifest = ProjectConfig::load_from_dir(&project_dir).expect("manifest");
+
+    assert!(main_source.contains("news_page_router"));
+    assert!(main_source.contains("news_api_router"));
+    assert!(
+        project_dir
+            .join("domains/news/services/news_service.dol")
+            .exists()
+    );
+    assert!(
+        project_dir
+            .join("domains/news/data/news_types.dol")
+            .exists()
+    );
+    assert!(
+        project_dir
+            .join("domains/auth/data/auth_user_types.dol")
+            .exists()
+    );
+    assert!(project_dir.join("app/router/news_page_router.dol").exists());
+    assert!(project_dir.join("app/router/news_api_router.dol").exists());
+    assert!(
+        manifest
+            .server
+            .auth
+            .authorization
+            .rules
+            .iter()
+            .any(|rule| rule.path == "/news-admin")
+    );
+    assert!(
+        manifest
+            .server
+            .auth
+            .authorization
+            .rules
+            .iter()
+            .any(|rule| rule.path == "/api/admin/news")
+    );
+}
+
+#[test]
+fn sample_auth_b2b_portal_exposes_public_news_pages_and_assets() {
+    let project_dir = sample_project_path("auth-b2b-portal");
+    let html = fs::read_to_string(project_dir.join("app/pages/news.html")).expect("news html");
+    let detail =
+        fs::read_to_string(project_dir.join("app/pages/news_detail.html")).expect("detail html");
+    let js = fs::read_to_string(project_dir.join("app/public/js/news.js")).expect("news js");
+    let detail_js =
+        fs::read_to_string(project_dir.join("app/public/js/news_detail.js")).expect("detail js");
+
+    assert!(html.contains("/assets/css/news.css"));
+    assert!(html.contains("/assets/js/news.js"));
+    assert!(detail.contains("/assets/js/news_detail.js"));
+    assert!(js.contains("/api/news"));
+    assert!(detail_js.contains("/api/news/"));
+}
+
+#[test]
+fn sample_auth_b2b_portal_exposes_news_admin_console_assets() {
+    let project_dir = sample_project_path("auth-b2b-portal");
+    let html =
+        fs::read_to_string(project_dir.join("app/pages/news_admin.html")).expect("admin html");
+    let js = fs::read_to_string(project_dir.join("app/public/js/news_admin.js")).expect("admin js");
+
+    assert!(html.contains("/assets/css/news_admin.css"));
+    assert!(html.contains("/assets/js/news_admin.js"));
+    assert!(js.contains("/api/admin/news"));
+    assert!(js.contains("/publish"));
+    assert!(js.contains("X-CSRF-Token"));
+    assert!(js.contains("transport === \"bearer\" ? \"omit\" : \"include\""));
+}
+
+#[test]
+fn sample_auth_b2b_portal_smoke_script_uses_editor_for_news_flow() {
+    let project_dir = sample_project_path("auth-b2b-portal");
+    let smoke =
+        fs::read_to_string(project_dir.join("scripts/smoke.sh")).expect("smoke script should read");
+
+    assert!(smoke.contains("\"username\":\"editor\""));
+    assert!(smoke.contains("EDITOR_COOKIE_JAR"));
+    assert!(smoke.contains("EDITOR_ACCESS_TOKEN"));
+    assert!(smoke.contains("/api/admin/news"));
+    assert!(smoke.contains("/publish"));
+}
+
+#[test]
 fn sample_auth_b2b_portal_live_flows_work_when_env_is_available() {
     let Some(url) = std::env::var("DOLANG_TEST_POSTGRES_URL").ok() else {
         return;
@@ -466,6 +581,182 @@ fn sample_auth_b2b_portal_live_flows_work_when_env_is_available() {
     assert_eq!(me_bearer_json["principal"]["scheme"], "bearer");
 
     // SAFETY: test serializes access with a process-wide mutex.
+    unsafe {
+        std::env::remove_var("SESSION_DATABASE_URL");
+        std::env::remove_var("APP_DATABASE_URL");
+        std::env::remove_var("JWT_SECRET");
+    }
+}
+
+#[test]
+fn sample_auth_b2b_portal_news_role_matrix_works_when_env_is_available() {
+    let Some(url) = std::env::var("DOLANG_TEST_POSTGRES_URL").ok() else {
+        return;
+    };
+    let _guard = sample_auth_env_lock().lock().expect("env lock should work");
+    let project_dir = sample_project_path("auth-b2b-portal");
+
+    // SAFETY: test serializes process env mutation with a process-wide mutex.
+    unsafe {
+        std::env::set_var("SESSION_DATABASE_URL", &url);
+        std::env::set_var("APP_DATABASE_URL", &url);
+        std::env::set_var("JWT_SECRET", "sample-auth-secret");
+    }
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(outcome.error.is_none(), "sample project should boot");
+    let base_url = start_live_http_server_from_context(outcome.context);
+
+    let member_login_body = serde_json::json!({
+        "username": "member",
+        "password": "password123"
+    })
+    .to_string();
+    let member_login = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/auth/login",
+        &[("Content-Type", "application/json")],
+        Some(member_login_body.as_str()),
+    );
+    let member_login_json: serde_json::Value =
+        serde_json::from_str(&member_login.body).expect("member login response should be json");
+    let member_cookie = member_login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("member login should set cookie");
+    let member_csrf = member_login_json["csrf_token"]
+        .as_str()
+        .expect("member csrf token");
+
+    let member_create_body = serde_json::json!({
+        "slug": "member-should-not-create",
+        "title": "Member Forbidden",
+        "summary": "Members should not create news",
+        "body": "forbidden",
+        "category_id": "cat_company"
+    })
+    .to_string();
+    let member_create = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/api/admin/news",
+        &[
+            ("Content-Type", "application/json"),
+            ("Cookie", &member_cookie),
+            ("X-CSRF-Token", member_csrf),
+        ],
+        Some(member_create_body.as_str()),
+    );
+
+    let editor_login_body = serde_json::json!({
+        "username": "editor",
+        "password": "password123"
+    })
+    .to_string();
+    let editor_login = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/auth/login",
+        &[("Content-Type", "application/json")],
+        Some(editor_login_body.as_str()),
+    );
+    let editor_login_json: serde_json::Value =
+        serde_json::from_str(&editor_login.body).expect("editor login response should be json");
+    let editor_cookie = editor_login
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("set-cookie"))
+        .map(|(_, value)| value.clone())
+        .expect("editor login should set cookie");
+    let editor_csrf = editor_login_json["csrf_token"]
+        .as_str()
+        .expect("editor csrf token");
+    let editor_access_token = editor_login_json["access_token"]
+        .as_str()
+        .expect("editor access token");
+
+    let slug = format!("editor-news-{}", std::process::id());
+    let editor_create_body = serde_json::json!({
+        "slug": slug,
+        "title": "Editor Draft",
+        "summary": "Draft created by editor",
+        "body": "This article verifies editor write permissions.",
+        "category_id": "cat_product"
+    })
+    .to_string();
+    let editor_create_without_csrf = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/api/admin/news",
+        &[
+            ("Content-Type", "application/json"),
+            ("Cookie", &editor_cookie),
+        ],
+        Some(editor_create_body.as_str()),
+    );
+    let editor_create = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/api/admin/news",
+        &[
+            ("Content-Type", "application/json"),
+            ("Cookie", &editor_cookie),
+            ("X-CSRF-Token", editor_csrf),
+        ],
+        Some(editor_create_body.as_str()),
+    );
+    let editor_create_json: serde_json::Value =
+        serde_json::from_str(&editor_create.body).expect("editor create response should be json");
+    let article_id = editor_create_json["article_id"]
+        .as_str()
+        .expect("created article should have id");
+
+    let public_before_publish = http_get(&base_url, "/api/news");
+    let public_before_publish_json: serde_json::Value =
+        serde_json::from_str(&public_before_publish.body).expect("public list should be json");
+
+    let publish = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        &format!("/api/admin/news/{article_id}/publish"),
+        &[
+            ("Authorization", &format!("Bearer {editor_access_token}")),
+            ("Content-Type", "application/json"),
+        ],
+        Some("{}"),
+    );
+
+    let public_after_publish = http_get(&base_url, "/api/news");
+    let public_after_publish_json: serde_json::Value =
+        serde_json::from_str(&public_after_publish.body).expect("public list should be json");
+
+    assert_eq!(member_login.status, 200);
+    assert_eq!(member_create.status, 403);
+    assert_eq!(editor_login.status, 200);
+    assert_eq!(editor_create_without_csrf.status, 403);
+    assert_eq!(editor_create.status, 201);
+    assert_eq!(public_before_publish.status, 200);
+    assert_eq!(publish.status, 200);
+    assert_eq!(public_after_publish.status, 200);
+    assert!(
+        !public_before_publish_json
+            .as_array()
+            .expect("public list should be array")
+            .iter()
+            .any(|article| article["slug"] == slug)
+    );
+    assert!(
+        public_after_publish_json
+            .as_array()
+            .expect("public list should be array")
+            .iter()
+            .any(|article| article["slug"] == slug)
+    );
+
+    // SAFETY: test serializes process env mutation with a process-wide mutex.
     unsafe {
         std::env::remove_var("SESSION_DATABASE_URL");
         std::env::remove_var("APP_DATABASE_URL");

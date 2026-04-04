@@ -229,11 +229,18 @@ $POST("/users") create_user() -> JSON {
 
 - `std.auth.session.current()`
 - `std.auth.session.exists()`
+- `std.auth.session.id()`
+- `std.auth.session.get(key)`
 - `std.auth.jwt.current()`
+- `std.auth.jwt.bearer()`
 - `std.auth.guard.principal()`
 - `std.auth.guard.authenticated()`
+- `std.auth.csrf.token()`
+- `std.auth.csrf.rotate()`
 
 这些 API 读取的是当前请求上下文中的 principal / session / JWT claims，不需要手动重复解析请求头。
+
+如果你需要完整的 session / jwt / guard / csrf 方法表，请直接查 [stdlib-api.md](stdlib-api.md)。
 
 ---
 

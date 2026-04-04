@@ -1,0 +1,17 @@
+$Type AuthUser {
+    user_id: String
+    username: String
+    password_hash: String
+    display_name: String
+    team_id: String
+    role: String
+    is_active: Bool
+}
+
+$Type PublicUser {
+    user_id: String
+    username: String
+    display_name: String
+    team_id: String
+    role: String
+}

@@ -419,5 +419,9 @@ dolang serve main.dol --routertab
   STATIC /static        -> static/
 
 Local: http://127.0.0.1:8080
+Network: http://192.168.1.25:8080
+
+如果当前环境拿不到可用私网 IPv4，CLI 会回退成：
+
 Network: listening on all interfaces (:8080), use your LAN IP to access
 ```

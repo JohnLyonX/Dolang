@@ -4,7 +4,7 @@ version = "0.1.0"
 entry = "main.dol"
 
 [server]
-host = "127.0.0.1"
+host = "0.0.0.0"
 port = 8080
 
 [server.auth]
@@ -70,3 +70,39 @@ method = "POST"
 path = "/api/projects"
 require = "authenticated"
 permissions_all = ["project:create"]
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/news-admin"
+require = "authenticated"
+permissions_any = ["news:create", "news:edit", "news:publish"]
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/api/admin/news"
+require = "authenticated"
+permissions_all = ["news:edit"]
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/api/admin/news"
+require = "authenticated"
+permissions_all = ["news:create"]
+
+[[server.auth.authorization.rules]]
+method = "PUT"
+path = "/api/admin/news/*"
+require = "authenticated"
+permissions_all = ["news:edit"]
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/api/admin/news/*/publish"
+require = "authenticated"
+permissions_all = ["news:publish"]
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/api/admin/news/*/unpublish"
+require = "authenticated"
+permissions_all = ["news:publish"]

@@ -2,20 +2,21 @@ $mod std.auth.csrf;
 $mod std.auth.jwt;
 $mod std.auth.password;
 $mod std.auth.session;
-$mod services.permissions;
-$mod services.users;
+$mod domains.auth.data.auth_user_types;
+$mod domains.auth.services.auth_user_service;
+$mod domains.auth.services.permission_service;
 
 $fn authenticate(username, plain_password) {
-    $ user = users.find_by_username(username);
+    $ user = auth_user_service.find_user_by_username(username);
     $if user == null {
         $# null;
     }
 
-    $if user["is_active"] != true {
+    $if user.is_active() != true {
         $# null;
     }
 
-    $if password.verify(plain_password, user["password_hash"]) != true {
+    $if password.verify(plain_password, user.password_hash()) != true {
         $# null;
     }
 
@@ -23,30 +24,30 @@ $fn authenticate(username, plain_password) {
 }
 
 $fn issue_login(user) -> JSON {
-    $ roles = permissions.roles_for_user(user);
-    $ perms = permissions.permissions_for_user(user);
-    $ claims = permissions.claims_for_user(user);
+    $ roles = permission_service.roles_for_user(user);
+    $ perms = permission_service.permissions_for_user(user);
+    $ claims = permission_service.claims_for_user(user);
 
     session.create({
-        "subject": user["user_id"],
+        "subject": user.user_id(),
         "roles": roles,
         "permissions": perms,
         "claims": claims
     });
 
     $ pair = jwt.issue_pair({
-        "sub": user["user_id"],
+        "sub": user.user_id(),
         "roles": roles,
         "permissions": perms,
-        "display_name": user["display_name"],
-        "team_id": user["team_id"],
-        "username": user["username"],
-        "role": user["role"]
+        "display_name": user.display_name(),
+        "team_id": user.team_id(),
+        "username": user.username(),
+        "role": user.role()
     });
 
     $# {
         "ok": true,
-        "user": permissions.public_user(user),
+        "user": permission_service.public_user(user),
         "session": session.current(),
         "csrf_token": csrf.token(),
         "access_token": pair["access_token"],

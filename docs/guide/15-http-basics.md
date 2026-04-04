@@ -153,6 +153,13 @@ audience = "dolang"
 - `std.auth.guard`
 - `std.auth.csrf`
 
+在 handler 里最常用的请求级方法通常是：
+
+- `session.current()` / `session.exists()` / `session.id()`
+- `jwt.current()` / `jwt.bearer()`
+- `guard.principal()` / `guard.authenticated()`
+- `csrf.token()` / `csrf.rotate()`
+
 完整配置和 API 细节请读：
 
 - [../reference/http.md](../reference/http.md)

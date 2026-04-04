@@ -1,5 +1,6 @@
 // HTTP Server entry point — delegates all Axum logic to AxumBackend
 use std::io::{self, Write};
+use std::net::Ipv4Addr;
 use std::process;
 use std::thread;
 use std::time::Duration;
@@ -186,18 +187,99 @@ impl<W: Write> Write for StyledServeWriter<W> {
 }
 
 fn server_address_lines(host: &str, port: u16) -> Vec<String> {
+    let networks = if host == "0.0.0.0" {
+        discover_lan_ipv4_addrs()
+            .into_iter()
+            .map(|addr| addr.to_string())
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    server_address_lines_for_networks(host, port, &networks)
+}
+
+fn server_address_lines_for_networks(host: &str, port: u16, networks: &[String]) -> Vec<String> {
     if host == "0.0.0.0" {
-        vec![
-            format!("{}   http://127.0.0.1:{port}", green("  ➜  Local:")),
-            format!(
+        let mut lines = vec![format!(
+            "{}   http://127.0.0.1:{port}",
+            green("  ➜  Local:")
+        )];
+        let mut networks = networks.to_vec();
+        networks.sort();
+        networks.dedup();
+
+        if networks.is_empty() {
+            lines.push(format!(
                 "{} listening on all interfaces (:{}), use your LAN IP to access",
                 cyan("  ➜  Network:"),
                 port
-            ),
-        ]
+            ));
+        } else {
+            for network in networks {
+                lines.push(format!(
+                    "{} http://{}:{port}",
+                    cyan("  ➜  Network:"),
+                    network
+                ));
+            }
+        }
+        lines
     } else {
         vec![format!("{}   http://{host}:{port}", green("  ➜  Local:"))]
     }
+}
+
+fn discover_lan_ipv4_addrs() -> Vec<Ipv4Addr> {
+    #[cfg(unix)]
+    {
+        discover_lan_ipv4_addrs_unix()
+    }
+
+    #[cfg(not(unix))]
+    {
+        Vec::new()
+    }
+}
+
+#[cfg(unix)]
+fn discover_lan_ipv4_addrs_unix() -> Vec<Ipv4Addr> {
+    use std::collections::BTreeSet;
+    use std::ptr;
+
+    let mut addrs = BTreeSet::new();
+    let mut ifaddrs: *mut libc::ifaddrs = ptr::null_mut();
+
+    unsafe {
+        if libc::getifaddrs(&mut ifaddrs) != 0 {
+            return Vec::new();
+        }
+
+        let mut current = ifaddrs;
+        while !current.is_null() {
+            let addr = (*current).ifa_addr;
+            if !addr.is_null() && (*addr).sa_family as i32 == libc::AF_INET {
+                let sockaddr = &*(addr as *const libc::sockaddr_in);
+                let ip = Ipv4Addr::from(u32::from_be(sockaddr.sin_addr.s_addr));
+                if is_visible_lan_ipv4(ip) {
+                    addrs.insert(ip);
+                }
+            }
+            current = (*current).ifa_next;
+        }
+
+        libc::freeifaddrs(ifaddrs);
+    }
+
+    addrs.into_iter().collect()
+}
+
+fn is_visible_lan_ipv4(ip: Ipv4Addr) -> bool {
+    !ip.is_loopback() && !ip.is_unspecified() && is_private_lan_ipv4(ip)
+}
+
+fn is_private_lan_ipv4(ip: Ipv4Addr) -> bool {
+    let [a, b, _, _] = ip.octets();
+    matches!((a, b), (10, _) | (172, 16..=31) | (192, 168))
 }
 
 fn route_output_lines(
@@ -357,7 +439,8 @@ struct RouteRow {
 mod tests {
     use super::{
         banner_line_delay, banner_pause_duration, route_output_lines, route_table_line_delay,
-        serve_banner_lines, server_address_lines, startup_line_delay, style_runtime_line,
+        serve_banner_lines, server_address_lines_for_networks, startup_line_delay,
+        style_runtime_line,
     };
     use dolang::interpreter::{HttpRoute, RouteModuleState, StaticRoute};
     use std::sync::Arc;
@@ -390,9 +473,29 @@ mod tests {
     }
 
     #[test]
-    fn server_address_lines_use_localhost_hint_for_wildcard_bind() {
+    fn server_address_lines_render_detected_lan_addresses_for_wildcard_bind() {
         assert_eq!(
-            server_address_lines("0.0.0.0", 8080),
+            server_address_lines_for_networks(
+                "0.0.0.0",
+                8080,
+                &[
+                    "192.168.1.25".to_string(),
+                    "10.0.0.42".to_string(),
+                    "192.168.1.25".to_string(),
+                ]
+            ),
+            vec![
+                "\u{1b}[32m  ➜  Local:\u{1b}[0m   http://127.0.0.1:8080".to_string(),
+                "\u{1b}[36m  ➜  Network:\u{1b}[0m http://10.0.0.42:8080".to_string(),
+                "\u{1b}[36m  ➜  Network:\u{1b}[0m http://192.168.1.25:8080".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn server_address_lines_fall_back_when_no_lan_address_is_available() {
+        assert_eq!(
+            server_address_lines_for_networks("0.0.0.0", 8080, &[]),
             vec![
                 "\u{1b}[32m  ➜  Local:\u{1b}[0m   http://127.0.0.1:8080".to_string(),
                 "\u{1b}[36m  ➜  Network:\u{1b}[0m listening on all interfaces (:8080), use your LAN IP to access".to_string(),
@@ -403,7 +506,7 @@ mod tests {
     #[test]
     fn server_address_lines_preserve_specific_host() {
         assert_eq!(
-            server_address_lines("127.0.0.1", 8080),
+            server_address_lines_for_networks("127.0.0.1", 8080, &["192.168.1.25".to_string()]),
             vec!["\u{1b}[32m  ➜  Local:\u{1b}[0m   http://127.0.0.1:8080".to_string()]
         );
     }

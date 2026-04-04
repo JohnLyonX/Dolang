@@ -201,7 +201,8 @@ port = 8080
 - `127.0.0.1` 时打印 `Local: http://127.0.0.1:<port>`
 - `0.0.0.0` 时同时打印：
   - `Local: http://127.0.0.1:<port>`
-  - `Network: listening on all interfaces (:<port>), use your LAN IP to access`
+  - 如果能枚举到本机私网 IPv4，会逐条打印 `Network: http://<LAN_IP>:<port>`
+  - 如果当前环境没有可用私网 IPv4，再回退成 `Network: listening on all interfaces (:<port>), use your LAN IP to access`
 
 ## `[server.auth]`
 

@@ -11,6 +11,8 @@ $main() {
 
     $HTTP("/auth").link("app.router.auth_router");
     $HTTP("/").link("app.router.account_router");
+    $HTTP("/").link("app.router.news_page_router");
     $HTTP("/admin").link("app.router.admin_router");
     $HTTP("/api").link("app.router.project_router");
+    $HTTP("/api").link("app.router.news_api_router");
 }

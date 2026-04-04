@@ -3,6 +3,7 @@ use indexmap::IndexMap;
 use crate::ast::{Expr, HtmlConstructor, JsonConstructor, ResConstructor, StructConstructor};
 use crate::diagnostics::codes;
 use crate::error::Error;
+use crate::interpreter::{TypeValidationError, validate_typed_instance_fields};
 use crate::runtime::{ProgramState, RuntimeContext};
 
 use super::super::value::DolangValue;
@@ -69,7 +70,7 @@ pub fn eval_struct_constructor(
     w: &mut dyn std::io::Write,
 ) -> Result<DolangValue, Error> {
     let shape = context.get_type(&ctor.type_name).cloned();
-    if shape.is_none() {
+    let Some(shape) = shape else {
         return Err(Error::Diagnostic(
             crate::diagnostics::Diagnostic::error(
                 codes::RUNTIME_FIELD_NOT_FOUND,
@@ -77,30 +78,61 @@ pub fn eval_struct_constructor(
             )
             .with_span(ctor.span),
         ));
-    }
+    };
 
     let mut fields: IndexMap<String, DolangValue> = IndexMap::new();
     for (key, value_expr) in &ctor.fields {
         let val = eval_expr(value_expr, state, context, w, false)?;
-        // @HIDE fields are stored with "_" prefix internally
-        let stored_key = if let Some(ref s) = shape {
-            if let Some(fd) = s.fields.iter().find(|f| f.name == *key) {
-                if fd.hidden {
-                    format!("_{}", key)
-                } else {
-                    key.clone()
-                }
-            } else {
-                key.clone()
-            }
+        let Some(field_def) = shape.fields.iter().find(|field| field.name == *key) else {
+            return Err(type_validation_error(
+                TypeValidationError::UnknownField {
+                    type_name: ctor.type_name.clone(),
+                    field_name: key.clone(),
+                },
+                ctor.span,
+            ));
+        };
+        let stored_key = if field_def.hidden {
+            format!("_{}", key)
         } else {
             key.clone()
         };
         fields.insert(stored_key, val);
     }
 
+    validate_typed_instance_fields(&ctor.type_name, &fields, context)
+        .map_err(|error| type_validation_error(error, ctor.span))?;
+
     Ok(DolangValue::TypedInstance {
         type_name: ctor.type_name.clone(),
         fields,
     })
+}
+
+fn type_validation_error(error: TypeValidationError, span: crate::ast::Span) -> Error {
+    let message = match error {
+        TypeValidationError::BareList => {
+            "typed fields must declare 'List<T>' instead of bare 'List'".to_string()
+        }
+        TypeValidationError::UnknownType { expected_type } => {
+            format!("type '{expected_type}' is not defined")
+        }
+        TypeValidationError::Mismatch {
+            expected_type,
+            actual_type,
+        } => format!("expects '{expected_type}', got '{actual_type}'"),
+        TypeValidationError::MissingRequiredField {
+            type_name,
+            field_name,
+        } => format!("type '{type_name}' requires field '{field_name}'"),
+        TypeValidationError::UnknownField {
+            type_name,
+            field_name,
+        } => format!("type '{type_name}' has no field '{field_name}'"),
+    };
+
+    Error::Diagnostic(
+        crate::diagnostics::Diagnostic::error(codes::RUNTIME_FIELD_TYPE_MISMATCH, message)
+            .with_span(span),
+    )
 }

@@ -7,22 +7,26 @@
   <link rel="stylesheet" href="/assets/css/news.css">
 </head>
 <body class="news-site article-page">
-  <header class="news-hero compact">
-    <div class="news-hero-copy">
-      <p class="eyebrow">Dolang Newsroom</p>
-      <h1>Article Detail</h1>
-    </div>
-    <nav class="news-nav">
-      <a href="/news">Back to News</a>
-      <a href="/news-admin">News Admin</a>
-      <a href="/console">Auth Console</a>
-    </nav>
-  </header>
+  <div class="site-frame">
+    <header class="site-masthead compact-masthead">
+      <div>
+        <p class="section-kicker">News Article</p>
+        <a class="masthead-mark" href="/">Dolang Newsroom</a>
+      </div>
+      <nav class="site-nav">
+        <a href="/">Back to Front Page</a>
+        <a href="/news">Latest</a>
+        <a href="/login">Sign In</a>
+      </nav>
+    </header>
 
-  <main class="news-main">
-    <article id="news-article" class="news-article"></article>
-    <section id="news-status" class="news-status"></section>
-  </main>
+    <main class="article-layout">
+      <article id="news-article" class="news-article"></article>
+      <aside class="article-sidebar">
+        <div id="news-status" class="sidebar-panel status-panel"></div>
+      </aside>
+    </main>
+  </div>
 
   <script src="/assets/js/news_detail.js"></script>
 </body>

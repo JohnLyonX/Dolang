@@ -1,6 +1,7 @@
 use crate::ast::{AssignStmt, ConstDeclStmt, Expr, MethodCall, VarDeclStmt};
 use crate::diagnostics::codes;
 use crate::error::Error;
+use crate::interpreter::{TypeValidationError, validate_value_against_type};
 use crate::runtime::{ProgramState, RuntimeContext};
 
 use super::super::env::{ValueType, get_value_type, parse_type_annotation, type_name};
@@ -117,7 +118,7 @@ pub(super) fn handle_assign_stmt(
         };
 
         // Determine stored key and expected field type (accounting for @HIDE fields)
-        let (stored_key, expected_field_type) = {
+        let (instance_type_name, stored_key, expected_field_type) = {
             let existing = match state.lookup_env(&var_name) {
                 Some(e) => e,
                 None => {
@@ -127,27 +128,21 @@ pub(super) fn handle_assign_stmt(
                     )));
                 }
             };
-            if let DolangValue::TypedInstance { type_name, fields } = existing {
+            if let DolangValue::TypedInstance {
+                type_name,
+                fields: _,
+            } = existing
+            {
                 let shape_opt = context.get_type(type_name);
                 let field_def = shape_opt
                     .and_then(|s| s.fields.iter().find(|f| f.name == target.method).cloned());
                 let expected_type = field_def.as_ref().map(|f| f.type_name.clone());
                 let key = match field_def {
                     Some(f) if f.hidden => format!("_{}", target.method),
-                    _ => {
-                        if !fields.contains_key(&target.method) {
-                            let hk = format!("_{}", target.method);
-                            if fields.contains_key(&hk) {
-                                hk
-                            } else {
-                                target.method.clone()
-                            }
-                        } else {
-                            target.method.clone()
-                        }
-                    }
+                    Some(_) => target.method.clone(),
+                    None => target.method.clone(),
                 };
-                (key, expected_type)
+                (type_name.clone(), key, expected_type)
             } else {
                 return Flow::Err(Error::InvalidAssignment(Some(format!(
                     "'{}' is not a struct instance",
@@ -157,30 +152,19 @@ pub(super) fn handle_assign_stmt(
         };
 
         // Type-check: verify assigned value matches the declared field type
-        if let Some(ref expected_type) = expected_field_type {
-            let type_ok = match expected_type.as_str() {
-                "Int" => matches!(val, DolangValue::Int(_)),
-                "Float" => matches!(val, DolangValue::Float(_) | DolangValue::Int(_)),
-                "String" => matches!(val, DolangValue::Str(_)),
-                "Bool" => matches!(val, DolangValue::Bool(_)),
-                "List" => matches!(val, DolangValue::List(_)),
-                "Map" => matches!(val, DolangValue::Map(_)),
-                _ => true, // user-defined or unknown types pass through
-            };
-            if !type_ok {
-                return Flow::Err(Error::Diagnostic(
-                    crate::diagnostics::Diagnostic::error(
-                        codes::RUNTIME_FIELD_TYPE_MISMATCH,
-                        format!(
-                            "field '{}' expects type '{}', got '{}'",
-                            target.method,
-                            expected_type,
-                            val.type_name()
-                        ),
-                    )
-                    .with_span(crate::ast::Span::from_token(stmt.span.start)),
-                ));
-            }
+        let Some(expected_type) = expected_field_type.as_deref() else {
+            return Flow::Err(type_assignment_error(
+                TypeValidationError::UnknownField {
+                    type_name: instance_type_name,
+                    field_name: target.method.clone(),
+                },
+                stmt.span,
+                &target.method,
+            ));
+        };
+
+        if let Err(error) = validate_value_against_type(expected_type, &val, context) {
+            return Flow::Err(type_assignment_error(error, stmt.span, &target.method));
         }
 
         state.invalidate_env_snapshot();
@@ -300,6 +284,40 @@ pub(super) fn handle_assign_stmt(
 
     state.insert_env(name, val);
     Flow::Normal
+}
+
+fn type_assignment_error(
+    error: TypeValidationError,
+    span: crate::ast::Span,
+    field_name: &str,
+) -> Error {
+    let message = match error {
+        TypeValidationError::BareList => {
+            format!("field '{field_name}' must declare 'List<T>' instead of bare 'List'")
+        }
+        TypeValidationError::UnknownType { expected_type } => {
+            format!("field '{field_name}' references unknown type '{expected_type}'")
+        }
+        TypeValidationError::Mismatch {
+            expected_type,
+            actual_type,
+        } => format!(
+            "field '{field_name}' expects type '{expected_type}', got '{actual_type}'"
+        ),
+        TypeValidationError::MissingRequiredField {
+            type_name,
+            field_name,
+        } => format!("type '{type_name}' requires field '{field_name}'"),
+        TypeValidationError::UnknownField {
+            type_name,
+            field_name,
+        } => format!("type '{type_name}' has no field '{field_name}'"),
+    };
+
+    Error::Diagnostic(
+        crate::diagnostics::Diagnostic::error(codes::RUNTIME_FIELD_TYPE_MISMATCH, message)
+            .with_span(crate::ast::Span::from_token(span.start)),
+    )
 }
 
 pub(super) fn handle_expr_stmt(

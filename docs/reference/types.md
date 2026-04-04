@@ -552,7 +552,7 @@ $>> {"a":1}.type();    // 输出: Map
 
 ## 自定义类型 `$Type`
 
-使用 `$Type` 定义用户类型与结构形状。当前主线里，这不再只是文档层描述；当函数或 HTTP handler 声明返回 `User` 或 `List<User>` 时，runtime 会校验实际值是否为对应的 `TypedInstance`。
+使用 `$Type` 定义用户类型与结构形状。当前主线里，这不再只是文档层描述；`$Type` 是 Dolang 的名义自定义类型，不是和 `Map` 按形状自动互换的结构标签。
 
 ```dolang
 $Type User {
@@ -573,6 +573,13 @@ $Type User {
 
 **无 getter / setter**，无私有字段，无方法。
 
+### 当前主线语义
+
+- `User { ... }` 才是 `User`
+- 裸 `Map` / `JSON` 即使字段一致，也不是 `User`
+- 构造 `User { ... }` 时，runtime 会校验缺失必填字段、未声明字段、字段类型不匹配
+- 当函数或 HTTP handler 声明返回 `User` 或 `List<User>` 时，实际值也必须是对应的 typed instance
+
 如果你只是要返回普通 JSON，对外仍然可以写 `-> JSON`。但如果声明返回用户类型，实际值应写成：
 
 ```dolang
@@ -587,6 +594,19 @@ $fn get_user() -> User {
         name: "Alice",
     };
 }
+```
+
+例如下面这种写法现在会直接报错，因为缺少必填字段 `name`：
+
+```dolang
+$Type User {
+    id: Int
+    name: Str
+}
+
+$ user = User {
+    id: 1,
+};
 ```
 
 ---

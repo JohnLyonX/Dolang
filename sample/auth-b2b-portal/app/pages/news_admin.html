@@ -53,7 +53,14 @@
         <label><span>Title</span><input id="title" required></label>
         <label><span>Summary</span><textarea id="summary" rows="3" required></textarea></label>
         <label><span>Body</span><textarea id="body" rows="8" required></textarea></label>
-        <label><span>Category ID</span><input id="category-id" value="cat_company" required></label>
+        <label>
+          <span>Category</span>
+          <select id="category-id" required>
+            <option value="cat_company">Company</option>
+            <option value="cat_product">Product</option>
+            <option value="cat_security">Security</option>
+          </select>
+        </label>
         <div class="button-row">
           <button type="submit">Save Draft</button>
           <button id="publish-btn" type="button">Publish</button>

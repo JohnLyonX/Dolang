@@ -5,12 +5,17 @@ pub mod builtins;
 pub mod env;
 pub mod eval;
 pub mod exec;
+pub mod type_validation;
 pub mod value;
 
 pub use crate::ast::CorsConfig;
 use crate::runtime::NativeFnMap;
 pub use env::{Env, FnEnv, parse_type_annotation, type_name};
 pub use exec::exec;
+pub use type_validation::{
+    TypeValidationError, parse_list_item_type, validate_typed_instance_fields,
+    validate_value_against_type,
+};
 pub use value::DolangValue;
 
 #[derive(Debug, Clone, Default)]

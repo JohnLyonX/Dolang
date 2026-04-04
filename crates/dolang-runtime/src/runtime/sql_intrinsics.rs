@@ -14,6 +14,32 @@ use super::context::RuntimeContext;
 use super::intrinsics::{ids, intrinsic_string_arg};
 use super::sql_registry::{PostgresClientHandle, SqlConn};
 
+fn format_postgres_db_error_message(code: Option<&str>, message: &str, detail: Option<&str>) -> String {
+    let mut parts = Vec::new();
+    if let Some(code) = code {
+        parts.push(code.to_string());
+    }
+    parts.push(message.to_string());
+    if let Some(detail) = detail {
+        if !detail.is_empty() {
+            parts.push(format!("detail: {detail}"));
+        }
+    }
+    parts.join(": ")
+}
+
+fn format_postgres_error(err: &postgres::Error) -> String {
+    if let Some(db_error) = err.as_db_error() {
+        return format_postgres_db_error_message(
+            Some(db_error.code().code()),
+            db_error.message(),
+            db_error.detail(),
+        );
+    }
+
+    err.to_string()
+}
+
 pub fn sqlite_connect(
     args: &[DolangValue],
     context: &RuntimeContext,
@@ -385,8 +411,10 @@ fn postgres_execute(
             .execute(sql.as_str(), &param_refs)
             .map_err(|err| {
                 Error::Interpreter(format!(
-                    "{}: postgres execute failed: {err}",
+                    "{}: postgres execute failed: {}",
                     ids::SQL_EXECUTE
+                    ,
+                    format_postgres_error(&err)
                 ))
             })
     })
@@ -428,7 +456,11 @@ fn postgres_query(
             .client_mut()?
             .query(sql.as_str(), &param_refs)
             .map_err(|err| {
-                Error::Interpreter(format!("{}: postgres query failed: {err}", ids::SQL_QUERY))
+                Error::Interpreter(format!(
+                    "{}: postgres query failed: {}",
+                    ids::SQL_QUERY,
+                    format_postgres_error(&err)
+                ))
             })
     })
     .join()
@@ -866,8 +898,28 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("Null bind parameters are not supported")
+            .contains("Null bind parameters are not supported")
         );
+    }
+
+    #[test]
+    fn postgres_db_error_formatter_includes_code_and_detail_when_present() {
+        let formatted = format_postgres_db_error_message(
+            Some("42P01"),
+            "relation \"news_articles\" does not exist",
+            Some("Perhaps you meant to reference a different table."),
+        );
+
+        assert_eq!(
+            formatted,
+            "42P01: relation \"news_articles\" does not exist: detail: Perhaps you meant to reference a different table."
+        );
+    }
+
+    #[test]
+    fn postgres_db_error_formatter_omits_missing_optional_fields() {
+        let formatted = format_postgres_db_error_message(None, "db error", None);
+        assert_eq!(formatted, "db error");
     }
 
     #[test]
@@ -929,4 +981,5 @@ mod tests {
                 .unwrap()
         );
     }
+
 }

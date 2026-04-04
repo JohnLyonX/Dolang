@@ -1,8 +1,9 @@
 use crate::ast::FnDeclStmt;
 use crate::error::Error;
+use crate::interpreter::{TypeValidationError, validate_value_against_type};
 use crate::runtime::{ProgramState, RuntimeContext};
 
-use super::super::env::{FnEnv, RuntimeFn, ValueType, get_value_type};
+use super::super::env::{FnEnv, RuntimeFn};
 use super::super::value::DolangValue;
 use super::{Flow, exec_block};
 
@@ -176,119 +177,37 @@ pub fn validate_declared_return_type(
         )));
     };
 
-    validate_expected_type(kind, name, expected_type, value, context)
-}
-
-fn validate_expected_type(
-    kind: &str,
-    name: &str,
-    expected_type: &str,
-    value: &DolangValue,
-    context: &RuntimeContext,
-) -> Result<(), Error> {
-    if let Some(item_type) = parse_list_item_type(expected_type) {
-        let DolangValue::List(items) = value else {
-            return Err(type_mismatch_error(kind, name, expected_type, value));
-        };
-
-        for item in items {
-            validate_expected_type(kind, name, item_type, item, context)?;
-        }
-
-        return Ok(());
-    }
-
-    let normalized = expected_type.to_ascii_lowercase();
-    match normalized.as_str() {
-        "int" | "integer" => validate_builtin_type(kind, name, "Int", ValueType::Int, value),
-        "float" => validate_builtin_type(kind, name, "Float", ValueType::Float, value),
-        "string" | "str" => validate_builtin_type(kind, name, "String", ValueType::String, value),
-        "bool" | "boolean" => validate_builtin_type(kind, name, "Bool", ValueType::Bool, value),
-        "list" => Err(Error::Interpreter(format!(
+    match validate_value_against_type(expected_type, value, context) {
+        Ok(()) => Ok(()),
+        Err(TypeValidationError::BareList) => Err(Error::Interpreter(format!(
             "{kind} '{name}' declares return type 'List' without a type parameter; use 'List<T>' instead (e.g. 'List<User>')"
         ))),
-        "map" => validate_builtin_type(kind, name, "Map", ValueType::Map, value),
-        "response" => validate_builtin_type(kind, name, "Response", ValueType::Response, value),
-        "json" => {
-            if let DolangValue::Response {
-                body: Some(body), ..
-            } = value
-            {
-                return validate_expected_type(kind, name, "Json", body.as_ref(), context);
-            }
-
-            let actual_type = get_value_type(value);
-            if matches!(
-                actual_type,
-                ValueType::Json | ValueType::Map | ValueType::Dynamic
-            ) {
-                Ok(())
-            } else {
-                Err(type_mismatch_error(kind, name, "Json", value))
-            }
-        }
-        _ => validate_user_defined_type(kind, name, expected_type, value, context),
+        Err(TypeValidationError::UnknownType { expected_type }) => Err(Error::Interpreter(
+            format!("{kind} '{name}' references unknown return type '{expected_type}'"),
+        )),
+        Err(TypeValidationError::Mismatch {
+            expected_type,
+            actual_type,
+        }) => Err(Error::Interpreter(format!(
+            "{kind} '{name}' expects return type '{expected_type}' but got '{actual_type}'"
+        ))),
+        Err(TypeValidationError::MissingRequiredField { .. })
+        | Err(TypeValidationError::UnknownField { .. }) => Err(Error::Interpreter(format!(
+            "{kind} '{name}' expects return type '{expected_type}' but got '{}'",
+            value.type_name()
+        ))),
     }
-}
-
-fn validate_builtin_type(
-    kind: &str,
-    name: &str,
-    expected_type: &str,
-    expected: ValueType,
-    value: &DolangValue,
-) -> Result<(), Error> {
-    let actual_type = get_value_type(value);
-    if actual_type == expected {
-        return Ok(());
-    }
-
-    Err(type_mismatch_error(kind, name, expected_type, value))
-}
-
-fn validate_user_defined_type(
-    kind: &str,
-    name: &str,
-    expected_type: &str,
-    value: &DolangValue,
-    context: &RuntimeContext,
-) -> Result<(), Error> {
-    if context.get_type(expected_type).is_none() {
-        return Err(Error::Interpreter(format!(
-            "{kind} '{name}' references unknown return type '{expected_type}'"
-        )));
-    }
-
-    match value {
-        DolangValue::TypedInstance { type_name, .. } if type_name == expected_type => Ok(()),
-        _ => Err(type_mismatch_error(kind, name, expected_type, value)),
-    }
-}
-
-fn type_mismatch_error(kind: &str, name: &str, expected_type: &str, value: &DolangValue) -> Error {
-    Error::Interpreter(format!(
-        "{kind} '{name}' expects return type '{expected_type}' but got '{}'",
-        value.type_name()
-    ))
-}
-
-fn parse_list_item_type(expected_type: &str) -> Option<&str> {
-    let expected_type = expected_type.trim();
-    let rest = expected_type.strip_prefix("List<")?;
-    rest.strip_suffix('>').map(str::trim)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
-    use indexmap::IndexMap;
-
     use super::*;
     use crate::runtime::{
         RuntimeMode,
         context::{TypeField, TypeShape},
     };
+    use indexmap::IndexMap;
+    use std::path::PathBuf;
 
     fn test_context() -> RuntimeContext {
         RuntimeContext::new(RuntimeMode::Test, PathBuf::from("."))

@@ -2,7 +2,7 @@ $main() {
     $STATIC("/assets", "app/public");
 
     $GET("/") home() {
-        $# $HTML().link("app.pages.console");
+        $# $HTML().link("app.pages.news");
     }
 
     $GET("/console") console() {

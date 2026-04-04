@@ -22,6 +22,8 @@ $ user = User {
 $ post = Post {
     id: 7,
     title: "Hello",
+    content: "World",
+    author: user,
 };
 
 $>> user.name;

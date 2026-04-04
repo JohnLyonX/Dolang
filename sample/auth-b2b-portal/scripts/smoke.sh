@@ -68,7 +68,7 @@ CREATE_JSON="$(curl -sS \
 echo "${CREATE_JSON}"
 ARTICLE_ID="$(printf '%s' "${CREATE_JSON}" | jq -r '.article_id')"
 
-echo "[8] publish draft via bearer"
+echo "[8] editor publish draft via bearer should be forbidden"
 curl -sS \
   -X POST \
   -H "Authorization: Bearer ${EDITOR_ACCESS_TOKEN}" \
@@ -77,7 +77,16 @@ curl -sS \
   "${BASE_URL}/api/admin/news/${ARTICLE_ID}/publish"
 echo
 
-echo "[9] public news list includes published article"
+echo "[9] admin publish draft via bearer"
+curl -sS \
+  -X POST \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+  -H 'Content-Type: application/json' \
+  -d '{}' \
+  "${BASE_URL}/api/admin/news/${ARTICLE_ID}/publish"
+echo
+
+echo "[10] public news list includes published article"
 curl -sS \
   "${BASE_URL}/api/news"
 echo

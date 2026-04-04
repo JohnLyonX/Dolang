@@ -324,6 +324,38 @@ fn sample_auth_b2b_portal_exposes_browser_console_assets() {
 }
 
 #[test]
+fn sample_auth_b2b_portal_news_home_and_login_pages_exist() {
+    let project_dir = sample_project_path("auth-b2b-portal");
+    let main_source = fs::read_to_string(project_dir.join("main.dol")).expect("main should read");
+    let router_source = fs::read_to_string(project_dir.join("app/router/news_page_router.dol"))
+        .expect("news page router should read");
+    let news_html =
+        fs::read_to_string(project_dir.join("app/pages/news.html")).expect("news html should read");
+    let login_html = fs::read_to_string(project_dir.join("app/pages/login.html"))
+        .expect("login html should read");
+    let news_css =
+        fs::read_to_string(project_dir.join("app/public/css/news.css")).expect("news css should read");
+    let login_js = fs::read_to_string(project_dir.join("app/public/js/login.js"))
+        .expect("login js should read");
+
+    assert!(main_source.contains("$GET(\"/\") home()"));
+    assert!(main_source.contains("$HTML().link(\"app.pages.news\")"));
+    assert!(main_source.contains("$GET(\"/console\")"));
+    assert!(router_source.contains("$GET(\"/login\") login_page()"));
+    assert!(router_source.contains("$HTML().link(\"app.pages.login\")"));
+    assert!(news_html.contains("Front Page"));
+    assert!(news_html.contains("Sign In"));
+    assert!(!news_html.contains("Auth Console"));
+    assert!(login_html.contains("/assets/css/news.css"));
+    assert!(login_html.contains("/assets/js/login.js"));
+    assert!(login_html.contains("Newsroom Sign In"));
+    assert!(news_css.contains(".front-page"));
+    assert!(news_css.contains(".login-page"));
+    assert!(login_js.contains("requestJson(\"/auth/login\""));
+    assert!(login_js.contains("window.location.href = \"/news-admin\""));
+}
+
+#[test]
 fn sample_auth_b2b_portal_documents_argon2_password_seed_setup() {
     let project_dir = sample_project_path("auth-b2b-portal");
     let readme =
@@ -445,6 +477,9 @@ fn sample_auth_b2b_portal_exposes_public_news_pages_and_assets() {
     assert!(detail.contains("/assets/js/news_detail.js"));
     assert!(js.contains("/api/news"));
     assert!(detail_js.contains("/api/news/"));
+    assert!(detail.contains("Back to Front Page"));
+    assert!(detail.contains("Sign In"));
+    assert!(!detail.contains("Auth Console"));
 }
 
 #[test]
@@ -456,6 +491,9 @@ fn sample_auth_b2b_portal_exposes_news_admin_console_assets() {
 
     assert!(html.contains("/assets/css/news_admin.css"));
     assert!(html.contains("/assets/js/news_admin.js"));
+    assert!(html.contains("value=\"cat_company\""));
+    assert!(html.contains("value=\"cat_product\""));
+    assert!(html.contains("value=\"cat_security\""));
     assert!(js.contains("/api/admin/news"));
     assert!(js.contains("/publish"));
     assert!(js.contains("X-CSRF-Token"));
@@ -470,7 +508,7 @@ fn sample_auth_b2b_portal_smoke_script_uses_editor_for_news_flow() {
 
     assert!(smoke.contains("\"username\":\"editor\""));
     assert!(smoke.contains("EDITOR_COOKIE_JAR"));
-    assert!(smoke.contains("EDITOR_ACCESS_TOKEN"));
+    assert!(smoke.contains("ACCESS_TOKEN"));
     assert!(smoke.contains("/api/admin/news"));
     assert!(smoke.contains("/publish"));
 }
@@ -678,6 +716,24 @@ fn sample_auth_b2b_portal_news_role_matrix_works_when_env_is_available() {
         .as_str()
         .expect("editor access token");
 
+    let admin_login_body = serde_json::json!({
+        "username": "admin",
+        "password": "password123"
+    })
+    .to_string();
+    let admin_login = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/auth/login",
+        &[("Content-Type", "application/json")],
+        Some(admin_login_body.as_str()),
+    );
+    let admin_login_json: serde_json::Value =
+        serde_json::from_str(&admin_login.body).expect("admin login response should be json");
+    let admin_access_token = admin_login_json["access_token"]
+        .as_str()
+        .expect("admin access token");
+
     let slug = format!("editor-news-{}", std::process::id());
     let editor_create_body = serde_json::json!({
         "slug": slug,
@@ -718,12 +774,23 @@ fn sample_auth_b2b_portal_news_role_matrix_works_when_env_is_available() {
     let public_before_publish_json: serde_json::Value =
         serde_json::from_str(&public_before_publish.body).expect("public list should be json");
 
-    let publish = http_request_with_headers_and_body(
+    let editor_publish = http_request_with_headers_and_body(
         "POST",
         &base_url,
         &format!("/api/admin/news/{article_id}/publish"),
         &[
             ("Authorization", &format!("Bearer {editor_access_token}")),
+            ("Content-Type", "application/json"),
+        ],
+        Some("{}"),
+    );
+
+    let admin_publish = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        &format!("/api/admin/news/{article_id}/publish"),
+        &[
+            ("Authorization", &format!("Bearer {admin_access_token}")),
             ("Content-Type", "application/json"),
         ],
         Some("{}"),
@@ -736,10 +803,12 @@ fn sample_auth_b2b_portal_news_role_matrix_works_when_env_is_available() {
     assert_eq!(member_login.status, 200);
     assert_eq!(member_create.status, 403);
     assert_eq!(editor_login.status, 200);
+    assert_eq!(admin_login.status, 200);
     assert_eq!(editor_create_without_csrf.status, 403);
     assert_eq!(editor_create.status, 201);
     assert_eq!(public_before_publish.status, 200);
-    assert_eq!(publish.status, 200);
+    assert_eq!(editor_publish.status, 403);
+    assert_eq!(admin_publish.status, 200);
     assert_eq!(public_after_publish.status, 200);
     assert!(
         !public_before_publish_json
@@ -830,6 +899,54 @@ fn http_handler_user_return_type_bootstraps_in_test_mode() {
     assert!(
         outcome.error.is_none(),
         "visible user return type should pass"
+    );
+}
+
+#[test]
+fn typed_constructor_rejects_nested_map_for_user_field() {
+    let outcome = run_fixture(
+        "spec/invalid/data/type_nested_user_field_mismatch.dol",
+        RuntimeMode::Test,
+    );
+
+    let error = outcome.error.expect("nested map should fail");
+    assert!(error.contains("expects 'User', got 'Map'"), "error={error}");
+}
+
+#[test]
+fn typed_instance_assignment_rejects_unknown_field() {
+    let project_dir = write_temp_project(
+        "dolang-type-assignment",
+        "name = \"type-assignment\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$Type User {
+    id: Int
+}
+
+$ user = User {
+    id: 1,
+};
+
+user.nickname = "neo";
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    let error = outcome
+        .error
+        .expect("unknown field assignment should fail");
+    assert!(error.contains("type 'User' has no field 'nickname'"), "error={error}");
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn strict_type_construction_fixture_passes() {
+    assert_fixture_stdout(
+        "spec/valid/data/type_construction.dol",
+        "John\nsecret\nWorld\njohn@example.com\n",
     );
 }
 

@@ -95,7 +95,7 @@ $fn list_users() -> List<User> {
 
 ## `$Type`
 
-`$Type` 用来描述结构，不等于 class：
+`$Type` 定义的是 Dolang 的名义自定义类型，不等于 class，也不是“形状一样就能互换”的 `Map`：
 
 ```dol
 $Type User {
@@ -107,7 +107,20 @@ $Type User {
 
 它最适合和 `List<T>`、接口返回说明、阅读文档时的结构表达配合使用。
 
+这里要记住两条：
+
+- `User { ... }` 才是 `User`
+- 裸 `Map` / `JSON` 即使字段完全一致，也不是 `User`
+
 如果函数或 HTTP handler 声明返回 `User` 或 `List<User>`，实际返回值也应该是 `User { ... }` 实例，而不是形状相同的裸 `Map`。
+
+当前主线里，`$Type` 构造还会在 runtime 校验：
+
+- 未声明字段
+- 缺失必填字段
+- 字段值类型不匹配
+
+这意味着如果 `name` 是必填字段，`User { id: 1 }` 会直接报错，而不是构造出一个缺字段实例。
 
 ## HTTP 返回里的 `List<T>`
 

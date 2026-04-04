@@ -10,7 +10,7 @@ $fn permissions_for_user(user) -> List<String> {
     }
 
     $if user.role() == "editor" {
-        $# ["news:create", "news:edit", "news:publish"];
+        $# ["news:create", "news:edit"];
     }
 
     $# ["project:read"];

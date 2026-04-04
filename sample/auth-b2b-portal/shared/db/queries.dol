@@ -1,5 +1,9 @@
 $mod config.database;
 
+_$fn database_error(err) -> String {
+    $# "database unavailable: " + err;
+}
+
 $fn safe_query(sql, params) -> List<Map> {
     $try {
         $ conn = database.connect_db();
@@ -9,10 +13,10 @@ $fn safe_query(sql, params) -> List<Map> {
             $# rows;
         } $catch err {
             conn.close();
-            $throw "database unavailable";
+            $throw database_error(err);
         }
     } $catch err {
-        $throw "database unavailable";
+        $throw database_error(err);
     }
 }
 
@@ -28,9 +32,9 @@ $fn safe_execute(sql, params) -> Map {
             };
         } $catch err {
             conn.close();
-            $throw "database unavailable";
+            $throw database_error(err);
         }
     } $catch err {
-        $throw "database unavailable";
+        $throw database_error(err);
     }
 }

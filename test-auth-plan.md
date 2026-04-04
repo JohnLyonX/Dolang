@@ -155,7 +155,7 @@ sample/
 
 - `role = "editor"`
   - roles: `["editor"]`
-  - permissions: `["news:create", "news:edit", "news:publish"]`
+  - permissions: `["news:create", "news:edit"]`
 
 - `role = "member"`
   - roles: `["member"]`

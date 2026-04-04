@@ -20,6 +20,6 @@ $fn find_user_by_username(username) {
             is_active: row["is_active"]
         };
     } $catch err {
-        $throw "database unavailable";
+        $throw err;
     }
 }

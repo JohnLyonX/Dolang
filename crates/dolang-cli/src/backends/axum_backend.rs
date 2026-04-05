@@ -1,5 +1,6 @@
 use axum::http::{HeaderName, HeaderValue, Method};
 use axum::response::IntoResponse;
+use dolang::ast::TypeExpr;
 use dolang::diagnostics::Severity;
 use dolang::diagnostics::{Diagnostic, codes};
 use dolang::error::Error;
@@ -13,7 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 
-use dolang::interpreter::{DolangValue, HttpRoute, StaticRoute};
+use dolang::interpreter::{DolangValue, HttpRoute, StaticRoute, type_expr_name};
 use dolang::runtime::{
     HandlerInput, RuntimeContext, backend::HttpBackend, execute_http_route_in_context,
 };
@@ -79,7 +80,11 @@ impl AxumBackend {
 
 // ─── Response building ────────────────────────────────────────────────────────
 
-fn build_http_response(result: Option<DolangValue>, return_type: &str) -> axum::response::Response {
+fn build_http_response(
+    result: Option<DolangValue>,
+    return_type: &TypeExpr,
+) -> axum::response::Response {
+    let return_type_name = type_expr_name(return_type);
     match result {
         // $RES(status, body) — status code is now respected
         Some(DolangValue::Response { status, body }) => {
@@ -100,7 +105,7 @@ fn build_http_response(result: Option<DolangValue>, return_type: &str) -> axum::
 
         result => {
             // Explicit -> HTML return type
-            if return_type == "HTML" {
+            if return_type_name == "HTML" {
                 let html_content = match result {
                     Some(DolangValue::Str(s)) => s,
                     Some(v) => v.to_string(),
@@ -119,7 +124,7 @@ fn build_http_response(result: Option<DolangValue>, return_type: &str) -> axum::
                     JsonValue::Object(obj)
                 }
                 Some(DolangValue::Str(s)) => {
-                    if return_type == "JSON" {
+                    if return_type_name == "JSON" {
                         serde_json::from_str::<JsonValue>(&s)
                             .unwrap_or_else(|_| serde_json::json!({"value": s}))
                     } else {
@@ -320,8 +325,11 @@ fn build_router(
                         .into_response();
                 }
 
-                let return_type = handler_return_type.as_deref().unwrap_or("JSON");
-                let response = build_http_response(result, return_type);
+                let return_type = handler_return_type
+                    .as_ref()
+                    .cloned()
+                    .unwrap_or_else(|| TypeExpr::Named("JSON".to_string()));
+                let response = build_http_response(result, &return_type);
                 let response = append_response_headers(response, &response_headers);
                 append_auth_response_headers(response, &request_context)
             }

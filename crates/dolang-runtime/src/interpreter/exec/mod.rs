@@ -15,6 +15,7 @@ use std::io::{Write, stdout};
 use super::value::DolangValue;
 
 pub use functions::{call_fn, call_module_fn, validate_declared_return_type};
+pub(crate) use functions::parameter_type_error;
 
 /// Internal control-flow signal returned by exec_inner.
 #[derive(Debug)]

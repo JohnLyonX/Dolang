@@ -4,7 +4,8 @@ use std::process;
 
 use serde_json::Value as JsonValue;
 
-use dolang::interpreter::{DolangValue, HttpRoute};
+use dolang::ast::TypeExpr;
+use dolang::interpreter::{DolangValue, HttpRoute, type_expr_name};
 use dolang::runtime::{
     HandlerInput, ProgramState, RuntimeMode, execute_http_route, execute_program_with_writer,
     load_context_and_program,
@@ -167,7 +168,7 @@ fn run_route_test(
     let return_type = route
         .return_type
         .clone()
-        .unwrap_or_else(|| "JSON".to_string());
+        .unwrap_or_else(|| TypeExpr::Named("JSON".to_string()));
     let response_body = build_response(result, &return_type);
 
     TestResult {
@@ -221,9 +222,10 @@ fn value_to_json(v: &DolangValue) -> JsonValue {
 }
 
 /// Build HTTP response from handler result
-fn build_response(result: Option<DolangValue>, return_type: &str) -> String {
+fn build_response(result: Option<DolangValue>, return_type: &TypeExpr) -> String {
+    let return_type_name = type_expr_name(return_type);
     match result {
-        Some(val) => match return_type {
+        Some(val) => match return_type_name.as_str() {
             "String" => match val {
                 DolangValue::Str(s) => s,
                 _ => val.to_string(),

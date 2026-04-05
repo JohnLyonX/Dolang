@@ -2,9 +2,10 @@ use chrono::Utc;
 use indexmap::IndexMap;
 use uuid::Uuid;
 
+use crate::ast::FnParam;
 use crate::error::Error;
-use crate::interpreter::exec::validate_declared_return_type;
-use crate::interpreter::{DolangValue, HttpRoute, exec_http_handler};
+use crate::interpreter::exec::{parameter_type_error, validate_declared_return_type};
+use crate::interpreter::{DolangValue, HttpRoute, exec_http_handler, validate_value_against_type_expr};
 use crate::runtime::auth::{
     Principal, RuntimeAuthorizationRule, SessionStore, SessionStoreBackend, csrf_token_from_claims,
     ensure_session_csrf_token, verify_jwt,
@@ -59,18 +60,20 @@ pub fn execute_http_route_in_context(
     let route_seg_parts: Vec<&str> = route.path.split('/').collect();
     let url_seg_parts: Vec<&str> = input.request_path.split('/').collect();
 
+    let mut bound_http_params: IndexMap<String, DolangValue> = IndexMap::new();
+
     if route_seg_parts.len() == url_seg_parts.len() {
         for idx in 0..route_seg_parts.len() {
             let route_seg = route_seg_parts[idx];
             let url_seg = url_seg_parts[idx];
             if let Some(param_name) = route_seg.strip_prefix(':') {
-                state.insert_env(
+                bound_http_params.insert(
                     param_name.to_string(),
                     DolangValue::Str(url_seg.to_string()),
                 );
             } else if idx < route.params.len() {
-                state.insert_env(
-                    route.params[idx].clone(),
+                bound_http_params.insert(
+                    route.params[idx].name.clone(),
                     DolangValue::Str(url_seg.to_string()),
                 );
             }
@@ -81,8 +84,22 @@ pub fn execute_http_route_in_context(
         for pair in query.split('&') {
             let parts: Vec<&str> = pair.split('=').collect();
             if parts.len() == 2 {
-                state.insert_env(parts[0].to_string(), DolangValue::Str(parts[1].to_string()));
+                bound_http_params.insert(
+                    parts[0].to_string(),
+                    DolangValue::Str(parts[1].to_string()),
+                );
             }
+        }
+    }
+
+    if let Err(err) =
+        bind_http_handler_params(&route.params, &bound_http_params, &mut state, runtime_context)
+    {
+        return (true, None, Some(err.to_string()));
+    }
+    for (name, value) in &bound_http_params {
+        if !state.env_contains_key(name) {
+            state.insert_env(name.clone(), value.clone());
         }
     }
 
@@ -104,7 +121,7 @@ pub fn execute_http_route_in_context(
         if let Err(e) = validate_declared_return_type(
             "http handler",
             &route.name,
-            route.return_type.as_deref(),
+            route.return_type.as_ref(),
             result.as_ref(),
             runtime_context,
         ) {
@@ -113,6 +130,25 @@ pub fn execute_http_route_in_context(
     }
 
     (should_continue, result, error)
+}
+
+pub(crate) fn bind_http_handler_params(
+    params: &[FnParam],
+    values: &IndexMap<String, DolangValue>,
+    state: &mut ProgramState,
+    runtime_context: &RuntimeContext,
+) -> Result<(), Error> {
+    for param in params {
+        if let Some(value) = values.get(&param.name) {
+            if let Some(type_expr) = &param.type_annotation {
+                validate_value_against_type_expr(type_expr, value, runtime_context)
+                    .map_err(|error| parameter_type_error(&param.name, type_expr, error))?;
+            }
+            state.insert_env(param.name.clone(), value.clone());
+        }
+    }
+
+    Ok(())
 }
 
 fn apply_request_auth(

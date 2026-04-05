@@ -621,7 +621,7 @@ mod tests {
             name: "health".to_string(),
             params: Vec::new(),
             variadic_param: None,
-            return_type: Some("String".to_string()),
+            return_type: Some(crate::ast::TypeExpr::Named("String".to_string())),
             cors: None,
             parent_cors: None,
             response_headers: Vec::new(),

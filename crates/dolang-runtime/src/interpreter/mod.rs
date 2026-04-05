@@ -9,12 +9,12 @@ pub mod type_validation;
 pub mod value;
 
 pub use crate::ast::CorsConfig;
+use crate::ast::{FnParam, TypeExpr};
 use crate::runtime::NativeFnMap;
 pub use env::{Env, FnEnv, type_expr_name, type_name};
 pub use exec::exec;
 pub use type_validation::{
-    TypeValidationError, parse_runtime_type_expr, validate_typed_instance_fields,
-    validate_value_against_type_expr,
+    TypeValidationError, validate_typed_instance_fields, validate_value_against_type_expr,
 };
 pub use value::DolangValue;
 
@@ -51,9 +51,9 @@ pub struct HttpRoute {
     pub method: String,      // "GET", "POST", "PUT", "DELETE", "PATCH"
     pub path: String,        // "/user/:id"
     pub name: String,        // function name
-    pub params: Vec<String>, // parameter names
+    pub params: Vec<FnParam>,
     pub variadic_param: Option<String>,
-    pub return_type: Option<String>,
+    pub return_type: Option<TypeExpr>,
     pub cors: Option<CorsConfig>,
     pub parent_cors: Option<CorsConfig>,
     pub response_headers: Vec<(String, String)>,

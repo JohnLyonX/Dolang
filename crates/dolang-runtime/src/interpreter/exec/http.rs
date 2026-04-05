@@ -3,7 +3,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::ast::{HttpBlockStmt, HttpFnStmt};
+use crate::ast::{HttpBlockStmt, HttpFnStmt, TypeExpr};
 use crate::error::Error;
 
 use crate::module::ModuleResolver;
@@ -264,8 +264,24 @@ fn probe_http_handler_return_type(
     probe_state.extend_env(route.module_env().clone());
     probe_state.fns.extend(route.module_fns().clone());
 
+    let mut bound_http_params = indexmap::IndexMap::new();
     for param in &route.params {
-        probe_state.insert_env(param.clone(), DolangValue::Str("__dummy__".to_string()));
+        bound_http_params.insert(param.name.clone(), DolangValue::Str("__dummy__".to_string()));
+    }
+
+    if let Err(err) = crate::runtime::http::bind_http_handler_params(
+        &route.params,
+        &bound_http_params,
+        &mut probe_state,
+        &probe_context,
+    ) {
+        return Err(err);
+    }
+
+    for (name, value) in bound_http_params {
+        if !probe_state.env_contains_key(&name) {
+            probe_state.insert_env(name, value);
+        }
     }
 
     probe_state.insert_env(
@@ -274,7 +290,7 @@ fn probe_http_handler_return_type(
     );
     probe_state.insert_env(
         "body".to_string(),
-        default_probe_body(route.return_type.as_deref()),
+        default_probe_body(route.return_type.as_ref()),
     );
 
     let (_should_continue, result, error) =
@@ -286,21 +302,27 @@ fn probe_http_handler_return_type(
     super::functions::validate_declared_return_type(
         "http handler",
         &route.name,
-        route.return_type.as_deref(),
+        route.return_type.as_ref(),
         result.as_ref(),
         &probe_context,
     )
 }
 
-fn default_probe_body(return_type: Option<&str>) -> DolangValue {
-    match return_type.map(str::trim) {
-        Some("Int") | Some("Integer") => DolangValue::Int(0),
-        Some("Float") => DolangValue::Float(0.0),
-        Some("String") | Some("Str") => DolangValue::Str("__dummy__".to_string()),
-        Some("Bool") | Some("Boolean") => DolangValue::Bool(false),
-        Some("List") => DolangValue::List(vec![]),
-        Some("Map") | Some("Json") => DolangValue::Map(indexmap::IndexMap::new()),
-        Some("Response") => DolangValue::Response {
+fn default_probe_body(return_type: Option<&TypeExpr>) -> DolangValue {
+    match return_type {
+        Some(TypeExpr::Named(name)) if name == "Int" || name == "Integer" => DolangValue::Int(0),
+        Some(TypeExpr::Named(name)) if name == "Float" => DolangValue::Float(0.0),
+        Some(TypeExpr::Named(name)) if name == "String" || name == "Str" => {
+            DolangValue::Str("__dummy__".to_string())
+        }
+        Some(TypeExpr::Named(name)) if name == "Bool" || name == "Boolean" => {
+            DolangValue::Bool(false)
+        }
+        Some(TypeExpr::List(_)) => DolangValue::List(vec![]),
+        Some(TypeExpr::Named(name)) if name == "Map" || name == "Json" => {
+            DolangValue::Map(indexmap::IndexMap::new())
+        }
+        Some(TypeExpr::Named(name)) if name == "Response" => DolangValue::Response {
             status: 200,
             body: None,
         },

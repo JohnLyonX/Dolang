@@ -294,10 +294,16 @@ pub struct FnDeclStmt {
     pub span: Span,
     pub name: String,
     pub is_public: bool,
-    pub params: Vec<String>,
+    pub params: Vec<FnParam>,
     pub variadic_param: Option<String>,
-    pub return_type: Option<String>,
+    pub return_type: Option<TypeExpr>,
     pub body: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FnParam {
+    pub name: String,
+    pub type_annotation: Option<TypeExpr>,
 }
 
 #[derive(Debug, Clone)]
@@ -323,9 +329,9 @@ pub struct HttpFnStmt {
     pub method: String, // "GET", "POST", "PUT", "DELETE", "PATCH"
     pub path: String,   // "/user/:id"
     pub name: String,   // function name
-    pub params: Vec<String>,
+    pub params: Vec<FnParam>,
     pub variadic_param: Option<String>,
-    pub return_type: Option<String>,
+    pub return_type: Option<TypeExpr>,
     pub cors: Option<CorsConfig>,
     pub headers: Vec<SetHdrEntry>,
     pub body: Vec<Stmt>,
@@ -408,9 +414,9 @@ pub struct FnCallExpr {
 #[derive(Debug, Clone)]
 pub struct FnLiteral {
     pub span: Span,
-    pub params: Vec<String>,
+    pub params: Vec<FnParam>,
     pub variadic_param: Option<String>,
-    pub return_type: Option<String>,
+    pub return_type: Option<TypeExpr>,
     pub body: Vec<Stmt>,
 }
 

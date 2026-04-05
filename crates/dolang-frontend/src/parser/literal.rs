@@ -1,7 +1,8 @@
 // Literal parser - handles function literals and anonymous functions.
-use crate::ast::{Expr, FnLiteral, Span, Stmt};
+use crate::ast::{Expr, FnLiteral, FnParam, Span, Stmt};
 use crate::error::Error;
 use crate::parser::expr::ExprParser;
+use crate::parser::stmt::parse_type_expr_tokens;
 use crate::token::Type;
 
 /// Parse anonymous function literal: $fn(x, y) -> Int { body }
@@ -13,7 +14,7 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
     }
     parser.pos += 1; // consume '('
 
-    let mut params: Vec<String> = Vec::new();
+    let mut params: Vec<FnParam> = Vec::new();
     let mut variadic_param: Option<String> = None;
     if parser.pos < parser.tokens.len() && parser.tokens[parser.pos].typ != Type::RParen {
         loop {
@@ -34,8 +35,29 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
             if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::Ident {
                 return Err(parser.error_expected("expected parameter name", "identifier"));
             }
-            params.push(parser.tokens[parser.pos].literal.clone());
+            let name = parser.tokens[parser.pos].literal.clone();
             parser.pos += 1;
+            let type_annotation = if parser.pos < parser.tokens.len()
+                && parser.tokens[parser.pos].typ == Type::Colon
+            {
+                parser.pos += 1;
+                let type_start = parser.pos;
+                while parser.pos < parser.tokens.len()
+                    && parser.tokens[parser.pos].typ != Type::Comma
+                    && parser.tokens[parser.pos].typ != Type::RParen
+                {
+                    parser.pos += 1;
+                }
+                Some(parse_type_expr_tokens(
+                    &parser.tokens[type_start..parser.pos],
+                )?)
+            } else {
+                None
+            };
+            params.push(FnParam {
+                name,
+                type_annotation,
+            });
             if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::Comma {
                 break;
             }
@@ -51,12 +73,14 @@ pub fn parse_fn_literal<'a>(parser: &mut ExprParser<'a>) -> Result<Box<Expr>, Er
     let return_type =
         if parser.pos < parser.tokens.len() && parser.tokens[parser.pos].typ == Type::Arrow {
             parser.pos += 1; // consume '->'
-            if parser.pos >= parser.tokens.len() || parser.tokens[parser.pos].typ != Type::Ident {
-                return Err(parser.error_expected("expected return type", "type identifier"));
+            let type_start = parser.pos;
+            while parser.pos < parser.tokens.len() && parser.tokens[parser.pos].typ != Type::LBrace {
+                parser.pos += 1;
             }
-            let rt = parser.tokens[parser.pos].literal.clone();
-            parser.pos += 1;
-            Some(rt)
+            if type_start == parser.pos {
+                return Err(parser.error_expected("expected return type", "type expression"));
+            }
+            Some(parse_type_expr_tokens(&parser.tokens[type_start..parser.pos])?)
         } else {
             None
         };

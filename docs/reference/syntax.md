@@ -22,7 +22,20 @@ $fn greet(name) -> String {
 }
 ```
 
-参数类型注解当前不是主线承诺语法；reference 也不把它写成稳定用法。
+参数类型注解现在已经进入主线，可用于普通函数、HTTP handler 和匿名函数。
+
+例如：
+
+```dol
+$fn add(a: Int, b: Int) -> Int {
+    $# a + b;
+}
+```
+
+当前保守边界：
+
+- variadic 参数 `...rest` 仍不支持类型注解
+- `$Type` 参数不接受自动 `Map -> User` 转换
 
 ## 输入与输出
 

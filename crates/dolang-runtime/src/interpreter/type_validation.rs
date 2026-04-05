@@ -16,15 +16,6 @@ pub enum TypeValidationError {
     UnknownField { type_name: String, field_name: String },
 }
 
-pub fn parse_runtime_type_expr(type_name: &str) -> Result<TypeExpr, TypeValidationError> {
-    let chars: Vec<char> = type_name.trim().chars().collect();
-    let (type_expr, next) = parse_type_expr_chars(&chars, 0)?;
-    if next != chars.len() {
-        return Err(TypeValidationError::ExpectedListClose);
-    }
-    Ok(type_expr)
-}
-
 pub fn validate_value_against_type_expr(
     expected: &TypeExpr,
     value: &DolangValue,
@@ -99,48 +90,6 @@ pub fn validate_typed_instance_fields(
     }
 
     Ok(())
-}
-
-fn parse_type_expr_chars(
-    chars: &[char],
-    mut pos: usize,
-) -> Result<(TypeExpr, usize), TypeValidationError> {
-    while pos < chars.len() && chars[pos].is_whitespace() {
-        pos += 1;
-    }
-
-    let mut base = if matches_ident(chars, pos, "List") {
-        let after_list = pos + 4;
-        let mut inner_pos = skip_ws(chars, after_list);
-        if inner_pos >= chars.len() || chars[inner_pos] != '<' {
-            return Err(TypeValidationError::BareList);
-        }
-        inner_pos += 1;
-        let (inner, next) = parse_type_expr_chars(chars, inner_pos)?;
-        if matches!(inner, TypeExpr::Optional(_)) {
-            return Err(TypeValidationError::UnsupportedOptionalListItem);
-        }
-        let end = skip_ws(chars, next);
-        if end >= chars.len() || chars[end] != '>' {
-            return Err(TypeValidationError::ExpectedListClose);
-        }
-        pos = end + 1;
-        TypeExpr::List(Box::new(inner))
-    } else {
-        let start = pos;
-        while pos < chars.len() && (chars[pos].is_ascii_alphanumeric() || chars[pos] == '_') {
-            pos += 1;
-        }
-        TypeExpr::Named(chars[start..pos].iter().collect())
-    };
-
-    pos = skip_ws(chars, pos);
-    if pos < chars.len() && chars[pos] == '?' {
-        pos += 1;
-        base = TypeExpr::Optional(Box::new(base));
-    }
-
-    Ok((base, pos))
 }
 
 fn validate_named_type(
@@ -221,18 +170,6 @@ fn expect_match(
             actual_type: value.type_name().into_owned(),
         })
     }
-}
-
-fn matches_ident(chars: &[char], pos: usize, ident: &str) -> bool {
-    let ident_chars: Vec<char> = ident.chars().collect();
-    chars.get(pos..pos + ident_chars.len()) == Some(ident_chars.as_slice())
-}
-
-fn skip_ws(chars: &[char], mut pos: usize) -> usize {
-    while pos < chars.len() && chars[pos].is_whitespace() {
-        pos += 1;
-    }
-    pos
 }
 
 fn type_expr_to_string(type_expr: &TypeExpr) -> String {

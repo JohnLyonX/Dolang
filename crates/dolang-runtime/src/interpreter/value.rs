@@ -5,7 +5,7 @@
 // - Null 表示无返回值函数的结果（$fn greet() { ... } 无 $# 语句时）
 // - Function 表示匿名函数作为一等公民存储在变量中的情况
 
-use crate::ast::Stmt;
+use crate::ast::{FnParam, Stmt, TypeExpr};
 use indexmap::IndexMap;
 use std::borrow::Cow;
 use std::fmt;
@@ -21,10 +21,10 @@ pub enum DolangValue {
     List(Vec<DolangValue>),
     Map(IndexMap<String, DolangValue>),
     Function {
-        params: Vec<String>,
+        params: Vec<FnParam>,
         variadic_param: Option<String>,
         body: Vec<Stmt>,
-        return_type: Option<String>,
+        return_type: Option<TypeExpr>,
     },
     File {
         path: String,
@@ -121,7 +121,12 @@ impl fmt::Display for DolangValue {
                 write!(f, "}}")
             }
             Self::Function { params, .. } => {
-                write!(f, "<fn({})>", params.join(", "))
+                let names = params
+                    .iter()
+                    .map(|param| param.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "<fn({names})>")
             }
             Self::File { path, .. } => {
                 write!(f, "File({})", path)
@@ -274,7 +279,14 @@ impl fmt::Debug for DolangValue {
             Self::Null => write!(f, "Null"),
             Self::List(v) => write!(f, "List({v:?})"),
             Self::Map(m) => write!(f, "Map({m:?})"),
-            Self::Function { params, .. } => write!(f, "Function({})", params.join(", ")),
+            Self::Function { params, .. } => {
+                let names = params
+                    .iter()
+                    .map(|param| param.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "Function({names})")
+            }
             Self::File { path, mode } => write!(f, "File({path:?}, {mode:?})"),
             Self::Json(m) => write!(f, "Json({m:?})"),
             Self::Html(v) => write!(f, "Html({v:?})"),

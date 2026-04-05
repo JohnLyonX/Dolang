@@ -1,8 +1,6 @@
-use crate::ast::FnDeclStmt;
+use crate::ast::{FnDeclStmt, FnParam, TypeExpr};
 use crate::error::Error;
-use crate::interpreter::{
-    TypeValidationError, parse_runtime_type_expr, validate_value_against_type_expr,
-};
+use crate::interpreter::{TypeValidationError, type_expr_name, validate_value_against_type_expr};
 use crate::runtime::{ProgramState, RuntimeContext};
 
 use super::super::env::{FnEnv, RuntimeFn};
@@ -58,9 +56,7 @@ pub fn call_fn(
     let mut local_state = ProgramState::new();
     local_state.set_env_fallback(fn_def.module_env.clone());
 
-    for (param, arg) in fn_decl.params.iter().zip(args.iter()) {
-        local_state.insert_env(param.clone(), arg.clone());
-    }
+    bind_typed_params(&fn_decl.params, args, &mut local_state, context)?;
 
     if let Some(var_param) = &fn_decl.variadic_param {
         let extra_args: Vec<DolangValue> = args[min_params..].to_vec();
@@ -76,7 +72,7 @@ pub fn call_fn(
             validate_declared_return_type(
                 "function",
                 &fn_decl.name,
-                fn_decl.return_type.as_deref(),
+                fn_decl.return_type.as_ref(),
                 val.as_ref(),
                 context,
             )?;
@@ -128,9 +124,7 @@ pub fn call_module_fn(
     local_state.set_env_fallback(std::sync::Arc::new(module_env.clone()));
 
     // 参数绑定（覆盖同名的模块环境变量）
-    for (param, arg) in fn_decl.params.iter().zip(args.iter()) {
-        local_state.insert_env(param.clone(), arg.clone());
-    }
+    bind_typed_params(&fn_decl.params, args, &mut local_state, context)?;
     if let Some(var_param) = &fn_decl.variadic_param {
         let extra = args[min_params..].to_vec();
         local_state.insert_env(var_param.clone(), DolangValue::List(extra));
@@ -146,7 +140,7 @@ pub fn call_module_fn(
             validate_declared_return_type(
                 "function",
                 &fn_decl.name,
-                fn_decl.return_type.as_deref(),
+                fn_decl.return_type.as_ref(),
                 val.as_ref(),
                 context,
             )?;
@@ -165,7 +159,7 @@ pub fn call_module_fn(
 pub fn validate_declared_return_type(
     kind: &str,
     name: &str,
-    expected_type: Option<&str>,
+    expected_type: Option<&TypeExpr>,
     value: Option<&DolangValue>,
     context: &RuntimeContext,
 ) -> Result<(), Error> {
@@ -175,24 +169,25 @@ pub fn validate_declared_return_type(
 
     let Some(value) = value else {
         return Err(Error::Interpreter(format!(
-            "{kind} '{name}' expects return type '{expected_type}' but returned nothing"
+            "{kind} '{name}' expects return type '{}' but returned nothing",
+            type_expr_name(expected_type)
         )));
     };
 
-    let parsed = parse_runtime_type_expr(expected_type);
-    match parsed.and_then(|type_expr| validate_value_against_type_expr(&type_expr, value, context))
-    {
+    match validate_value_against_type_expr(expected_type, value, context) {
         Ok(()) => Ok(()),
         Err(TypeValidationError::BareList) => Err(Error::Interpreter(format!(
             "{kind} '{name}' declares return type 'List' without a type parameter; use 'List<T>' instead (e.g. 'List<User>')"
         ))),
         Err(TypeValidationError::UnsupportedOptionalListItem) => Err(Error::Interpreter(
             format!(
-                "{kind} '{name}' uses unsupported return type '{expected_type}'; 'List<T?>' is not supported"
+                "{kind} '{name}' uses unsupported return type '{}'; 'List<T?>' is not supported",
+                type_expr_name(expected_type)
             ),
         )),
         Err(TypeValidationError::ExpectedListClose) => Err(Error::Interpreter(format!(
-            "{kind} '{name}' declares invalid return type '{expected_type}'"
+            "{kind} '{name}' declares invalid return type '{}'",
+            type_expr_name(expected_type)
         ))),
         Err(TypeValidationError::UnknownType { expected_type }) => Err(Error::Interpreter(
             format!("{kind} '{name}' references unknown return type '{expected_type}'"),
@@ -205,9 +200,72 @@ pub fn validate_declared_return_type(
         ))),
         Err(TypeValidationError::MissingRequiredField { .. })
         | Err(TypeValidationError::UnknownField { .. }) => Err(Error::Interpreter(format!(
-            "{kind} '{name}' expects return type '{expected_type}' but got '{}'",
+            "{kind} '{name}' expects return type '{}' but got '{}'",
+            type_expr_name(expected_type),
             value.type_name()
         ))),
+    }
+}
+
+pub(crate) fn bind_typed_params(
+    params: &[FnParam],
+    args: &[DolangValue],
+    state: &mut ProgramState,
+    context: &RuntimeContext,
+) -> Result<(), Error> {
+    for (param, arg) in params.iter().zip(args.iter()) {
+        if let Some(type_expr) = &param.type_annotation {
+            validate_value_against_type_expr(type_expr, arg, context)
+                .map_err(|error| parameter_type_error(&param.name, type_expr, error))?;
+        }
+        state.insert_env(param.name.clone(), arg.clone());
+    }
+
+    Ok(())
+}
+
+pub(crate) fn parameter_type_error(
+    param_name: &str,
+    type_expr: &TypeExpr,
+    error: TypeValidationError,
+) -> Error {
+    let message = match error {
+        TypeValidationError::Mismatch { actual_type, .. } => format!(
+            "parameter '{param_name}' expects type '{}', got '{actual_type}'",
+            type_expr_name(type_expr)
+        ),
+        other => format!(
+            "parameter '{param_name}' expects type '{}': {}",
+            type_expr_name(type_expr),
+            type_validation_detail(other)
+        ),
+    };
+
+    Error::Interpreter(message)
+}
+
+fn type_validation_detail(error: TypeValidationError) -> String {
+    match error {
+        TypeValidationError::BareList => "bare List is not allowed".to_string(),
+        TypeValidationError::UnsupportedOptionalListItem => {
+            "optional list item types are not supported".to_string()
+        }
+        TypeValidationError::ExpectedListClose => "incomplete list type expression".to_string(),
+        TypeValidationError::UnknownType { expected_type } => {
+            format!("unknown type '{expected_type}'")
+        }
+        TypeValidationError::Mismatch {
+            expected_type,
+            actual_type,
+        } => format!("expected '{expected_type}', got '{actual_type}'"),
+        TypeValidationError::MissingRequiredField {
+            type_name,
+            field_name,
+        } => format!("type '{type_name}' requires field '{field_name}'"),
+        TypeValidationError::UnknownField {
+            type_name,
+            field_name,
+        } => format!("type '{type_name}' has no field '{field_name}'"),
     }
 }
 
@@ -229,9 +287,10 @@ mod tests {
     fn shared_return_type_validator_accepts_matching_int() {
         let context = test_context();
         let value = DolangValue::Int(1);
+        let expected = TypeExpr::Named("Int".to_string());
 
         assert!(
-            validate_declared_return_type("function", "f", Some("Int"), Some(&value), &context,)
+            validate_declared_return_type("function", "f", Some(&expected), Some(&value), &context,)
                 .is_ok()
         );
     }
@@ -239,7 +298,8 @@ mod tests {
     #[test]
     fn shared_return_type_validator_rejects_missing_return_value() {
         let context = test_context();
-        let error = validate_declared_return_type("function", "f", Some("Int"), None, &context)
+        let expected = TypeExpr::Named("Int".to_string());
+        let error = validate_declared_return_type("function", "f", Some(&expected), None, &context)
             .expect_err("missing return should fail");
         assert!(error.to_string().contains("returned nothing"));
     }
@@ -260,9 +320,15 @@ mod tests {
         );
 
         let value = DolangValue::Map(IndexMap::new());
+        let expected = TypeExpr::Named("User".to_string());
 
-        let error =
-            validate_declared_return_type("function", "f", Some("User"), Some(&value), &context)
+        let error = validate_declared_return_type(
+            "function",
+            "f",
+            Some(&expected),
+            Some(&value),
+            &context,
+        )
                 .expect_err("wrong user type should fail");
         assert!(error.to_string().contains("expects return type 'User'"));
     }
@@ -286,12 +352,13 @@ mod tests {
             type_name: "User".to_string(),
             fields: IndexMap::new(),
         }]);
+        let expected = TypeExpr::List(Box::new(TypeExpr::Named("User".to_string())));
 
         assert!(
             validate_declared_return_type(
                 "function",
                 "f",
-                Some("List<User>"),
+                Some(&expected),
                 Some(&value),
                 &context,
             )

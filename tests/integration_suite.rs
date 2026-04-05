@@ -1161,6 +1161,197 @@ $>> list[1];
 }
 
 #[test]
+fn typed_function_parameter_accepts_matching_value() {
+    let project_dir = write_temp_project(
+        "dolang-typed-param-fn-ok",
+        "name = \"typed-param-fn-ok\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$fn echo_id(id: Int) -> Int {
+    $# id;
+}
+
+$>> echo_id(7);
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    assert!(
+        outcome.error.is_none(),
+        "function call should succeed: {:?}",
+        outcome.error
+    );
+    assert_eq!(outcome.stdout, "7\n");
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_function_parameter_rejects_wrong_value() {
+    let project_dir = write_temp_project(
+        "dolang-typed-param-fn-bad",
+        "name = \"typed-param-fn-bad\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$fn echo_id(id: Int) -> Int {
+    $# id;
+}
+
+$>> echo_id("bad");
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    let error = outcome.error.expect("function call should fail");
+    assert!(
+        error.contains("parameter 'id' expects type 'Int', got 'String'"),
+        "error={error}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_module_function_parameter_rejects_wrong_value() {
+    let project_dir = write_temp_project(
+        "dolang-typed-param-module-bad",
+        "name = \"typed-param-module-bad\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[
+            (
+                "main.dol",
+                r#"$mod helper;
+
+$>> helper.echo_id("bad");
+"#,
+            ),
+            (
+                "helper.dol",
+                r#"$fn echo_id(id: Int) -> Int {
+    $# id;
+}
+"#,
+            ),
+        ],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    let error = outcome.error.expect("module function call should fail");
+    assert!(
+        error.contains("parameter 'id' expects type 'Int', got 'String'"),
+        "error={error}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_http_handler_parameter_accepts_matching_value() {
+    let project_dir = write_temp_project(
+        "dolang-typed-param-http-ok",
+        "name = \"typed-param-http-ok\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$GET("/users/:id") get_user(id: String) -> String {
+    $# id;
+}
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    assert!(
+        outcome.error.is_none(),
+        "http handler should bootstrap: {:?}",
+        outcome.error
+    );
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_http_handler_parameter_rejects_wrong_value() {
+    let project_dir = write_temp_project(
+        "dolang-typed-param-http-bad",
+        "name = \"typed-param-http-bad\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$GET("/users/:id") get_user(id: Int) -> Int {
+    $# 1;
+}
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    let error = outcome.error.expect("http handler should fail");
+    assert!(
+        error.contains("parameter 'id' expects type 'Int', got 'String'"),
+        "error={error}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_fn_literal_parameter_accepts_matching_value() {
+    let project_dir = write_temp_project(
+        "dolang-typed-param-literal-ok",
+        "name = \"typed-param-literal-ok\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$ echo = $fn(user_id: Int) -> Int {
+    $# user_id;
+};
+
+$>> echo(9);
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    assert!(
+        outcome.error.is_none(),
+        "fn literal should succeed: {:?}",
+        outcome.error
+    );
+    assert_eq!(outcome.stdout, "9\n");
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_function_parameter_rejects_bare_map_for_user() {
+    let project_dir = write_temp_project(
+        "dolang-typed-param-user-bad",
+        "name = \"typed-param-user-bad\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$Type User {
+    id: Int
+}
+
+$fn show_user(user: User) -> Int {
+    $# user.id;
+}
+
+$>> show_user({"id": 1});
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    let error = outcome.error.expect("typed user parameter should fail");
+    assert!(
+        error.contains("parameter 'user' expects type 'User', got 'Map'"),
+        "error={error}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
 fn http_handler_unknown_user_type_fails_in_test_mode_bootstrap() {
     let outcome = run_fixture(
         "spec/invalid/http/http_handler_unknown_user_type_without_import.dol",

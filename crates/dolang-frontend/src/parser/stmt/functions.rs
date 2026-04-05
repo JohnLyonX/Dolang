@@ -1,4 +1,4 @@
-use crate::ast::{FnDeclStmt, Span, Stmt};
+use crate::ast::{FnDeclStmt, FnParam, Span, Stmt};
 use crate::error::Error;
 use crate::token::Type;
 
@@ -17,7 +17,7 @@ impl<'a> StmtParser<'a> {
 
         self.expect(Type::LParen)?;
 
-        let mut params: Vec<String> = Vec::new();
+        let mut params: Vec<FnParam> = Vec::new();
         let mut variadic_param: Option<String> = None;
         if !self.at_end() && self.peek().typ != Type::RParen {
             loop {
@@ -32,7 +32,17 @@ impl<'a> StmtParser<'a> {
                 if self.at_end() || self.peek().typ != Type::Ident {
                     return Err(Error::InvalidStatement(None));
                 }
-                params.push(self.advance().literal.clone());
+                let name = self.advance().literal.clone();
+                let type_annotation = if !self.at_end() && self.peek().typ == Type::Colon {
+                    self.advance();
+                    Some(self.parse_type_expr()?)
+                } else {
+                    None
+                };
+                params.push(FnParam {
+                    name,
+                    type_annotation,
+                });
                 if self.at_end() || self.peek().typ != Type::Comma {
                     break;
                 }
@@ -44,22 +54,7 @@ impl<'a> StmtParser<'a> {
 
         let return_type = if !self.at_end() && self.peek().typ == Type::Arrow {
             self.advance();
-            if self.at_end() || self.peek().typ != Type::Ident {
-                return Err(Error::InvalidStatement(None));
-            }
-            let base = self.advance().literal.clone();
-            // Support JSON<User> compound return type annotation
-            if !self.at_end() && self.peek().typ == Type::Lt {
-                self.advance(); // consume <
-                if self.at_end() || self.peek().typ != Type::Ident {
-                    return Err(Error::InvalidStatement(None));
-                }
-                let param = self.advance().literal.clone();
-                self.expect(Type::Gt)?; // consume >
-                Some(format!("{}<{}>", base, param))
-            } else {
-                Some(base)
-            }
+            Some(self.parse_type_expr()?)
         } else {
             None
         };

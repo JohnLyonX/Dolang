@@ -384,7 +384,7 @@ fn parse_init_or_update(toks: &[Token]) -> Result<Option<Box<Stmt>>, Error> {
     Err(Error::InvalidStatement(None))
 }
 
-fn parse_type_expr_tokens(toks: &[Token]) -> Result<TypeExpr, Error> {
+pub(crate) fn parse_type_expr_tokens(toks: &[Token]) -> Result<TypeExpr, Error> {
     let mut parser = StmtParser::new(toks, "");
     let type_expr = parser.parse_type_expr()?;
     if !parser.at_end() {

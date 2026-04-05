@@ -50,7 +50,7 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join("..")
-            .join("test-http-database")
+            .join("../../../../sample/test-http-database")
     }
 
     fn sample_context() -> RuntimeContext {

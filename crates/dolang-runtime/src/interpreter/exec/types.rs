@@ -14,8 +14,7 @@ pub(super) fn handle_type_decl(stmt: &TypeDeclStmt, context: &mut RuntimeContext
             .iter()
             .map(|f| TypeField {
                 name: f.name.clone(),
-                type_name: f.type_name.clone(),
-                optional: f.optional,
+                type_expr: f.type_expr.clone(),
                 hidden: f.hidden,
             })
             .collect(),

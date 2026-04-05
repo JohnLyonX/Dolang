@@ -122,6 +122,32 @@ $Type User {
 
 这意味着如果 `name` 是必填字段，`User { id: 1 }` 会直接报错，而不是构造出一个缺字段实例。
 
+阶段 2 之后，`$Type` 字段还支持：
+
+```dol
+$Type Feed {
+    items: List<Post>
+    next_cursor: String?
+}
+```
+
+这里的语义是：
+
+- `items` 必须是 `List<Post>`
+- `next_cursor` 可以缺失
+- `next_cursor` 也可以显式为 `null`
+
+当前主线支持：
+
+- `User`
+- `User?`
+- `List<User>`
+- `List<User>?`
+
+当前主线不支持：
+
+- `List<User?>`
+
 ## HTTP 返回里的 `List<T>`
 
 在 HTTP 章节里同样推荐这样写：

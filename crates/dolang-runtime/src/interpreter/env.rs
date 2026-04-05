@@ -1,6 +1,6 @@
 // Environment management - types for variables and functions.
 use super::value::DolangValue;
-use crate::ast::FnDeclStmt;
+use crate::ast::{FnDeclStmt, TypeExpr};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -48,7 +48,7 @@ pub type Env = HashMap<String, DolangValue>;
 /// Type environment: tracks declared types for variables with type annotations
 /// This is used to enforce type checking on assignment
 /// Key: variable name, Value: declared type (if any)
-pub type TypeEnv = HashMap<String, ValueType>;
+pub type TypeEnv = HashMap<String, TypeExpr>;
 
 /// Constant environment: tracks which variables are constants
 /// Key: variable name, Value: true if constant
@@ -122,17 +122,12 @@ pub fn generate_fn_name() -> String {
     format!("__anon_fn_{}__", n)
 }
 
-/// Convert type annotation string to ValueType
-/// Returns None if the type annotation is invalid
-pub fn parse_type_annotation(type_str: &str) -> Option<ValueType> {
-    match type_str {
-        "Int" => Some(ValueType::Int),
-        "Float" => Some(ValueType::Float),
-        "String" => Some(ValueType::String),
-        "Bool" => Some(ValueType::Bool),
-        "List" => Some(ValueType::List),
-        "Map" => Some(ValueType::Map),
-        _ => None,
+/// Format a parsed type expression for diagnostics.
+pub fn type_expr_name(type_expr: &TypeExpr) -> String {
+    match type_expr {
+        TypeExpr::Named(name) => name.clone(),
+        TypeExpr::List(inner) => format!("List<{}>", type_expr_name(inner)),
+        TypeExpr::Optional(inner) => format!("{}?", type_expr_name(inner)),
     }
 }
 

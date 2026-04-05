@@ -1,6 +1,6 @@
 use crate::ast::{
     BreakStmt, ConstDeclStmt, ContinueStmt, ExitStmt, MainDeclStmt, ModDeclStmt, ReturnStmt, Span,
-    Stmt, TypeDeclStmt, TypeField, VarDeclStmt,
+    Stmt, TypeDeclStmt, TypeExpr, TypeField, VarDeclStmt,
 };
 use crate::error::Error;
 use crate::token::Type;
@@ -174,10 +174,7 @@ impl<'a> StmtParser<'a> {
 
         let type_annotation = if self.peek().typ == Type::Colon {
             self.advance();
-            if self.at_end() || self.peek().typ != Type::Ident {
-                return Err(Error::InvalidStatement(None));
-            }
-            Some(self.advance().literal.clone())
+            Some(self.parse_type_expr()?)
         } else {
             None
         };
@@ -207,10 +204,7 @@ impl<'a> StmtParser<'a> {
 
         let type_annotation = if self.peek().typ == Type::Colon {
             self.advance();
-            if self.at_end() || self.peek().typ != Type::Ident {
-                return Err(Error::InvalidStatement(None));
-            }
-            Some(self.advance().literal.clone())
+            Some(self.parse_type_expr()?)
         } else {
             None
         };
@@ -308,30 +302,11 @@ impl<'a> StmtParser<'a> {
             }
             self.advance(); // consume :
 
-            // type name
-            if self.at_end() || self.peek().typ != Type::Ident {
-                return Err(Error::Parse(crate::error::ParseError {
-                    message: format!("expected type name for field '{}'", field_name),
-                    line: 1,
-                    column: 1,
-                    found: None,
-                    expected: Some("type name".to_string()),
-                }));
-            }
-            let type_name = self.advance().literal.clone();
-
-            // optional ?
-            let optional = if !self.at_end() && self.peek().typ == Type::Question {
-                self.advance();
-                true
-            } else {
-                false
-            };
+            let type_expr = self.parse_type_expr()?;
 
             fields.push(TypeField {
                 name: field_name,
-                type_name,
-                optional,
+                type_expr,
                 hidden,
             });
 
@@ -360,6 +335,71 @@ impl<'a> StmtParser<'a> {
             name,
             fields,
         }))
+    }
+
+    pub(crate) fn parse_type_expr(&mut self) -> Result<TypeExpr, Error> {
+        let mut base = if self.at_end() || self.peek().typ != Type::Ident {
+            return Err(Error::Parse(crate::error::ParseError {
+                message: "expected type name".to_string(),
+                line: 1,
+                column: 1,
+                found: None,
+                expected: Some("type name".to_string()),
+            }));
+        } else if self.peek().literal == "List" {
+            self.advance();
+            if self.at_end() || self.peek().typ != Type::Lt {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "bare 'List' is not allowed here; use 'List<T>'".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("<".to_string()),
+                }));
+            }
+            self.advance();
+            let inner = self.parse_type_expr()?;
+            if matches!(inner, TypeExpr::Optional(_)) {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message:
+                        "optional list item types are not supported; use 'List<T>' or 'List<T>?'"
+                            .to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("non-optional list item type".to_string()),
+                }));
+            }
+            if self.at_end() || self.peek().typ != Type::Gt {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "expected '>' after list item type".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some(">".to_string()),
+                }));
+            }
+            self.advance();
+            TypeExpr::List(Box::new(inner))
+        } else {
+            TypeExpr::Named(self.advance().literal.clone())
+        };
+
+        if !self.at_end() && self.peek().typ == Type::Question {
+            self.advance();
+            if !self.at_end() && self.peek().typ == Type::Question {
+                return Err(Error::Parse(crate::error::ParseError {
+                    message: "double optional marker '??' is not supported".to_string(),
+                    line: 1,
+                    column: 1,
+                    found: None,
+                    expected: Some("single '?'".to_string()),
+                }));
+            }
+            base = TypeExpr::Optional(Box::new(base));
+        }
+
+        Ok(base)
     }
 
     pub fn parse_expr_or_assignment_stmt(&mut self) -> Result<Option<Stmt>, Error> {

@@ -12,6 +12,10 @@ $Type Post {
     author: User
 }
 
+$Type Feed {
+    items: List<Post>
+}
+
 $ user = User {
     id: 1,
     name: "John",
@@ -26,8 +30,9 @@ $ post = Post {
     author: user,
 };
 
-$>> user.name;
-$>> user.password;
-$>> post.content;
-post.author = user;
-$>> post.author.email;
+$ feed = Feed {
+    items: [post],
+};
+
+$ items = feed.items;
+$>> items[0].title;

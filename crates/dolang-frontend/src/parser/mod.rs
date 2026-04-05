@@ -40,7 +40,7 @@ pub fn calc_line_col(src: &str, pos: usize) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use crate::ast::Stmt;
+    use crate::ast::{Stmt, TypeExpr};
     use crate::diagnostics::codes;
 
     #[test]
@@ -420,6 +420,45 @@ $GET("/items") list() {
         let rendered = error.to_string();
         assert!(
             rendered.contains(codes::PARSE_CORS_INVALID_SYNTAX),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn parse_type_decl_accepts_optional_list_field_type() {
+        let source = r#"
+$Type Feed {
+    items: List<User>?
+}
+"#;
+
+        let statements = parse(source).expect("source should parse");
+        match &statements[0] {
+            Stmt::TypeDecl(stmt) => {
+                assert_eq!(
+                    stmt.fields[0].type_expr,
+                    TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::Named(
+                        "User".to_string()
+                    )))))
+                );
+            }
+            other => panic!("expected type declaration, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_optional_list_item_type_expression() {
+        let source = r#"
+$Type Feed {
+    items: List<User?>
+}
+"#;
+
+        let error = parse(source).expect_err("source should fail");
+        let rendered = error.to_string();
+        assert!(rendered.contains(codes::PARSE_GENERIC), "{rendered}");
+        assert!(
+            rendered.contains("optional list item types are not supported"),
             "{rendered}"
         );
     }

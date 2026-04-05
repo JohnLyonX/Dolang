@@ -579,6 +579,8 @@ $Type User {
 - 裸 `Map` / `JSON` 即使字段一致，也不是 `User`
 - 构造 `User { ... }` 时，runtime 会校验缺失必填字段、未声明字段、字段类型不匹配
 - 当函数或 HTTP handler 声明返回 `User` 或 `List<User>` 时，实际值也必须是对应的 typed instance
+- `$Type` 字段当前支持 `User`、`User?`、`List<User>`、`List<User>?`
+- `T?` 表示字段可以缺失；如果出现，也允许显式 `null`
 
 如果你只是要返回普通 JSON，对外仍然可以写 `-> JSON`。但如果声明返回用户类型，实际值应写成：
 
@@ -608,6 +610,25 @@ $ user = User {
     id: 1,
 };
 ```
+
+也可以写带列表字段和可选字段的类型：
+
+```dolang
+$Type Feed {
+    items: List<Post>
+    next_cursor: String?
+}
+```
+
+当前主线不支持：
+
+```dolang
+$Type Feed {
+    items: List<Post?>
+}
+```
+
+如果你需要“整个列表可选”，应写成 `List<Post>?`，而不是 `List<Post?>`。
 
 ---
 

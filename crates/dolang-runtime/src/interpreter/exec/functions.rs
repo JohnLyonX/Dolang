@@ -1,6 +1,8 @@
 use crate::ast::FnDeclStmt;
 use crate::error::Error;
-use crate::interpreter::{TypeValidationError, validate_value_against_type};
+use crate::interpreter::{
+    TypeValidationError, parse_runtime_type_expr, validate_value_against_type_expr,
+};
 use crate::runtime::{ProgramState, RuntimeContext};
 
 use super::super::env::{FnEnv, RuntimeFn};
@@ -177,10 +179,20 @@ pub fn validate_declared_return_type(
         )));
     };
 
-    match validate_value_against_type(expected_type, value, context) {
+    let parsed = parse_runtime_type_expr(expected_type);
+    match parsed.and_then(|type_expr| validate_value_against_type_expr(&type_expr, value, context))
+    {
         Ok(()) => Ok(()),
         Err(TypeValidationError::BareList) => Err(Error::Interpreter(format!(
             "{kind} '{name}' declares return type 'List' without a type parameter; use 'List<T>' instead (e.g. 'List<User>')"
+        ))),
+        Err(TypeValidationError::UnsupportedOptionalListItem) => Err(Error::Interpreter(
+            format!(
+                "{kind} '{name}' uses unsupported return type '{expected_type}'; 'List<T?>' is not supported"
+            ),
+        )),
+        Err(TypeValidationError::ExpectedListClose) => Err(Error::Interpreter(format!(
+            "{kind} '{name}' declares invalid return type '{expected_type}'"
         ))),
         Err(TypeValidationError::UnknownType { expected_type }) => Err(Error::Interpreter(
             format!("{kind} '{name}' references unknown return type '{expected_type}'"),
@@ -241,8 +253,7 @@ mod tests {
                 name: "User".to_string(),
                 fields: vec![TypeField {
                     name: "id".to_string(),
-                    type_name: "Int".to_string(),
-                    optional: false,
+                    type_expr: crate::ast::TypeExpr::Named("Int".to_string()),
                     hidden: false,
                 }],
             },
@@ -265,8 +276,7 @@ mod tests {
                 name: "User".to_string(),
                 fields: vec![TypeField {
                     name: "id".to_string(),
-                    type_name: "Int".to_string(),
-                    optional: false,
+                    type_expr: crate::ast::TypeExpr::Named("Int".to_string()),
                     hidden: false,
                 }],
             },

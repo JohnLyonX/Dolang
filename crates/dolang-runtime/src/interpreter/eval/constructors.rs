@@ -114,6 +114,12 @@ fn type_validation_error(error: TypeValidationError, span: crate::ast::Span) -> 
         TypeValidationError::BareList => {
             "typed fields must declare 'List<T>' instead of bare 'List'".to_string()
         }
+        TypeValidationError::UnsupportedOptionalListItem => {
+            "optional list item types are not supported; use 'List<T>' or 'List<T>?'".to_string()
+        }
+        TypeValidationError::ExpectedListClose => {
+            "expected '>' after list item type".to_string()
+        }
         TypeValidationError::UnknownType { expected_type } => {
             format!("type '{expected_type}' is not defined")
         }

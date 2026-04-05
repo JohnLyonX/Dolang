@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use crate::ast::TypeExpr;
 use crate::config::ProjectConfig;
 use crate::error::Error;
 use crate::interpreter::{CorsConfig, HttpRoute, ModuleNamespace, StaticRoute};
@@ -16,8 +17,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct TypeField {
     pub name: String,
-    pub type_name: String,
-    pub optional: bool,
+    pub type_expr: TypeExpr,
     pub hidden: bool,
 }
 

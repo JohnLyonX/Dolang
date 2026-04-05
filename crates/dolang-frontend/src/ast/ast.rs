@@ -214,7 +214,7 @@ pub struct AssignStmt {
 pub struct VarDeclStmt {
     pub span: Span,
     pub name: String,
-    pub type_annotation: Option<String>, // e.g., Some("Int"), None for dynamic
+    pub type_annotation: Option<TypeExpr>,
     pub value: Box<Expr>,
 }
 
@@ -222,7 +222,7 @@ pub struct VarDeclStmt {
 pub struct ConstDeclStmt {
     pub span: Span,
     pub name: String,
-    pub type_annotation: Option<String>, // Optional type annotation: $@ x: Int = 30
+    pub type_annotation: Option<TypeExpr>,
     pub value: Box<Expr>,
 }
 
@@ -366,13 +366,19 @@ pub struct MainDeclStmt {
     pub body: Vec<Stmt>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeExpr {
+    Named(String),
+    List(Box<TypeExpr>),
+    Optional(Box<TypeExpr>),
+}
+
 /// A single field in a $Type declaration: `name: TypeName?` or `@HIDE name: TypeName`
 #[derive(Debug, Clone)]
 pub struct TypeField {
     pub name: String,
-    pub type_name: String, // "Int" | "Str" | "Bool" | "Float"
-    pub optional: bool,    // true if field has `?` suffix
-    pub hidden: bool,      // true if field has `@HIDE` annotation
+    pub type_expr: TypeExpr,
+    pub hidden: bool,
 }
 
 /// Struct constructor: `TypeName { field: value, ... }`

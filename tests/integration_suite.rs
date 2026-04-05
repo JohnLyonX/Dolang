@@ -946,8 +946,218 @@ user.nickname = "neo";
 fn strict_type_construction_fixture_passes() {
     assert_fixture_stdout(
         "spec/valid/data/type_construction.dol",
-        "John\nsecret\nWorld\njohn@example.com\n",
+        "Hello\n",
     );
+}
+
+#[test]
+fn optional_null_and_list_construction_fixture_passes() {
+    assert_fixture_stdout(
+        "spec/valid/data/type_optional_null_and_list_construction.dol",
+        "null\nnull\nFirst\n",
+    );
+}
+
+#[test]
+fn typed_list_variable_rejects_wrong_initial_item() {
+    let outcome = run_fixture(
+        "spec/invalid/data/variable_typed_list_mismatch.dol",
+        RuntimeMode::Test,
+    );
+    let error = outcome.error.expect("typed list should fail");
+    assert!(
+        error.contains("variable 'posts' expects type 'Post' but got 'User'"),
+        "error={error}"
+    );
+}
+
+#[test]
+fn typed_list_index_assignment_rejects_wrong_item_type() {
+    let project_dir = write_temp_project(
+        "dolang-typed-list-index",
+        "name = \"typed-list-index\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$Type User {
+    id: Int
+}
+
+$Type Post {
+    title: String
+}
+
+$ posts: List<Post> = [
+    Post {
+        title: "ok",
+    }
+];
+
+posts[0] = User {
+    id: 1,
+};
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    let error = outcome.error.expect("wrong list item should fail");
+    assert!(
+        error.contains("list element for 'posts' expects type 'Post', got 'User'"),
+        "error={error}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_list_push_accepts_matching_item_type() {
+    let project_dir = write_temp_project(
+        "dolang-typed-list-push-ok",
+        "name = \"typed-list-push-ok\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$Type Post {
+    title: String
+}
+
+$ posts: List<Post> = [];
+posts.push(Post {
+    title: "Hello",
+});
+$>> posts[0].title;
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    assert!(outcome.error.is_none(), "push should succeed: {:?}", outcome.error);
+    assert_eq!(outcome.stdout, "Hello\n");
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_list_push_rejects_wrong_item_type() {
+    let project_dir = write_temp_project(
+        "dolang-typed-list-push-bad",
+        "name = \"typed-list-push-bad\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$Type Post {
+    title: String
+}
+
+$Type User {
+    name: String
+}
+
+$ posts: List<Post> = [];
+posts.push(User {
+    name: "Alice",
+});
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    let error = outcome.error.expect("push should fail");
+    assert!(
+        error.contains("list method 'push' for 'posts' expects item type 'Post', got 'User'"),
+        "error={error}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_list_insert_accepts_matching_item_type() {
+    let project_dir = write_temp_project(
+        "dolang-typed-list-insert-ok",
+        "name = \"typed-list-insert-ok\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$Type Post {
+    title: String
+}
+
+$ posts: List<Post> = [];
+posts.insert(0, Post {
+    title: "Hello",
+});
+$>> posts[0].title;
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    assert!(
+        outcome.error.is_none(),
+        "insert should succeed: {:?}",
+        outcome.error
+    );
+    assert_eq!(outcome.stdout, "Hello\n");
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn typed_list_insert_rejects_wrong_item_type() {
+    let project_dir = write_temp_project(
+        "dolang-typed-list-insert-bad",
+        "name = \"typed-list-insert-bad\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$Type Post {
+    title: String
+}
+
+$Type User {
+    name: String
+}
+
+$ posts: List<Post> = [];
+posts.insert(0, User {
+    name: "Alice",
+});
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    let error = outcome.error.expect("insert should fail");
+    assert!(
+        error.contains("list method 'insert' for 'posts' expects item type 'Post', got 'User'"),
+        "error={error}"
+    );
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn dynamic_list_mutators_remain_untyped() {
+    let project_dir = write_temp_project(
+        "dolang-dynamic-list-mutators",
+        "name = \"dynamic-list-mutators\"\nversion = \"0.1.0\"\nentry = \"main.dol\"\n",
+        &[(
+            "main.dol",
+            r#"$ list = [];
+list.push(1);
+list.insert(1, "two");
+$>> list[0];
+$>> list[1];
+"#,
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir.join("main.dol"), RuntimeMode::Test);
+    assert!(
+        outcome.error.is_none(),
+        "dynamic list mutators should stay allowed: {:?}",
+        outcome.error
+    );
+    assert_eq!(outcome.stdout, "1\ntwo\n");
+
+    fs::remove_dir_all(&project_dir).expect("cleanup");
 }
 
 #[test]

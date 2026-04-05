@@ -5,7 +5,7 @@ mod http;
 mod io;
 mod modules;
 
-use crate::ast::{AssignStmt, BinaryExpr, Expr, Span, Stmt, VarDeclStmt};
+use crate::ast::{AssignStmt, BinaryExpr, Expr, Span, Stmt, TypeExpr, VarDeclStmt};
 use crate::diagnostics::{Diagnostic, codes};
 use crate::error::Error;
 use crate::parser::{calc_line_col, parse_expr_tokens, parse_expr_tokens_with_src};
@@ -348,11 +348,12 @@ fn parse_init_or_update(toks: &[Token]) -> Result<Option<Box<Stmt>>, Error> {
         let type_annotation;
         let value_start_idx;
         if toks[2].typ == Type::Colon {
-            if toks.len() < 5 || toks[3].typ != Type::Ident || toks[4].typ != Type::Assign {
+            let assign_idx = find_token(toks, Type::Assign).ok_or(Error::InvalidStatement(None))?;
+            if assign_idx <= 3 {
                 return Err(Error::InvalidStatement(None));
             }
-            type_annotation = Some(toks[3].literal.clone());
-            value_start_idx = 5;
+            type_annotation = Some(parse_type_expr_tokens(&toks[3..assign_idx])?);
+            value_start_idx = assign_idx + 1;
         } else if toks[2].typ == Type::Assign {
             type_annotation = None;
             value_start_idx = 3;
@@ -381,6 +382,15 @@ fn parse_init_or_update(toks: &[Token]) -> Result<Option<Box<Stmt>>, Error> {
     }
 
     Err(Error::InvalidStatement(None))
+}
+
+fn parse_type_expr_tokens(toks: &[Token]) -> Result<TypeExpr, Error> {
+    let mut parser = StmtParser::new(toks, "");
+    let type_expr = parser.parse_type_expr()?;
+    if !parser.at_end() {
+        return Err(Error::InvalidStatement(None));
+    }
+    Ok(type_expr)
 }
 
 pub(crate) fn build_compound_assign(

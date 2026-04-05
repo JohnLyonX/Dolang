@@ -1,5 +1,6 @@
 use indexmap::IndexMap;
 
+use crate::ast::TypeExpr;
 use crate::runtime::RuntimeContext;
 
 use super::value::DolangValue;
@@ -7,45 +8,51 @@ use super::value::DolangValue;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeValidationError {
     BareList,
+    UnsupportedOptionalListItem,
+    ExpectedListClose,
     UnknownType { expected_type: String },
     Mismatch { expected_type: String, actual_type: String },
     MissingRequiredField { type_name: String, field_name: String },
     UnknownField { type_name: String, field_name: String },
 }
 
-pub fn validate_value_against_type(
-    expected_type: &str,
+pub fn parse_runtime_type_expr(type_name: &str) -> Result<TypeExpr, TypeValidationError> {
+    let chars: Vec<char> = type_name.trim().chars().collect();
+    let (type_expr, next) = parse_type_expr_chars(&chars, 0)?;
+    if next != chars.len() {
+        return Err(TypeValidationError::ExpectedListClose);
+    }
+    Ok(type_expr)
+}
+
+pub fn validate_value_against_type_expr(
+    expected: &TypeExpr,
     value: &DolangValue,
     context: &RuntimeContext,
 ) -> Result<(), TypeValidationError> {
-    let expected_type = expected_type.trim();
+    match expected {
+        TypeExpr::Named(name) => validate_named_type(name, value, context),
+        TypeExpr::List(inner) => {
+            let DolangValue::List(items) = value else {
+                return Err(TypeValidationError::Mismatch {
+                    expected_type: type_expr_to_string(expected),
+                    actual_type: value.type_name().into_owned(),
+                });
+            };
 
-    if let Some(item_type) = parse_list_item_type(expected_type) {
-        let DolangValue::List(items) = value else {
-            return Err(TypeValidationError::Mismatch {
-                expected_type: expected_type.to_string(),
-                actual_type: value.type_name().into_owned(),
-            });
-        };
+            for item in items {
+                validate_value_against_type_expr(inner, item, context)?;
+            }
 
-        for item in items {
-            validate_value_against_type(item_type, item, context)?;
+            Ok(())
         }
-
-        return Ok(());
-    }
-
-    let normalized = expected_type.to_ascii_lowercase();
-    match normalized.as_str() {
-        "int" | "integer" => expect_int(expected_type, value),
-        "float" => expect_float(expected_type, value),
-        "string" | "str" => expect_string(expected_type, value),
-        "bool" | "boolean" => expect_bool(expected_type, value),
-        "list" => Err(TypeValidationError::BareList),
-        "map" => expect_map(expected_type, value),
-        "response" => expect_response(expected_type, value),
-        "json" => expect_json_like(expected_type, value, context),
-        _ => expect_user_type(expected_type, value, context),
+        TypeExpr::Optional(inner) => {
+            if matches!(value, DolangValue::Null) {
+                Ok(())
+            } else {
+                validate_value_against_type_expr(inner, value, context)
+            }
+        }
     }
 }
 
@@ -72,7 +79,7 @@ pub fn validate_typed_instance_fields(
             });
         };
 
-        validate_value_against_type(&field.type_name, value, context)?;
+        validate_value_against_type_expr(&field.type_expr, value, context)?;
     }
 
     for field in &shape.fields {
@@ -81,7 +88,9 @@ pub fn validate_typed_instance_fields(
         } else {
             field.name.clone()
         };
-        if !field.optional && !fields.contains_key(&stored_name) {
+        let present = fields.contains_key(&stored_name);
+        let optional = matches!(field.type_expr, TypeExpr::Optional(_));
+        if !optional && !present {
             return Err(TypeValidationError::MissingRequiredField {
                 type_name: type_name.to_string(),
                 field_name: field.name.clone(),
@@ -92,105 +101,146 @@ pub fn validate_typed_instance_fields(
     Ok(())
 }
 
-pub fn parse_list_item_type(expected_type: &str) -> Option<&str> {
-    let expected_type = expected_type.trim();
-    let rest = expected_type.strip_prefix("List<")?;
-    rest.strip_suffix('>').map(str::trim)
-}
-
-fn expect_int(expected_type: &str, value: &DolangValue) -> Result<(), TypeValidationError> {
-    if matches!(value, DolangValue::Int(_)) {
-        Ok(())
-    } else {
-        mismatch(expected_type, value)
+fn parse_type_expr_chars(
+    chars: &[char],
+    mut pos: usize,
+) -> Result<(TypeExpr, usize), TypeValidationError> {
+    while pos < chars.len() && chars[pos].is_whitespace() {
+        pos += 1;
     }
-}
 
-fn expect_float(expected_type: &str, value: &DolangValue) -> Result<(), TypeValidationError> {
-    if matches!(value, DolangValue::Float(_) | DolangValue::Int(_)) {
-        Ok(())
+    let mut base = if matches_ident(chars, pos, "List") {
+        let after_list = pos + 4;
+        let mut inner_pos = skip_ws(chars, after_list);
+        if inner_pos >= chars.len() || chars[inner_pos] != '<' {
+            return Err(TypeValidationError::BareList);
+        }
+        inner_pos += 1;
+        let (inner, next) = parse_type_expr_chars(chars, inner_pos)?;
+        if matches!(inner, TypeExpr::Optional(_)) {
+            return Err(TypeValidationError::UnsupportedOptionalListItem);
+        }
+        let end = skip_ws(chars, next);
+        if end >= chars.len() || chars[end] != '>' {
+            return Err(TypeValidationError::ExpectedListClose);
+        }
+        pos = end + 1;
+        TypeExpr::List(Box::new(inner))
     } else {
-        mismatch(expected_type, value)
+        let start = pos;
+        while pos < chars.len() && (chars[pos].is_ascii_alphanumeric() || chars[pos] == '_') {
+            pos += 1;
+        }
+        TypeExpr::Named(chars[start..pos].iter().collect())
+    };
+
+    pos = skip_ws(chars, pos);
+    if pos < chars.len() && chars[pos] == '?' {
+        pos += 1;
+        base = TypeExpr::Optional(Box::new(base));
     }
+
+    Ok((base, pos))
 }
 
-fn expect_string(expected_type: &str, value: &DolangValue) -> Result<(), TypeValidationError> {
-    if matches!(value, DolangValue::Str(_)) {
-        Ok(())
-    } else {
-        mismatch(expected_type, value)
-    }
-}
-
-fn expect_bool(expected_type: &str, value: &DolangValue) -> Result<(), TypeValidationError> {
-    if matches!(value, DolangValue::Bool(_)) {
-        Ok(())
-    } else {
-        mismatch(expected_type, value)
-    }
-}
-
-fn expect_map(expected_type: &str, value: &DolangValue) -> Result<(), TypeValidationError> {
-    if matches!(value, DolangValue::Map(_)) {
-        Ok(())
-    } else {
-        mismatch(expected_type, value)
-    }
-}
-
-fn expect_response(expected_type: &str, value: &DolangValue) -> Result<(), TypeValidationError> {
-    if matches!(value, DolangValue::Response { .. }) {
-        Ok(())
-    } else {
-        mismatch(expected_type, value)
-    }
-}
-
-fn expect_json_like(
+fn validate_named_type(
     expected_type: &str,
     value: &DolangValue,
     context: &RuntimeContext,
 ) -> Result<(), TypeValidationError> {
-    if let DolangValue::Response {
-        body: Some(body), ..
-    } = value
-    {
-        return expect_json_like(expected_type, body.as_ref(), context);
-    }
+    let normalized = expected_type.to_ascii_lowercase();
+    match normalized.as_str() {
+        "int" | "integer" => expect_match("Int", value, matches!(value, DolangValue::Int(_))),
+        "float" => expect_match(
+            "Float",
+            value,
+            matches!(value, DolangValue::Float(_) | DolangValue::Int(_)),
+        ),
+        "string" | "str" => expect_match(
+            "String",
+            value,
+            matches!(value, DolangValue::Str(_)),
+        ),
+        "bool" | "boolean" => {
+            expect_match("Bool", value, matches!(value, DolangValue::Bool(_)))
+        }
+        "map" => expect_match("Map", value, matches!(value, DolangValue::Map(_))),
+        "response" => expect_match(
+            "Response",
+            value,
+            matches!(value, DolangValue::Response { .. }),
+        ),
+        "json" => {
+            if let DolangValue::Response {
+                body: Some(body), ..
+            } = value
+            {
+                return validate_named_type("Json", body.as_ref(), context);
+            }
 
-    if matches!(
-        value,
-        DolangValue::Json(_) | DolangValue::Map(_) | DolangValue::TypedInstance { .. }
-    ) {
-        Ok(())
-    } else {
-        let _ = context;
-        mismatch(expected_type, value)
+            expect_match(
+                "Json",
+                value,
+                matches!(
+                    value,
+                    DolangValue::Json(_)
+                        | DolangValue::Map(_)
+                        | DolangValue::TypedInstance { .. }
+                ),
+            )
+        }
+        "list" => Err(TypeValidationError::BareList),
+        _ => {
+            if context.get_type(expected_type).is_none() {
+                return Err(TypeValidationError::UnknownType {
+                    expected_type: expected_type.to_string(),
+                });
+            }
+
+            match value {
+                DolangValue::TypedInstance { type_name, .. } if type_name == expected_type => Ok(()),
+                _ => Err(TypeValidationError::Mismatch {
+                    expected_type: expected_type.to_string(),
+                    actual_type: value.type_name().into_owned(),
+                }),
+            }
+        }
     }
 }
 
-fn expect_user_type(
+fn expect_match(
     expected_type: &str,
     value: &DolangValue,
-    context: &RuntimeContext,
+    ok: bool,
 ) -> Result<(), TypeValidationError> {
-    if context.get_type(expected_type).is_none() {
-        return Err(TypeValidationError::UnknownType {
+    if ok {
+        Ok(())
+    } else {
+        Err(TypeValidationError::Mismatch {
             expected_type: expected_type.to_string(),
-        });
-    }
-
-    match value {
-        DolangValue::TypedInstance { type_name, .. } if type_name == expected_type => Ok(()),
-        _ => mismatch(expected_type, value),
+            actual_type: value.type_name().into_owned(),
+        })
     }
 }
 
-fn mismatch(expected_type: &str, value: &DolangValue) -> Result<(), TypeValidationError> {
-    Err(TypeValidationError::Mismatch {
-        expected_type: expected_type.to_string(),
-        actual_type: value.type_name().into_owned(),
-    })
+fn matches_ident(chars: &[char], pos: usize, ident: &str) -> bool {
+    let ident_chars: Vec<char> = ident.chars().collect();
+    chars.get(pos..pos + ident_chars.len()) == Some(ident_chars.as_slice())
+}
+
+fn skip_ws(chars: &[char], mut pos: usize) -> usize {
+    while pos < chars.len() && chars[pos].is_whitespace() {
+        pos += 1;
+    }
+    pos
+}
+
+fn type_expr_to_string(type_expr: &TypeExpr) -> String {
+    match type_expr {
+        TypeExpr::Named(name) => name.clone(),
+        TypeExpr::List(inner) => format!("List<{}>", type_expr_to_string(inner)),
+        TypeExpr::Optional(inner) => format!("{}?", type_expr_to_string(inner)),
+    }
 }
 
 #[cfg(test)]
@@ -208,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_value_against_type_rejects_map_for_user_type() {
+    fn validate_value_against_type_expr_rejects_map_for_user_type() {
         let mut context = test_context();
         context.register_type(
             "User",
@@ -219,7 +269,8 @@ mod tests {
         );
 
         let value = DolangValue::Map(IndexMap::new());
-        let error = validate_value_against_type("User", &value, &context)
+        let ty = TypeExpr::Named("User".to_string());
+        let error = validate_value_against_type_expr(&ty, &value, &context)
             .expect_err("map should not satisfy User");
 
         assert_eq!(
@@ -232,6 +283,13 @@ mod tests {
     }
 
     #[test]
+    fn validate_optional_string_accepts_null() {
+        let context = test_context();
+        let ty = TypeExpr::Optional(Box::new(TypeExpr::Named("String".into())));
+        assert!(validate_value_against_type_expr(&ty, &DolangValue::Null, &context).is_ok());
+    }
+
+    #[test]
     fn validate_typed_instance_fields_requires_non_optional_fields() {
         let mut context = test_context();
         context.register_type(
@@ -240,8 +298,7 @@ mod tests {
                 name: "User".to_string(),
                 fields: vec![TypeField {
                     name: "id".to_string(),
-                    type_name: "Int".to_string(),
-                    optional: false,
+                    type_expr: TypeExpr::Named("Int".to_string()),
                     hidden: false,
                 }],
             },
@@ -260,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_value_against_type_accepts_list_of_user_instances() {
+    fn validate_list_of_user_instances_accepts_matching_items() {
         let mut context = test_context();
         context.register_type(
             "User",
@@ -275,6 +332,7 @@ mod tests {
             fields: IndexMap::new(),
         }]);
 
-        assert!(validate_value_against_type("List<User>", &value, &context).is_ok());
+        let ty = TypeExpr::List(Box::new(TypeExpr::Named("User".to_string())));
+        assert!(validate_value_against_type_expr(&ty, &value, &context).is_ok());
     }
 }

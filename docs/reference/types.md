@@ -1,5 +1,11 @@
 # 类型系统
 
+> 迁移提示
+>
+> 本页是旧 reference 页面，仍保留历史示例。
+> 当前主线类型口径请优先参考 [../guide/09-gradual-typing.md](../guide/09-gradual-typing.md)、[errors.md](errors.md) 和 [syntax.md](syntax.md)。
+> 如果本页出现旧的泛型或返回类型写法，以主线和当前实现为准。
+
 DaoLang v1.3 采用**渐进式类型系统**，结合了动态语言的灵活性和静态类型的安全性。
 
 > **设计原则：能跑就不用加，怕出错再加。**
@@ -104,9 +110,30 @@ $>> "Dao" + "Lang";
 Dolang
 ```
 
+**转义字符**：
+
+```dao
+$>> "Hello\nWorld";         // 换行: Hello
+                           //          World
+$>> "Hello\tWorld";         // 制表符: Hello   World
+$>> "He said \"Hi\"";       // 双引号: He said "Hi"
+$>> "C:\\path\\file";       // 反斜杠: C:\path\file
+$>> "Line1\rLine2";        // 回车
+$>> "Hello\0World";        // 空字符
+```
+
+**f-string 同样支持转义**：
+
+```dao
+$ name = "World";
+$>> f"Hello\n{name}";      // 输出: Hello
+                           //          World
+```
+
 **特性**：
 - 支持 `+` 运算符进行字符串连接
 - 内部统一存储为字符串类型
+- 支持转义字符：`\n`, `\t`, `\r`, `\0`, `\\`, `\"`
 
 **字符串方法**：
 
@@ -518,6 +545,119 @@ $>> {"a":1}.type();    // 输出: Map
 ```
 
 > 注意：对于数值类型，方法调用需要用括号包裹，如 `(42).type()`
+
+---
+
+---
+
+## 自定义类型 `$Type`
+
+使用 `$Type` 定义用户类型与结构形状。当前主线里，这不再只是文档层描述；`$Type` 是 Dolang 的名义自定义类型，不是和 `Map` 按形状自动互换的结构标签。
+
+```dolang
+$Type User {
+    id: Int
+    name: Str
+    email: Str?    // ? 表示可选字段
+    age: Int?
+}
+```
+
+**字段规则**：
+
+| 写法 | 说明 |
+|------|------|
+| `id: Int` | 必填字段，类型为 Int |
+| `email: Str?` | 可选字段，类型为 Str，加 `?` |
+| 字段类型 | `Int` `Str` `Bool` `Float`，首字母大写 |
+
+**无 getter / setter**，无私有字段，无方法。
+
+### 当前主线语义
+
+- `User { ... }` 才是 `User`
+- 裸 `Map` / `JSON` 即使字段一致，也不是 `User`
+- 构造 `User { ... }` 时，runtime 会校验缺失必填字段、未声明字段、字段类型不匹配
+- 当函数或 HTTP handler 声明返回 `User` 或 `List<User>` 时，实际值也必须是对应的 typed instance
+- `$Type` 字段当前支持 `User`、`User?`、`List<User>`、`List<User>?`
+- `T?` 表示字段可以缺失；如果出现，也允许显式 `null`
+
+如果你只是要返回普通 JSON，对外仍然可以写 `-> JSON`。但如果声明返回用户类型，实际值应写成：
+
+```dolang
+$Type User {
+    id: Int
+    name: Str
+}
+
+$fn get_user() -> User {
+    $# User {
+        id: 1,
+        name: "Alice",
+    };
+}
+```
+
+例如下面这种写法现在会直接报错，因为缺少必填字段 `name`：
+
+```dolang
+$Type User {
+    id: Int
+    name: Str
+}
+
+$ user = User {
+    id: 1,
+};
+```
+
+也可以写带列表字段和可选字段的类型：
+
+```dolang
+$Type Feed {
+    items: List<Post>
+    next_cursor: String?
+}
+```
+
+当前主线不支持：
+
+```dolang
+$Type Feed {
+    items: List<Post?>
+}
+```
+
+如果你需要“整个列表可选”，应写成 `List<Post>?`，而不是 `List<Post?>`。
+
+---
+
+### 历史写法提示：`-> JSON<User>`
+
+这一节保留是为了说明旧文档里曾经出现过 `JSON<User>` 这类签名。
+
+当前主线不再把它当作稳定教学写法。请改用：
+
+- `-> JSON` 表示响应格式
+- `-> List<T>` 表示集合返回
+- `$Type` 用于结构说明，也参与当前主线的用户类型返回校验
+
+如果你在旧材料里看到 `JSON<User>`，应回到 [../guide/09-gradual-typing.md](../guide/09-gradual-typing.md) 采用当前口径。
+
+---
+
+### 推荐项目结构
+
+```
+project/
+├── main.dol
+├── models/          ← $Type 定义集中存放
+│   ├── user.dol
+│   └── order.dol
+├── routers/         ← 薄层：收参数 → 调 service → 返回响应
+├── service/         ← 业务逻辑：校验、组装、调 data
+└── data/            ← 数据操作：DB 查询、外部 API
+```
 
 ---
 

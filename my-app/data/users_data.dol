@@ -1,0 +1,8 @@
+$Type User {
+    id: Int
+    name: String
+    email: String
+    role: String
+    @HIDE password: String
+    @HIDE salt: String
+}

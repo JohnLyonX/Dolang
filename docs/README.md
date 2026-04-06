@@ -1,124 +1,51 @@
-# Dolang
+# Dolang Docs
 
-> *"我们不关心工程优雅，我们关心最快把想法变成收入。"*
+本目录现在按三层组织：
 
-<p align="center">
-  <img src="https://img.shields.io/badge/version-v1.6-blue" alt="Version">
-  <img src="https://img.shields.io/badge/Rust-1.70+-orange" alt="Rust">
-  <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
-</p>
+- Guide：按学习路径讲“先学什么、怎么用”
+- Reference：按主题查语法、HTTP、错误、stdlib API
+- Spec：记录当前实现边界，和 `tests/spec/*` 对齐
 
-Dolang 是面向**独立开发者**的快速变现脚本语言。
+如果三层文档出现冲突，优先顺序是：
 
-## 核心定位
+1. 当前实现与可执行测试
+2. `docs/spec/*`
+3. Guide / Reference
 
-- **目标用户**：独立开发者（同时身兼产品经理、设计师、工程师、运营）
-- **核心场景**：快速验证想法、直接暴露成可调用的服务
-- **设计哲学**：今天学，今天用，明天就能收钱
+## 快速入口
 
-## 核心特点
+- Guide 入口：[guide/README.md](guide/README.md)
+- Reference 入口：
+  - [reference/syntax.md](reference/syntax.md)
+  - [reference/errors.md](reference/errors.md)
+  - [reference/http.md](reference/http.md)
+  - [reference/grpc.md](reference/grpc.md)
+  - [reference/project-system.md](reference/project-system.md)
+  - [reference/stdlib-api.md](reference/stdlib-api.md)
+- Spec 入口：[spec/README.md](spec/README.md)
 
-### $ 符号哲学
+## 推荐阅读顺序
 
-```dao
-$ a = 1;        // 声明变量
-$@ PI = 3.14;   // 声明常量
-$>> a;          // 打印输出
-$<<LINE();      // 读取输入
-```
+第一次接触 Dolang：
 
-`$` 是全世界最通用的财富符号——美金、财富、钱。我们用它来声明变量、声明常量、打印输出、读取输入，把每一行代码都和「赚钱」这件事绑定在一起。
+1. 先读 [guide/README.md](guide/README.md)
+2. 按编号章节读到 `16`
+3. 需要查完整 API 时跳到 [reference/stdlib-api.md](reference/stdlib-api.md)
+4. 对语义边界有疑问时再看 [spec/README.md](spec/README.md)
 
-**写代码，就是赚钱。**
+已经在项目里排障：
 
-### 极简语法
+1. 先查 [reference/errors.md](reference/errors.md)
+2. HTTP 问题查 [reference/http.md](reference/http.md)
+3. gRPC client 问题查 [reference/grpc.md](reference/grpc.md)
+4. 类型、模块、返回值争议回看 `spec/`
 
-7 个符号，5 分钟上手：
+## 迁移状态
 
-| 语法 | 功能 |
-|------|------|
-| `$` | 变量声明 |
-| `$@` | 常量声明 |
-| `$>>` | 打印输出 |
-| `$<<` | 读取输入 |
-| `$if/$elif/$else` | 条件语句 |
-| `$while/$loop/$for` | 循环语句 |
-| `$fn/$#` | 函数定义与返回 |
+`docs/guide/` 下仍保留一批旧页面，用于迁移过渡。它们不再是主线入口，状态分三类：
 
-### 渐进式类型
+- `Deprecated`：内容与现有主线冲突，不应继续当教学入口
+- `Supplemental`：仍有背景信息或补充价值，但不承担主线职责
+- `Migration Source`：保留可迁移内容或旧索引，方便追溯
 
-```dao
-$ x = 30;           // 动态模式，类型随时可变
-x = "hello";        // ✅ 允许
-
-$ y: Int = 30;     // 静态模式，类型固定
-y = "hello";        // ❌ 报错
-```
-
-### 快速验证
-
-从想法到跑起来的时间，就是你需要的全部。
-
----
-
-## 安装
-
-```bash
-# 克隆项目
-git clone https://github.com/your-repo/daolang.git
-cd daolang
-
-# 编译
-cargo build
-
-# 运行 REPL
-cargo run
-```
-
-## 快速开始
-
-```
-Dolang REPL v1.6
->> $>> "Hello, Dolang!";
-Hello, Dolang!
->>
-```
-
-### 退出 REPL
-
-- 输入 `exit`
-- 输入 `exit()`
-- 输入 `quit`
-- 快捷键 Ctrl+D（当输入为空时）
-
----
-
-## 与 PHP 的区别
-
-| | PHP | Dolang |
-|---|---|---|
-| 定位 | 建房子 | 摆摊 |
-| 目标 | 工程构建 | 变现验证 |
-| 学习成本 | 需要框架、路由、模板 | 7 个符号，5 分钟上手 |
-| 时代背景 | 30 年前的 Web | 独立开发者的今天 |
-| 态度 | 严肃的工程语言 | 反严肃，追求最快落地 |
-
-**PHP 是建房子的，Dolang 是摆摊的。**
-
-摆摊不需要地基，不需要设计图纸，需要的是今天就能开张，明天就能收钱。
-
----
-
-## 未来方向
-
-Dolang 目前是一个解释型脚本语言的起点。
-
-我们下一步想做的，是让「变现」这个动作成为语言的一等公民——让支付、Webhook、API 暴露不再是靠第三方库拼凑出来的，而是内建在语言的表达能力里。
-
-我们想要的终态是：
-
-> 一个 `.dal` 文件，一条命令，直接是一个能收钱的服务。
-
----
-
-*Dolang Team · v1.6 · MIT License*
+阅读主线时，优先使用编号章节和 reference 页面。

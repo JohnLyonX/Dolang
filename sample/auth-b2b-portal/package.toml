@@ -1,0 +1,108 @@
+[project]
+name = "auth-b2b-portal"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "session"
+identity_sources = ["cookie", "bearer"]
+
+[server.auth.session]
+enabled = true
+cookie_name = "portal_session"
+cookie_http_only = true
+cookie_same_site = "lax"
+cookie_secure = false
+cookie_path = "/"
+ttl_seconds = 86400
+idle_timeout_seconds = 7200
+rotation = "on_login"
+
+[server.auth.session.store]
+driver = "postgres"
+
+[server.auth.session.store.postgres]
+url_env = "SESSION_DATABASE_URL"
+table = "auth_sessions"
+refresh_table = "auth_refresh_tokens"
+
+[server.auth.jwt]
+enabled = true
+issuer = "dolang-auth-sample"
+audience = "auth-b2b-portal"
+algorithm = "HS256"
+secret_env = "JWT_SECRET"
+access_ttl_seconds = 900
+refresh_ttl_seconds = 2592000
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/me"
+require = "authenticated"
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/workspaces/current/switch"
+require = "authenticated"
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/auth/logout"
+require = "authenticated"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/admin/*"
+require = "authenticated"
+roles_any = ["admin"]
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/api/projects"
+require = "authenticated"
+permissions_all = ["project:create"]
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/news-admin"
+require = "authenticated"
+permissions_any = ["news:create", "news:edit", "news:publish"]
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/api/admin/news"
+require = "authenticated"
+permissions_all = ["news:edit"]
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/api/admin/news"
+require = "authenticated"
+permissions_all = ["news:create"]
+
+[[server.auth.authorization.rules]]
+method = "PUT"
+path = "/api/admin/news/*"
+require = "authenticated"
+permissions_all = ["news:edit"]
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/api/admin/news/*/publish"
+require = "authenticated"
+permissions_all = ["news:publish"]
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/api/admin/news/*/unpublish"
+require = "authenticated"
+permissions_all = ["news:publish"]

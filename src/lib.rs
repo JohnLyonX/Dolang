@@ -1,10 +1,6 @@
-pub mod ast;
-pub mod error;
-pub mod interpreter;
-pub mod lexer;
-pub mod parser;
-pub mod syntax;
-pub mod token;
-
-pub use parser::parse;
-pub use interpreter::{exec, FnEnv, DolangValue};
+pub use dolang_frontend::{ast, diagnostics, error, lexer, parse, parser, syntax, token};
+pub use dolang_runtime::{
+    DolangValue, FnEnv, IntrinsicCall, IntrinsicId, IntrinsicRegistry, ModuleNamespace,
+    ModuleResolver, ProgramState, ProjectConfig, ResolvedModule, RuntimeContext, RuntimeMode,
+    RuntimePolicy, ServerConfig, config, exec, interpreter, module, runtime, stdlib_native,
+};

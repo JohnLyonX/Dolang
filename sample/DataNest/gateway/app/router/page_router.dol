@@ -1,0 +1,11 @@
+$GET("/") app_page() -> HTML {
+    $# $HTML().link("app.pages.app");
+}
+
+$GET("/login") login_page() -> HTML {
+    $# $HTML().link("app.pages.login");
+}
+
+$GET("/register") register_page() -> HTML {
+    $# $HTML().link("app.pages.register");
+}

@@ -1,0 +1,8 @@
+$mod shared.db.queries;
+
+$fn find_auth_user_row_by_username(username) -> List<Map> {
+    $# queries.safe_query(
+        "SELECT user_id, username, password_hash, display_name, team_id, role, is_active FROM app_users WHERE username = $1 LIMIT 1",
+        [username]
+    );
+}

@@ -1,0 +1,8 @@
+[book]
+title = "Dolang Guide"
+language = "zh-CN"
+src = "."
+
+[build]
+build-dir = "book"
+create-missing = false

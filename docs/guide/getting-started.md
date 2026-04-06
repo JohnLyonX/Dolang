@@ -1,106 +1,147 @@
 # 快速开始
 
-本指南将帮助你在 5 分钟内掌握 Dolang 的基本用法。
+> **Status: Supplemental**
+>
+> 这是一页迁移期补充材料。
+> 如果你要走当前主线，请改读 [02-installation-and-cli.md](02-installation-and-cli.md) 和 [03-first-program.md](03-first-program.md)。
+> 本页仍保留的独特价值是“一页式上手”节奏，适合快速预览，但不再承担完整教学职责。
+
+本指南帮助你在 5 分钟内上手 Dolang。
+
+---
 
 ## 安装
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-repo/daolang.git
-cd daolang
+git clone https://github.com/your-repo/dolang.git
+cd dolang
 
 # 编译
-cargo build
+cargo build --release
 
-# 运行 REPL
-cargo run
+# 将二进制加入 PATH（可选）
+export PATH="$PATH:$(pwd)/target/release"
 ```
 
-## 你的第一个程序
+---
 
-```
-Dolang REPL v1.6
->> $>> "Hello, Dolang!";
-Hello, Dolang!
->>
-```
+## 运行你的第一个程序
 
-## REPL 使用说明
+创建文件 `hello.dol`：
 
-REPL（Read-Eval-Print Loop）是交互式解释器，你可以输入代码并立即看到结果。
-
-### 基本操作
-
-- **输入代码**：输入代码后按回车执行
-- **历史记录**：使用上下方向键遍历历史命令
-- **光标编辑**：使用左右方向键移动光标
-- **快捷键**：
-  - Ctrl+A：跳转行首
-  - Ctrl+E：跳转行末
-  - Ctrl+C：取消当前行输入
-  - Ctrl+D：退出程序（当输入为空时）
-
-### 多行输入
-
-REPL 支持多行输入。当输入未闭合的括号时，会自动继续读取：
-
-```
->> $fn fib(n) {
->>     $if n <= 1 {
->>         $# n;
->>     } $else {
->>         $# fib(n - 1) + fib(n - 2);
->>     }
->> }
-```
-
-输入 `}` 闭合代码块后按回车执行。
-
-## 退出方式
-
-有以下几种方式退出 REPL：
-
-- 输入 `exit`
-- 输入 `exit()`
-- 输入 `quit`
-- 快捷键 Ctrl+D（当输入为空时）
-
-## 第一个程序示例
-
-### Hello World
-
-```dao
+```dolang
 $>> "Hello, Dolang!";
 ```
 
-### 变量声明与使用
+运行：
 
-```dao
-$ name = "Dolang";
-$>> "Hello, " + name;
+```bash
+dolang run hello.dol
+# 输出: Hello, Dolang!
 ```
 
-### 简单计算
+---
 
-```dao
-$>> 1 + 2 * 3;
-7
+## 使用 REPL
 
-$>> (1 + 2) * 3;
-9
+REPL 是交互式解释器，适合快速验证代码：
+
+```bash
+dolang repl
 ```
 
-### 条件判断
+```
+Dolang REPL v2026
+>> $>> "Hello!";
+Hello!
+>> $ x = 1 + 2;
+>> $>> x;
+3
+>> exit
+```
 
-```dao
-$ x = 10;
-$if x > 5 {
-    $>> "big";
+**REPL 快捷键**
+
+| 快捷键 | 功能 |
+|--------|------|
+| `↑` / `↓` | 历史记录 |
+| `Ctrl+A` | 跳到行首 |
+| `Ctrl+E` | 跳到行末 |
+| `Ctrl+C` | 取消当前输入 |
+| `Ctrl+D` | 退出（输入为空时） |
+
+输入 `exit` 或 `quit` 也可退出。
+
+---
+
+## 基本语法速览
+
+### 变量与常量
+
+```dolang
+$ name = "Dolang";       // 变量（可修改）
+$@ PI = 3.14159;         // 常量（不可修改）
+```
+
+### 输出
+
+```dolang
+$>> "Hello, World!";
+$>> 42;
+$>> name;
+```
+
+### 注释
+
+```dolang
+// 这是单行注释
+```
+
+### 函数
+
+```dolang
+$fn add(a, b) {
+    $# a + b;            // $# 是 return
+}
+
+$>> add(3, 4);           // 7
+```
+
+### 条件
+
+```dolang
+$ score = 85;
+$if score >= 90 {
+    $>> "A";
+} $else $if score >= 80 {
+    $>> "B";
 } $else {
-    $>> "small";
+    $>> "C";
+}
+```
+
+### 循环
+
+```dolang
+// for-in 遍历列表
+$for item in [1, 2, 3] {
+    $>> item;
+}
+
+// while 循环
+$ i = 0;
+$while i < 3 {
+    $>> i;
+    i += 1;
 }
 ```
 
 ---
 
-现在你已经掌握了 Dolang 的基本用法，可以开始编写自己的脚本了。
+## 下一步
+
+- [18-patterns-and-recipes.md](18-patterns-and-recipes.md) — 现行可运行配方
+- [../reference/stdlib-api.md](../reference/stdlib-api.md) — 标准库与值方法查表
+- [11-modules.md](11-modules.md) — 当前模块系统主线
+- [15-http-basics.md](15-http-basics.md) / [16-http-organization.md](16-http-organization.md) — 当前 HTTP 主线

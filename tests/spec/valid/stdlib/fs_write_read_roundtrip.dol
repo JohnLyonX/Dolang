@@ -1,0 +1,5 @@
+$mod std.fs;
+fs.write_text("/tmp/dolang-test-stdlib.txt", "roundtrip ok");
+$ content = fs.read_text("/tmp/dolang-test-stdlib.txt");
+$>> content;
+fs.delete("/tmp/dolang-test-stdlib.txt");

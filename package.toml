@@ -1,0 +1,4 @@
+[project]
+name = "dolang"
+version = "2026.0.0"
+entry = "main.dol"

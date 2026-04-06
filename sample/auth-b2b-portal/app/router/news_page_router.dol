@@ -1,0 +1,15 @@
+$GET("/news") news_index() {
+    $# $HTML().link("app.pages.news");
+}
+
+$GET("/login") login_page() {
+    $# $HTML().link("app.pages.login");
+}
+
+$GET("/news/:slug") news_detail(slug) {
+    $# $HTML().link("app.pages.news_detail");
+}
+
+$GET("/news-admin") news_admin() {
+    $# $HTML().link("app.pages.news_admin");
+}

@@ -1,0 +1,10 @@
+$mod std.auth.guard;
+
+$POST("/projects") create_project() -> JSON {
+    guard.require_permission("project:create");
+    $# $RES(201, {
+        "ok": true,
+        "name": body["name"],
+        "created_by": guard.principal()["subject"]
+    });
+}

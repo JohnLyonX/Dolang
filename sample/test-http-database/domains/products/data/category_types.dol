@@ -1,0 +1,4 @@
+$Type Category {
+    id: Int
+    name: String
+}

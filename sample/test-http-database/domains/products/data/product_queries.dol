@@ -1,0 +1,37 @@
+$mod shared.db.queries;
+
+$fn list_categories_rows() -> List<Map> {
+    $# queries.safe_query("SELECT id, name FROM categories ORDER BY id", []);
+}
+
+$fn list_products_rows() -> List<Map> {
+    $# queries.safe_query("SELECT id, name, price::double precision AS price, category_id FROM products ORDER BY id", []);
+}
+
+$fn find_product_row_by_id(id) -> List<Map> {
+    $# queries.safe_query(
+        "SELECT id, name, price::double precision AS price, category_id FROM products WHERE id::bigint = $1",
+        [id.to_int()]
+    );
+}
+
+$fn insert_product_row(name, price, category_id) -> List<Map> {
+    $# queries.safe_query(
+        "INSERT INTO products (name, price, category_id) VALUES ($1, CAST($2 AS double precision), CAST($3::bigint AS integer)) RETURNING id, name, price::double precision AS price, category_id",
+        [name, price, category_id]
+    );
+}
+
+$fn update_product_row(id, name, price, category_id) -> List<Map> {
+    $# queries.safe_query(
+        "UPDATE products SET name = $2, price = CAST($3 AS double precision), category_id = CAST($4::bigint AS integer) WHERE id::bigint = $1 RETURNING id, name, price::double precision AS price, category_id",
+        [id.to_int(), name, price, category_id]
+    );
+}
+
+$fn delete_product_row(id) -> List<Map> {
+    $# queries.safe_query(
+        "DELETE FROM products WHERE id::bigint = $1 RETURNING id",
+        [id.to_int()]
+    );
+}

@@ -1,5 +1,11 @@
 # 核心概念
 
+> **Status: Supplemental**
+>
+> 这是一页迁移期补充材料，不再作为学习主线入口。
+> 主线请先读 [01-introduction.md](01-introduction.md) 和 [guide/README.md](README.md)。
+> 本页仍保留的独特价值是背景动机、设计口号和产品定位表述。
+
 本文档介绍 Dolang 的设计理念和核心概念。
 
 ## $ 符号哲学

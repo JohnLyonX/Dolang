@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dolang Auth Console</title>
+  <link rel="stylesheet" href="/assets/css/console.css">
+</head>
+<body class="auth-console">
+  <div class="auth-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Dolang Sample</p>
+        <h1>Auth B2B Portal Console</h1>
+        <p class="lede">用浏览器直接验证 cookie session、JWT、refresh、admin 和 project create 主链路。</p>
+      </div>
+      <div class="hero-actions">
+        <a href="/me" target="_blank" rel="noreferrer">Open /me JSON</a>
+        <a href="/console">Reload Console</a>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="panel">
+        <h2>Login</h2>
+        <form id="login-form" class="stack">
+          <label>
+            <span>Username</span>
+            <input id="username" name="username" value="admin" autocomplete="username" required>
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="password" name="password" type="password" value="password123" autocomplete="current-password" required>
+          </label>
+          <button type="submit">Login</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Session Snapshot</h2>
+        <div class="stack compact">
+          <label>
+            <span>Active transport</span>
+            <select id="transport">
+              <option value="cookie">Cookie Session</option>
+              <option value="bearer">Bearer JWT</option>
+            </select>
+          </label>
+          <label>
+            <span>CSRF Token</span>
+            <textarea id="csrf-token" rows="2" readonly></textarea>
+          </label>
+          <label>
+            <span>Access Token</span>
+            <textarea id="access-token" rows="4" readonly></textarea>
+          </label>
+          <label>
+            <span>Refresh Token</span>
+            <textarea id="refresh-token" rows="4" readonly></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Read Actions</h2>
+        <div class="button-grid">
+          <button id="me-cookie" type="button">GET /me via Cookie</button>
+          <button id="me-bearer" type="button">GET /me via Bearer</button>
+          <button id="admin-cookie" type="button">GET /admin/audit via Cookie</button>
+          <button id="admin-bearer" type="button">GET /admin/audit via Bearer</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Write Actions</h2>
+        <div class="stack">
+          <div class="button-grid">
+            <button id="refresh" type="button">POST /auth/refresh</button>
+            <button id="logout" type="button">POST /auth/logout</button>
+          </div>
+          <label>
+            <span>Workspace ID</span>
+            <input id="workspace-id" value="workspace-demo-01">
+          </label>
+          <div class="button-grid">
+            <button id="workspace-cookie" type="button">POST /workspaces/current/switch via Cookie</button>
+            <button id="workspace-bearer" type="button">POST /workspaces/current/switch via Bearer</button>
+          </div>
+          <label>
+            <span>Project Name</span>
+            <input id="project-name" value="Launch Control">
+          </label>
+          <div class="button-grid">
+            <button id="project-cookie" type="button">POST /api/projects via Cookie</button>
+            <button id="project-bearer" type="button">POST /api/projects via Bearer</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel-wide">
+        <h2>Response</h2>
+        <div id="status-banner" class="status-banner neutral">No request yet.</div>
+        <pre id="response-output" class="response-output"></pre>
+      </section>
+    </main>
+  </div>
+
+  <script src="/assets/js/console.js"></script>
+</body>
+</html>

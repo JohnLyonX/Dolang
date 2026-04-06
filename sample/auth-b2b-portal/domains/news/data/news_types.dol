@@ -1,0 +1,36 @@
+$Type NewsCategory {
+    category_id: String
+    slug: String
+    name: String
+}
+
+$Type NewsArticleSummary {
+    article_id: String
+    slug: String
+    title: String
+    summary: String
+    status: String
+    author_user_id: String
+    published_at: Int?
+    created_at: Int
+    updated_at: Int
+    category_id: String
+    category_slug: String
+    category_name: String
+}
+
+$Type NewsArticle {
+    article_id: String
+    slug: String
+    title: String
+    summary: String
+    body: String
+    status: String
+    author_user_id: String
+    published_at: Int?
+    created_at: Int
+    updated_at: Int
+    category_id: String
+    category_slug: String
+    category_name: String
+}

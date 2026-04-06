@@ -1,0 +1,178 @@
+$mod std.auth.guard;
+$mod std.env;
+$mod std.grpc;
+$mod domains.note.data.note_types;
+
+$ grpc_client = grpc.client({
+    "target": env.get("DATANEST_GRPC_TARGET"),
+    "descriptor": "../descriptors/datanest.pb",
+    "timeout_ms": 2000
+});
+
+_$fn auth_meta() -> JSON {
+    $ principal = guard.principal();
+    $if principal == null {
+        $throw "authentication required";
+    }
+
+    $ username = principal["subject"];
+    $if principal["claims"].contains_key("username") {
+        username = principal["claims"]["username"];
+    }
+
+    $# {
+        "x-user-id": principal["subject"],
+        "x-username": username
+    };
+}
+
+_$fn grpc_body(result) {
+    $if result["ok"] == false {
+        $throw result;
+    }
+
+    $# result["body"];
+}
+
+_$fn tag_from_map(item) -> Tag {
+    $# Tag {
+        tag_id: item["tag_id"],
+        name: item["name"],
+        user_id: item["user_id"],
+        created_at: item["created_at"]
+    };
+}
+
+_$fn note_summary_from_map(item) -> NoteSummary {
+    $# NoteSummary {
+        note_id: item["note_id"],
+        title: item["title"],
+        content_preview: item["content_preview"],
+        user_id: item["user_id"],
+        created_at: item["created_at"],
+        updated_at: item["updated_at"]
+    };
+}
+
+_$fn note_detail_from_map(item) -> NoteDetail {
+    $ tags = [];
+    $if item.contains_key("tags") {
+        $for tag in item["tags"] {
+            tags.push(tag_from_map(tag));
+        }
+    }
+
+    $# NoteDetail {
+        note_id: item["note_id"],
+        title: item["title"],
+        content: item["content"],
+        user_id: item["user_id"],
+        created_at: item["created_at"],
+        updated_at: item["updated_at"],
+        tags: tags
+    };
+}
+
+_$fn note_summaries_from_map(item) -> List<NoteSummary> {
+    $ notes = [];
+    $if item.contains_key("notes") {
+        $for note in item["notes"] {
+            notes.push(note_summary_from_map(note));
+        }
+    }
+
+    $# notes;
+}
+
+_$fn tags_from_map(item) -> List<Tag> {
+    $ tags = [];
+    $if item.contains_key("tags") {
+        $for tag in item["tags"] {
+            tags.push(tag_from_map(tag));
+        }
+    }
+
+    $# tags;
+}
+
+$fn list_notes() -> List<NoteSummary> {
+    $ result = grpc_client.call({
+        "service": "datanest.v1.DataNestService",
+        "method": "ListNotes",
+        "body": {},
+        "metadata": auth_meta()
+    });
+    $# note_summaries_from_map(grpc_body(result));
+}
+
+$fn search_notes(query) -> List<NoteSummary> {
+    $ result = grpc_client.call({
+        "service": "datanest.v1.DataNestService",
+        "method": "SearchNotes",
+        "body": {
+            "query": query
+        },
+        "metadata": auth_meta()
+    });
+    $# note_summaries_from_map(grpc_body(result));
+}
+
+$fn get_note(note_id) -> NoteDetail {
+    $ result = grpc_client.call({
+        "service": "datanest.v1.DataNestService",
+        "method": "GetNote",
+        "body": {
+            "note_id": note_id
+        },
+        "metadata": auth_meta()
+    });
+    $# note_detail_from_map(grpc_body(result));
+}
+
+$fn create_note(payload) -> NoteDetail {
+    $ result = grpc_client.call({
+        "service": "datanest.v1.DataNestService",
+        "method": "CreateNote",
+        "body": {
+            "title": payload["title"],
+            "content": payload["content"]
+        },
+        "metadata": auth_meta()
+    });
+    $# note_detail_from_map(grpc_body(result));
+}
+
+$fn list_tags() -> List<Tag> {
+    $ result = grpc_client.call({
+        "service": "datanest.v1.DataNestService",
+        "method": "ListTags",
+        "body": {},
+        "metadata": auth_meta()
+    });
+    $# tags_from_map(grpc_body(result));
+}
+
+$fn create_tag(payload) -> Tag {
+    $ result = grpc_client.call({
+        "service": "datanest.v1.DataNestService",
+        "method": "CreateTag",
+        "body": {
+            "name": payload["name"]
+        },
+        "metadata": auth_meta()
+    });
+    $# tag_from_map(grpc_body(result));
+}
+
+$fn attach_tag(note_id, tag_id) -> NoteDetail {
+    $ result = grpc_client.call({
+        "service": "datanest.v1.DataNestService",
+        "method": "AttachTagToNote",
+        "body": {
+            "note_id": note_id,
+            "tag_id": tag_id
+        },
+        "metadata": auth_meta()
+    });
+    $# note_detail_from_map(grpc_body(result));
+}

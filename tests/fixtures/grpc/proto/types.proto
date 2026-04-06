@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package dolang.test.types.v1;
+
+service TypesService {
+  rpc RoundTrip(TypesRequest) returns (TypesResponse);
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_READY = 1;
+  STATUS_DONE = 2;
+}
+
+message Nested {
+  string label = 1;
+}
+
+message TypesRequest {
+  repeated string tags = 1;
+  map<string, int32> counters = 2;
+  Nested nested = 3;
+  Status status = 4;
+  optional string alias = 5;
+  repeated Nested items = 6;
+  map<string, Nested> lookup = 7;
+}
+
+message TypesResponse {
+  repeated string tags = 1;
+  map<string, int32> counters = 2;
+  Nested nested = 3;
+  Status status = 4;
+  optional string alias = 5;
+  repeated Nested items = 6;
+  map<string, Nested> lookup = 7;
+}

@@ -1,0 +1,10 @@
+$mod data.users_data;
+$mod services.users_services;
+
+$GET("/users") getUsers() -> List {
+    $# users_services.find_all_users();
+}
+
+$GET("/users/:id") getUserById(id) -> User {
+    $# users_services.find_user_by_id(id);
+}

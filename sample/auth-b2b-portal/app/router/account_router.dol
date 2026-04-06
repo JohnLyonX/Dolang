@@ -1,0 +1,20 @@
+$mod std.auth.guard;
+$mod std.auth.jwt;
+$mod std.auth.session;
+
+$GET("/me") me() -> JSON {
+    $# {
+        "authenticated": guard.authenticated(),
+        "principal": guard.principal(),
+        "session": session.current(),
+        "jwt": jwt.current()
+    };
+}
+
+$POST("/workspaces/current/switch") switch_workspace() -> JSON {
+    $# {
+        "ok": true,
+        "workspace_id": body["workspace_id"],
+        "principal": guard.principal()
+    };
+}

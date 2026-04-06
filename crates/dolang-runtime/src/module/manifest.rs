@@ -40,6 +40,8 @@ struct ProjectSection {
 pub struct ServerConfig {
     pub port: u16,
     pub host: String,
+    pub upload_max_size: u64,
+    pub upload_max_file_size: u64,
     pub auth: AuthConfig,
 }
 
@@ -146,6 +148,8 @@ impl Default for ServerConfig {
         Self {
             port: 8080,
             host: "127.0.0.1".to_string(),
+            upload_max_size: 50,
+            upload_max_file_size: 10,
             auth: AuthConfig::default(),
         }
     }

@@ -235,18 +235,33 @@ fn discover_lan_ipv4_addrs() -> Vec<Ipv4Addr> {
         discover_lan_ipv4_addrs_unix()
     }
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        discover_lan_ipv4_addrs_windows()
+    }
+
+    #[cfg(not(any(unix, windows)))]
     {
         Vec::new()
     }
 }
 
+fn collect_visible_lan_ipv4_addrs(addrs: impl IntoIterator<Item = Ipv4Addr>) -> Vec<Ipv4Addr> {
+    use std::collections::BTreeSet;
+
+    addrs
+        .into_iter()
+        .filter(|ip| is_visible_lan_ipv4(*ip))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
 #[cfg(unix)]
 fn discover_lan_ipv4_addrs_unix() -> Vec<Ipv4Addr> {
-    use std::collections::BTreeSet;
     use std::ptr;
 
-    let mut addrs = BTreeSet::new();
+    let mut addrs = Vec::new();
     let mut ifaddrs: *mut libc::ifaddrs = ptr::null_mut();
 
     unsafe {
@@ -260,9 +275,7 @@ fn discover_lan_ipv4_addrs_unix() -> Vec<Ipv4Addr> {
             if !addr.is_null() && (*addr).sa_family as i32 == libc::AF_INET {
                 let sockaddr = &*(addr as *const libc::sockaddr_in);
                 let ip = Ipv4Addr::from(u32::from_be(sockaddr.sin_addr.s_addr));
-                if is_visible_lan_ipv4(ip) {
-                    addrs.insert(ip);
-                }
+                addrs.push(ip);
             }
             current = (*current).ifa_next;
         }
@@ -270,7 +283,67 @@ fn discover_lan_ipv4_addrs_unix() -> Vec<Ipv4Addr> {
         libc::freeifaddrs(ifaddrs);
     }
 
-    addrs.into_iter().collect()
+    collect_visible_lan_ipv4_addrs(addrs)
+}
+
+#[cfg(windows)]
+fn discover_lan_ipv4_addrs_windows() -> Vec<Ipv4Addr> {
+    use std::mem::size_of;
+    use std::ptr;
+    use windows_sys::Win32::Foundation::ERROR_BUFFER_OVERFLOW;
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
+        GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
+    };
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, SOCKADDR, SOCKADDR_IN};
+
+    let mut addrs = Vec::new();
+    let mut buffer_len: u32 = 15 * 1024;
+
+    for _ in 0..3 {
+        let mut buffer = vec![0u8; buffer_len as usize];
+        let result = unsafe {
+            GetAdaptersAddresses(
+                AF_INET as u32,
+                GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+                ptr::null(),
+                buffer.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES_LH,
+                &mut buffer_len,
+            )
+        };
+
+        if result == ERROR_BUFFER_OVERFLOW {
+            continue;
+        }
+
+        if result != 0 {
+            return Vec::new();
+        }
+
+        let mut current = buffer.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
+        unsafe {
+            while !current.is_null() {
+                let mut unicast = (*current).FirstUnicastAddress;
+                while !unicast.is_null() {
+                    let socket_address = (*unicast).Address.lpSockaddr;
+                    if !socket_address.is_null()
+                        && (*socket_address).sa_family == AF_INET
+                        && (*unicast).Address.iSockaddrLength as usize >= size_of::<SOCKADDR_IN>()
+                    {
+                        let sockaddr = &*(socket_address as *const SOCKADDR as *const SOCKADDR_IN);
+                        let ip = Ipv4Addr::from(u32::from_be(sockaddr.sin_addr.S_un.S_addr));
+                        addrs.push(ip);
+                    }
+                    unicast = (*unicast).Next;
+                }
+                current = (*current).Next;
+            }
+        }
+
+        return collect_visible_lan_ipv4_addrs(addrs);
+    }
+
+    Vec::new()
 }
 
 fn is_visible_lan_ipv4(ip: Ipv4Addr) -> bool {
@@ -438,11 +511,13 @@ struct RouteRow {
 #[cfg(test)]
 mod tests {
     use super::{
-        banner_line_delay, banner_pause_duration, route_output_lines, route_table_line_delay,
-        serve_banner_lines, server_address_lines_for_networks, startup_line_delay,
+        banner_line_delay, banner_pause_duration, collect_visible_lan_ipv4_addrs,
+        route_output_lines, route_table_line_delay, serve_banner_lines,
+        server_address_lines_for_networks, startup_line_delay,
         style_runtime_line,
     };
     use dolang::interpreter::{HttpRoute, RouteModuleState, StaticRoute};
+    use std::net::Ipv4Addr;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -508,6 +583,27 @@ mod tests {
         assert_eq!(
             server_address_lines_for_networks("127.0.0.1", 8080, &["192.168.1.25".to_string()]),
             vec!["\u{1b}[32m  ➜  Local:\u{1b}[0m   http://127.0.0.1:8080".to_string()]
+        );
+    }
+
+    #[test]
+    fn collect_visible_lan_ipv4_addrs_filters_non_private_and_deduplicates() {
+        let addrs = collect_visible_lan_ipv4_addrs([
+            Ipv4Addr::new(127, 0, 0, 1),
+            Ipv4Addr::new(10, 0, 0, 42),
+            Ipv4Addr::new(10, 0, 0, 42),
+            Ipv4Addr::new(172, 18, 36, 234),
+            Ipv4Addr::new(192, 168, 1, 9),
+            Ipv4Addr::new(8, 8, 8, 8),
+        ]);
+
+        assert_eq!(
+            addrs,
+            vec![
+                Ipv4Addr::new(10, 0, 0, 42),
+                Ipv4Addr::new(172, 18, 36, 234),
+                Ipv4Addr::new(192, 168, 1, 9),
+            ]
         );
     }
 

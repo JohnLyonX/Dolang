@@ -398,6 +398,20 @@ impl RuntimeContext {
             .unwrap_or(8080)
     }
 
+    pub fn server_upload_max_size(&self) -> u64 {
+        self.project_config
+            .as_ref()
+            .map(|cfg| cfg.server.upload_max_size * 1024 * 1024)
+            .unwrap_or(50 * 1024 * 1024)
+    }
+
+    pub fn server_upload_max_file_size(&self) -> u64 {
+        self.project_config
+            .as_ref()
+            .map(|cfg| cfg.server.upload_max_file_size * 1024 * 1024)
+            .unwrap_or(10 * 1024 * 1024)
+    }
+
     fn build_session_store(&self) -> SessionStoreBackend {
         match self.runtime_auth_config.session_store_driver.as_str() {
             "sqlite" => {

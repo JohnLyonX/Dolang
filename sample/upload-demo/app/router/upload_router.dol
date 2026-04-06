@@ -1,0 +1,40 @@
+$mod std.fs;
+
+$GET("/") index_page() -> HTML {
+    $# $HTML().link("app.pages.index");
+}
+
+$POST("/upload") upload_single(file) -> JSON {
+    $ target = "tmp/" + file.filename();
+        fs.copy(file.path(), target);
+    $# {
+        "ok": true,
+        "filename": file.filename(),
+        "url": "/files/" + file.filename()
+    };
+}
+
+$POST("/upload/multiple") upload_multiple(files) -> JSON {
+    $ result = [];
+    $for f in files {
+        $ target = "tmp/" + f.filename();
+        fs.copy(f.path(), target);
+        result.push({
+            "filename": f.filename(),
+            "url": "/files/" + f.filename()
+        });
+    }
+    $# { "ok": true, "files": result };
+}
+
+$GET("/uploads") list_uploads() -> JSON {
+    $ entries = fs.list("tmp");
+    $ files = [];
+    $for name in entries {
+        files.push({
+            "filename": name,
+            "url": "/files/" + name
+        });
+    }
+    $# { "files": files };
+}

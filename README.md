@@ -2,6 +2,12 @@
 
 Dolang is an interpreted scripting language for quickly turning ideas into runnable tools and HTTP services.
 
+Current stdlib strengths include:
+
+- fast lightweight HTTP services via `serve`
+- outbound HTTP calls via `std.http`
+- descriptor-driven unary gRPC client calls via `std.grpc`
+
 ## Workspace Overview
 
 - `crates/dolang-frontend/`: AST, token, lexer, parser, diagnostics, syntax
@@ -43,10 +49,16 @@ cargo test --workspace
 ## Documentation
 
 - Project docs: [docs/README.md](docs/README.md)
+- gRPC client reference: [docs/reference/grpc.md](docs/reference/grpc.md)
 - Contributor guide: [docs/contributing/dev-guide.md](docs/contributing/dev-guide.md)
 - Language behavior index: [docs/spec/README.md](docs/spec/README.md)
 - Standard library governance: [docs/stdlib/README.md](docs/stdlib/README.md)
 - Refactor plan: [refactor-plan.md](refactor-plan.md)
+
+## Examples
+
+- HTTP auth sample: [examples/http-auth/README.md](examples/http-auth/README.md)
+- HTTP to gRPC gateway sample: [examples/http-grpc-gateway/README.md](examples/http-grpc-gateway/README.md)
 
 ## License
 

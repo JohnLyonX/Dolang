@@ -1,0 +1,25 @@
+$mod std.grpc;
+
+$ user_svc = grpc.client({
+  "target": "dns:///user-service:50051",
+  "descriptor": "descriptors/user_service.pb",
+  "timeout_ms": 1500,
+  "metadata": {
+    "x-client": "dolang-gateway"
+  }
+});
+
+$POST("/api/users/detail") user_detail() -> JSON {
+  $ result = user_svc.call({
+    "service": "user.v1.UserService",
+    "method": "GetUser",
+    "body": {
+      "id": body["id"]
+    },
+    "metadata": {
+      "x-request-id": $HDR("X-Request-Id")
+    }
+  });
+
+  $# result;
+}

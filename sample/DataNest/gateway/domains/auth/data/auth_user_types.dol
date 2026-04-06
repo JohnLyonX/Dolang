@@ -1,0 +1,13 @@
+$Type AuthUser {
+    user_id: String
+    username: String
+    email: String
+    password_hash: String
+    is_active: Bool
+}
+
+$Type PublicUser {
+    user_id: String
+    username: String
+    email: String
+}

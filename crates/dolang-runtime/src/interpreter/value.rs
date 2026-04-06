@@ -6,6 +6,7 @@
 // - Function 表示匿名函数作为一等公民存储在变量中的情况
 
 use crate::ast::{FnParam, Stmt, TypeExpr};
+use crate::stdlib_native::grpc_client::types::GrpcContractKind;
 use indexmap::IndexMap;
 use std::borrow::Cow;
 use std::fmt;
@@ -29,6 +30,7 @@ pub enum DolangValue {
     File {
         path: String,
         mode: Option<String>, // "LINES" for line reading
+        filename: Option<String>, // 上传时来自 multipart Header，本地文件为 None
     },
     Json(IndexMap<String, DolangValue>), // JSON object
     Html(Box<DolangValue>),              // HTML content
@@ -47,6 +49,13 @@ pub enum DolangValue {
     Connection {
         id: String,
         driver: String, // "sqlite" or "postgres"
+    },
+    GrpcClient {
+        target: String,
+        contract_path: String,
+        contract_kind: GrpcContractKind,
+        timeout_ms: Option<u64>,
+        metadata: IndexMap<String, DolangValue>,
     },
     Null,
 }
@@ -80,6 +89,18 @@ impl PartialEq for DolangValue {
             // TypedInstance 暂不支持相等比较
             (Self::TypedInstance { .. }, _) => false,
             (Self::Connection { id: a, .. }, Self::Connection { id: b, .. }) => a == b,
+            (
+                Self::GrpcClient {
+                    target: a_target,
+                    contract_path: a_path,
+                    ..
+                },
+                Self::GrpcClient {
+                    target: b_target,
+                    contract_path: b_path,
+                    ..
+                },
+            ) => a_target == b_target && a_path == b_path,
             _ => false,
         }
     }
@@ -163,6 +184,7 @@ impl fmt::Display for DolangValue {
             Self::Connection { id, driver } => {
                 write!(f, "Connection({}:{})", driver, id)
             }
+            Self::GrpcClient { target, .. } => write!(f, "GrpcClient({target})"),
             Self::TypedInstance { type_name, fields } => {
                 write!(f, "{} {{", type_name)?;
                 for (i, (k, v)) in fields.iter().enumerate() {
@@ -203,6 +225,7 @@ impl DolangValue {
             Self::ModuleProxy { .. } => Cow::Borrowed("ModuleProxy"),
             Self::TypedInstance { type_name, .. } => Cow::Borrowed(type_name.as_str()),
             Self::Connection { .. } => Cow::Borrowed("Connection"),
+            Self::GrpcClient { .. } => Cow::Borrowed("GrpcClient"),
             Self::Null => Cow::Borrowed("Null"),
         }
     }
@@ -224,6 +247,7 @@ impl DolangValue {
             Self::ModuleProxy { .. } => true,
             Self::TypedInstance { .. } => true,
             Self::Connection { .. } => true,
+            Self::GrpcClient { .. } => true,
             Self::Null => false,
         }
     }
@@ -287,7 +311,7 @@ impl fmt::Debug for DolangValue {
                     .join(", ");
                 write!(f, "Function({names})")
             }
-            Self::File { path, mode } => write!(f, "File({path:?}, {mode:?})"),
+            Self::File { path, mode, filename } => write!(f, "File({path:?}, {mode:?}, {filename:?})"),
             Self::Json(m) => write!(f, "Json({m:?})"),
             Self::Html(v) => write!(f, "Html({v:?})"),
             Self::Response { status, .. } => write!(f, "Response({status})"),
@@ -296,6 +320,16 @@ impl fmt::Debug for DolangValue {
                 write!(f, "TypedInstance({type_name:?}, {fields:?})")
             }
             Self::Connection { id, driver } => write!(f, "Connection({driver:?}, {id:?})"),
+            Self::GrpcClient {
+                target,
+                contract_path,
+                contract_kind,
+                timeout_ms,
+                ..
+            } => write!(
+                f,
+                "GrpcClient({target:?}, {contract_path:?}, {contract_kind:?}, {timeout_ms:?})"
+            ),
         }
     }
 }

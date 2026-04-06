@@ -478,6 +478,64 @@ $>> lines;
 }
 ```
 
+### `std.grpc`
+
+首版定位：面向 HTTP API 编排、BFF、集成网关场景的 unary gRPC client。
+
+导入方式：
+
+```dol
+$mod std.grpc;
+```
+
+当前主 API：
+
+| 函数 / 方法 | 返回值 | 说明 | 稳定性 |
+|------|--------|------|--------|
+| `grpc.client(config)` | `GrpcClient` | 创建一个 descriptor 驱动的 gRPC client | Preview |
+| `GrpcClient.call(config)` | `Map` | 发起一次 unary gRPC 调用，返回结构化结果 | Preview |
+
+`grpc.client(config)` 支持的关键字段：
+
+- `target: String`
+- `descriptor: String`
+- `proto: String`
+- `timeout_ms: Int`
+- `metadata: Map<String, String>`
+
+约束：
+
+- `target` 必填
+- `descriptor` 与 `proto` 必须二选一
+- 当前稳定主路径是 `descriptor`
+- 当前传入 `proto` 会返回显式未实现错误
+
+`GrpcClient.call(config)` 支持的关键字段：
+
+- `service: String`
+- `method: String`
+- `body: Map | Json`
+- `timeout_ms: Int`
+- `metadata: Map<String, String>`
+
+返回结构统一为：
+
+- `ok`
+- `status`
+- `status_name`
+- `body`
+- `metadata`
+- `error`
+
+当前能力边界：
+
+- 支持 unary
+- 支持基础 metadata、timeout/deadline
+- 支持基础 `Map/JSON <-> protobuf` 映射
+- `oneof`、`Any`、复杂 well-known types、streaming 当前不支持
+
+详细说明见 [grpc.md](grpc.md)。
+
 ## 迁移说明
 
 - 本页是当前主线的完整 stdlib 查表入口

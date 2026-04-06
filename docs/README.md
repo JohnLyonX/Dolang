@@ -19,6 +19,7 @@
   - [reference/syntax.md](reference/syntax.md)
   - [reference/errors.md](reference/errors.md)
   - [reference/http.md](reference/http.md)
+  - [reference/grpc.md](reference/grpc.md)
   - [reference/project-system.md](reference/project-system.md)
   - [reference/stdlib-api.md](reference/stdlib-api.md)
 - Spec 入口：[spec/README.md](spec/README.md)
@@ -36,7 +37,8 @@
 
 1. 先查 [reference/errors.md](reference/errors.md)
 2. HTTP 问题查 [reference/http.md](reference/http.md)
-3. 类型、模块、返回值争议回看 `spec/`
+3. gRPC client 问题查 [reference/grpc.md](reference/grpc.md)
+4. 类型、模块、返回值争议回看 `spec/`
 
 ## 迁移状态
 

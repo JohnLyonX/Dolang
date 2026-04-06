@@ -1,0 +1,62 @@
+$mod config.database;
+
+_$fn database_error(err) -> String {
+    $# "database unavailable: " + err;
+}
+
+$fn find_auth_user_row_by_username(username) -> List<Map> {
+    $try {
+        $ conn = database.connect_db();
+        $try {
+            $ rows = conn.query(
+                "SELECT CAST(id AS TEXT) AS user_id, username, email, password AS password_hash, TRUE AS is_active FROM users WHERE username = $1 LIMIT 1",
+                [username]
+            );
+            conn.close();
+            $# rows;
+        } $catch err {
+            conn.close();
+            $throw database_error(err);
+        }
+    } $catch err {
+        $throw database_error(err);
+    }
+}
+
+$fn find_auth_user_row_by_email(email) -> List<Map> {
+    $try {
+        $ conn = database.connect_db();
+        $try {
+            $ rows = conn.query(
+                "SELECT CAST(id AS TEXT) AS user_id, username, email, password AS password_hash, TRUE AS is_active FROM users WHERE email = $1 LIMIT 1",
+                [email]
+            );
+            conn.close();
+            $# rows;
+        } $catch err {
+            conn.close();
+            $throw database_error(err);
+        }
+    } $catch err {
+        $throw database_error(err);
+    }
+}
+
+$fn insert_user(username, email, password_hash) -> Map {
+    $try {
+        $ conn = database.connect_db();
+        $try {
+            $ rows = conn.query(
+                "INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING CAST(id AS TEXT) AS user_id, username, email",
+                [username, email, password_hash]
+            );
+            conn.close();
+            $# rows[0];
+        } $catch err {
+            conn.close();
+            $throw database_error(err);
+        }
+    } $catch err {
+        $throw database_error(err);
+    }
+}

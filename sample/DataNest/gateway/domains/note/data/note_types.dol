@@ -1,0 +1,25 @@
+$Type Tag {
+    tag_id: String
+    name: String
+    user_id: String
+    created_at: Int
+}
+
+$Type NoteSummary {
+    note_id: String
+    title: String
+    content_preview: String
+    user_id: String
+    created_at: Int
+    updated_at: Int
+}
+
+$Type NoteDetail {
+    note_id: String
+    title: String
+    content: String
+    user_id: String
+    created_at: Int
+    updated_at: Int
+    tags: List<Tag>
+}

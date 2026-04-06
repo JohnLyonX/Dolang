@@ -38,6 +38,7 @@ pub fn get_value_type(val: &DolangValue) -> ValueType {
         DolangValue::ModuleProxy { .. } => ValueType::Dynamic,
         DolangValue::TypedInstance { .. } => ValueType::Dynamic,
         DolangValue::Connection { .. } => ValueType::Dynamic,
+        DolangValue::GrpcClient { .. } => ValueType::Dynamic,
         DolangValue::Null => ValueType::Dynamic,
     }
 }

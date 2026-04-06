@@ -1,0 +1,60 @@
+$mod std.auth.jwt;
+$mod std.auth.password;
+$mod domains.auth.data.auth_user_types;
+$mod domains.auth.services.auth_user_service;
+
+$fn authenticate(username, plain_password) {
+    $ user = auth_user_service.find_user_by_username(username);
+    $if user == null {
+        $# null;
+    }
+
+    $if user.is_active() != true {
+        $# null;
+    }
+
+    $if password.verify(plain_password, user.password_hash()) != true {
+        $# null;
+    }
+
+    $# user;
+}
+
+_$fn public_user(user) -> PublicUser {
+    $# PublicUser {
+        user_id: user.user_id(),
+        username: user.username(),
+        email: user.email()
+    };
+}
+
+$fn issue_login(user) -> JSON {
+    $ pair = jwt.issue_pair({
+        "sub": user.user_id(),
+        "username": user.username(),
+        "email": user.email()
+    });
+
+    $# {
+        "ok": true,
+        "user": public_user(user),
+        "access_token": pair["access_token"],
+        "refresh_token": pair["refresh_token"]
+    };
+}
+
+$fn register(username, email, password) -> JSON {
+    $ public_user = auth_user_service.create_user(username, email, password);
+    $ pair = jwt.issue_pair({
+        "sub": public_user.user_id(),
+        "username": public_user.username(),
+        "email": public_user.email()
+    });
+
+    $# {
+        "ok": true,
+        "user": public_user,
+        "access_token": pair["access_token"],
+        "refresh_token": pair["refresh_token"]
+    };
+}

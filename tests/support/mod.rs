@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod grpc;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;

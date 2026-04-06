@@ -4918,3 +4918,311 @@ entry = "main.dol"
 
     fs::remove_dir_all(&project_dir).expect("cleanup");
 }
+
+#[test]
+fn serve_mode_http_handler_can_call_grpc_client_and_return_json() {
+    let Some((target, shutdown, handle)) = support::grpc::start_echo_server() else {
+        return;
+    };
+
+    let project_dir = write_temp_project(
+        "dolang-grpc-gateway",
+        r#"
+[project]
+name = "grpc-gateway"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+"#,
+        &[(
+            "main.dol",
+            &format!(
+                r#"
+$mod std.grpc;
+
+$ grpc_client = grpc.client({{
+    "target": "{target}",
+    "descriptor": "tests/fixtures/grpc/descriptors/echo.pb",
+    "timeout_ms": 2000
+}});
+
+$POST("/echo") echo() -> JSON {{
+    $# grpc_client.call({{
+        "service": "dolang.test.echo.v1.EchoService",
+        "method": "Echo",
+        "body": {{
+            "message": body["message"]
+        }}
+    }});
+}}
+"#
+            ),
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        outcome.error.is_none(),
+        "grpc gateway fixture should boot: {:?}",
+        outcome.error
+    );
+
+    let base_url = start_live_http_server_from_context(outcome.context);
+    let response = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/echo",
+        &[("content-type", "application/json")],
+        Some(r#"{"message":"gateway-ping"}"#),
+    );
+
+    assert_eq!(response.status, 200);
+    assert!(response.body.contains("\"ok\":true"), "body={}", response.body);
+    assert!(
+        response.body.contains("\"gateway-ping\""),
+        "body={}",
+        response.body
+    );
+    assert!(
+        response.body.contains("\"x-grpc-test\":\"echo-ok\""),
+        "body={}",
+        response.body
+    );
+
+    let _ = shutdown.send(());
+    handle.join().expect("grpc echo server should shut down");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn serve_mode_http_handler_surfaces_grpc_not_found_as_structured_json() {
+    let Some((target, shutdown, handle)) = support::grpc::start_not_found_server() else {
+        return;
+    };
+
+    let project_dir = write_temp_project(
+        "dolang-grpc-gateway-not-found",
+        r#"
+[project]
+name = "grpc-gateway-not-found"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+"#,
+        &[(
+            "main.dol",
+            &format!(
+                r#"
+$mod std.grpc;
+
+$ grpc_client = grpc.client({{
+    "target": "{target}",
+    "descriptor": "tests/fixtures/grpc/descriptors/echo.pb",
+    "timeout_ms": 2000
+}});
+
+$POST("/echo") echo() -> JSON {{
+    $# grpc_client.call({{
+        "service": "dolang.test.echo.v1.EchoService",
+        "method": "Echo",
+        "body": {{
+            "message": body["message"]
+        }}
+    }});
+}}
+"#
+            ),
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        outcome.error.is_none(),
+        "grpc not-found fixture should boot: {:?}",
+        outcome.error
+    );
+
+    let base_url = start_live_http_server_from_context(outcome.context);
+    let response = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/echo",
+        &[("content-type", "application/json")],
+        Some(r#"{"message":"gateway-ping"}"#),
+    );
+
+    assert_eq!(response.status, 200);
+    assert!(response.body.contains("\"ok\":false"), "body={}", response.body);
+    assert!(response.body.contains("\"status\":5"), "body={}", response.body);
+    assert!(response.body.contains("NotFound"), "body={}", response.body);
+    assert!(response.body.contains("echo resource not found"), "body={}", response.body);
+    assert!(
+        response.body.contains("\"x-grpc-error-source\":\"echo-backend\""),
+        "body={}",
+        response.body
+    );
+
+    let _ = shutdown.send(());
+    handle.join().expect("grpc not-found server should shut down");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn serve_mode_http_handler_surfaces_grpc_deadline_exceeded_as_structured_json() {
+    let Some((target, shutdown, handle)) = support::grpc::start_slow_server() else {
+        return;
+    };
+
+    let project_dir = write_temp_project(
+        "dolang-grpc-gateway-timeout",
+        r#"
+[project]
+name = "grpc-gateway-timeout"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+"#,
+        &[(
+            "main.dol",
+            &format!(
+                r#"
+$mod std.grpc;
+
+$ grpc_client = grpc.client({{
+    "target": "{target}",
+    "descriptor": "tests/fixtures/grpc/descriptors/echo.pb",
+    "timeout_ms": 20
+}});
+
+$POST("/echo") echo() -> JSON {{
+    $# grpc_client.call({{
+        "service": "dolang.test.echo.v1.EchoService",
+        "method": "Echo",
+        "body": {{
+            "message": body["message"]
+        }}
+    }});
+}}
+"#
+            ),
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        outcome.error.is_none(),
+        "grpc timeout fixture should boot: {:?}",
+        outcome.error
+    );
+
+    let base_url = start_live_http_server_from_context(outcome.context);
+    let response = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/echo",
+        &[("content-type", "application/json")],
+        Some(r#"{"message":"gateway-ping"}"#),
+    );
+
+    assert_eq!(response.status, 200);
+    assert!(response.body.contains("\"ok\":false"), "body={}", response.body);
+    assert!(response.body.contains("\"status\":4"), "body={}", response.body);
+    assert!(
+        response.body.contains("DeadlineExceeded"),
+        "body={}",
+        response.body
+    );
+
+    let _ = shutdown.send(());
+    handle.join().expect("grpc slow server should shut down");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}
+
+#[test]
+fn serve_mode_http_handler_surfaces_grpc_unavailable_as_structured_json() {
+    let Some((target, shutdown, handle)) = support::grpc::start_unavailable_server() else {
+        return;
+    };
+
+    let project_dir = write_temp_project(
+        "dolang-grpc-gateway-unavailable",
+        r#"
+[project]
+name = "grpc-gateway-unavailable"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+"#,
+        &[(
+            "main.dol",
+            &format!(
+                r#"
+$mod std.grpc;
+
+$ grpc_client = grpc.client({{
+    "target": "{target}",
+    "descriptor": "tests/fixtures/grpc/descriptors/echo.pb",
+    "timeout_ms": 2000
+}});
+
+$POST("/echo") echo() -> JSON {{
+    $# grpc_client.call({{
+        "service": "dolang.test.echo.v1.EchoService",
+        "method": "Echo",
+        "body": {{
+            "message": body["message"]
+        }}
+    }});
+}}
+"#
+            ),
+        )],
+    );
+
+    let outcome = run_program_at_path(&project_dir, RuntimeMode::Serve);
+    assert!(
+        outcome.error.is_none(),
+        "grpc unavailable fixture should boot: {:?}",
+        outcome.error
+    );
+
+    let base_url = start_live_http_server_from_context(outcome.context);
+    let response = http_request_with_headers_and_body(
+        "POST",
+        &base_url,
+        "/echo",
+        &[("content-type", "application/json")],
+        Some(r#"{"message":"gateway-ping"}"#),
+    );
+
+    assert_eq!(response.status, 200);
+    assert!(response.body.contains("\"ok\":false"), "body={}", response.body);
+    assert!(response.body.contains("\"status\":14"), "body={}", response.body);
+    assert!(response.body.contains("Unavailable"), "body={}", response.body);
+    assert!(
+        response.body.contains("echo backend unavailable"),
+        "body={}",
+        response.body
+    );
+    assert!(
+        response.body.contains("\"x-grpc-error-source\":\"echo-backend\""),
+        "body={}",
+        response.body
+    );
+
+    let _ = shutdown.send(());
+    handle.join().expect("grpc unavailable server should shut down");
+    fs::remove_dir_all(&project_dir).expect("cleanup");
+}

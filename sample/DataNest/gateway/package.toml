@@ -1,0 +1,36 @@
+[project]
+name = "datanest-gateway"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[server.auth]
+enabled = true
+default_scheme = "bearer"
+identity_sources = ["bearer"]
+
+[server.auth.jwt]
+enabled = true
+issuer = "datanest-gateway"
+audience = "datanest"
+algorithm = "HS256"
+secret_env = "DATANEST_JWT_SECRET"
+access_ttl_seconds = 3600
+refresh_ttl_seconds = 2592000
+
+[server.auth.authorization]
+enabled = true
+default = "public"
+
+[[server.auth.authorization.rules]]
+method = "GET"
+path = "/api/*"
+require = "authenticated"
+
+[[server.auth.authorization.rules]]
+method = "POST"
+path = "/api/*"
+require = "authenticated"

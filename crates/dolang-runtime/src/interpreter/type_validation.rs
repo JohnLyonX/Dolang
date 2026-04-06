@@ -138,6 +138,11 @@ fn validate_named_type(
                 ),
             )
         }
+        "html" => expect_match(
+            "HTML",
+            value,
+            matches!(value, DolangValue::Html(_) | DolangValue::Str(_)),
+        ),
         "list" => Err(TypeValidationError::BareList),
         _ => {
             if context.get_type(expected_type).is_none() {

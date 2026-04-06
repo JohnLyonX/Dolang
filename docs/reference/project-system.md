@@ -13,6 +13,8 @@ entry = "main.dol"
 [server]
 host = "127.0.0.1"
 port = 8080
+upload_max_size = 50
+upload_max_file_size = 10
 
 [env]
 APP_ENV = "dev"
@@ -27,6 +29,10 @@ acme = "0.1.0"
 - `[project].version`: 项目版本
 - `[project].entry`: 项目入口文件，默认 `main.dol`
 - `[server]`: serve/test 模式使用的服务配置
+  - `host`: 监听地址，默认 `"127.0.0.1"`
+  - `port`: 监听端口，默认 `8080`
+  - `upload_max_size`: 单次 multipart 请求总大小上限（MB），默认 `50`
+  - `upload_max_file_size`: 单个上传文件大小上限（MB），默认 `10`
 - `[env]`: 通过 `$<<CONFIG()` 可读取的项目配置项
 - `[dependencies]`: 预留给第三方依赖解析的依赖清单
 

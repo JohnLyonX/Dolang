@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package dolang.test.oneof.v1;
+
+service OneofService {
+  rpc RoundTrip(OneofRequest) returns (OneofResponse);
+}
+
+message OneofRequest {
+  oneof payload {
+    string text = 1;
+    int64 count = 2;
+  }
+}
+
+message OneofResponse {
+  oneof payload {
+    string text = 1;
+    int64 count = 2;
+  }
+}

@@ -1,0 +1,8 @@
+$mod std.env;
+
+env.set("DATANEST_GRPC_TARGET","http://127.0.0.1:50051");
+env.set("DATANEST_JWT_SECRET","hello");
+env.set("DATANEST_DATABASE_URL","postgresql://liangzhanbo@localhost/postgres");
+
+
+

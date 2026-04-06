@@ -19,6 +19,8 @@ pub struct HandlerInput {
     pub query: Option<String>,
     pub headers: IndexMap<String, String>,
     pub body: Option<DolangValue>,
+    pub file: Option<DolangValue>,  // 单文件上传
+    pub files: Option<DolangValue>, // 多文件上传 List<File>
 }
 
 impl HandlerInput {
@@ -28,6 +30,8 @@ impl HandlerInput {
             query: None,
             headers: IndexMap::new(),
             body: None,
+            file: None,
+            files: None,
         }
     }
 }
@@ -113,11 +117,35 @@ pub fn execute_http_route_in_context(
     if let Some(body) = &input.body {
         state.insert_env("body".to_string(), body.clone());
     }
+    if let Some(file) = &input.file {
+        state.insert_env("file".to_string(), file.clone());
+    }
+    if let Some(files) = &input.files {
+        state.insert_env("files".to_string(), files.clone());
+    }
 
     let (should_continue, result, error) =
         exec_http_handler(&route.body, &mut state, runtime_context);
 
     if error.is_none() {
+        // Enforce: DolangValue::Html must be paired with -> HTML annotation
+        if matches!(result.as_ref(), Some(DolangValue::Html(_))) {
+            let declared_html = matches!(
+                &route.return_type,
+                Some(crate::ast::TypeExpr::Named(n)) if n.eq_ignore_ascii_case("html")
+            );
+            if !declared_html {
+                return (
+                    true,
+                    None,
+                    Some(format!(
+                        "http handler '{}' returned HTML but did not declare '-> HTML' return type",
+                        route.name
+                    )),
+                );
+            }
+        }
+
         if let Err(e) = validate_declared_return_type(
             "http handler",
             &route.name,

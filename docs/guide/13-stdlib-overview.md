@@ -21,6 +21,7 @@ native 模块：
 - `std.time`
 - `std.uuid`
 - `std.http`
+- `std.grpc`
 - `std.sqlite`
 - `std.postgres`
 - `std.auth.session`
@@ -91,6 +92,13 @@ $ obj = json.set({"name": "Tom"}, "age", 25);
 
 - 服务端语法：第 15、16 章
 - 客户端模块：`std.http`
+
+### gRPC 与后端集成
+
+- 客户端模块：`std.grpc`
+- 当前定位：descriptor 驱动的 unary gRPC client
+- 典型场景：Dolang 作为 HTTP API 集成层去调用 Go / 其他语言实现的后端服务
+- 完整说明：[../reference/grpc.md](../reference/grpc.md)
 
 ### 认证与授权
 

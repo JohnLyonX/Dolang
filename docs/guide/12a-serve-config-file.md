@@ -118,6 +118,8 @@ package.toml
 ├── [server]
 │   ├── host
 │   ├── port
+│   ├── upload_max_size
+│   ├── upload_max_file_size
 │   └── [auth]
 │       ├── enabled
 │       ├── default_scheme
@@ -174,6 +176,8 @@ package.toml
 [server]
 host = "127.0.0.1"
 port = 8080
+upload_max_size = 50
+upload_max_file_size = 10
 ```
 
 参数：
@@ -189,6 +193,14 @@ port = 8080
   - 类型：`Int`
   - 默认值：`8080`
   - 说明：HTTP 服务监听端口
+- `upload_max_size`
+  - 类型：`Int`（MB）
+  - 默认值：`50`
+  - 说明：单次 `multipart/form-data` 请求允许的**总大小**上限；超出时返回 400
+- `upload_max_file_size`
+  - 类型：`Int`（MB）
+  - 默认值：`10`
+  - 说明：单个上传文件的大小上限；超出时返回 400
 
 `host` 语义补充：
 
@@ -550,7 +562,22 @@ host = "127.0.0.1"
 port = 8080
 ```
 
-### 2. session auth
+### 2. 带文件上传限制
+
+```toml
+[project]
+name = "upload-demo"
+version = "0.1.0"
+entry = "main.dol"
+
+[server]
+host = "0.0.0.0"
+port = 8083
+upload_max_size = 100        # 单次请求总大小上限 100 MB
+upload_max_file_size = 20    # 单个文件大小上限 20 MB
+```
+
+### 3. session auth
 
 ```toml
 [project]
@@ -575,7 +602,7 @@ cookie_name = "dolang_session"
 driver = "memory"
 ```
 
-### 3. session + bearer + route auth
+### 4. session + bearer + route auth
 
 ```toml
 [project]

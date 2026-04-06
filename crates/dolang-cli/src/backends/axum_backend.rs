@@ -210,6 +210,7 @@ async fn serve_router(
     router: axum::Router,
     listener: tokio::net::TcpListener,
 ) -> Result<(), Error> {
+    cleanup_upload_temp_files(std::path::Path::new("/tmp/dolang-uploads"), 24);
     axum::serve(listener, router)
         .await
         .map_err(|err| Error::Interpreter(format!("HTTP server error: {err}")))
@@ -222,6 +223,8 @@ fn build_router(
 ) -> Result<axum::Router, Error> {
     validate_runtime_context(&context)?;
     let global_cors = context.global_cors().cloned();
+    let upload_max_total = context.server_upload_max_size();
+    let upload_max_file = context.server_upload_max_file_size();
     let shared_context = Arc::new(context);
     let mut router = axum::Router::new();
 
@@ -260,13 +263,35 @@ fn build_router(
                 }
 
                 if matches!(route_definition.method.as_str(), "POST" | "PUT" | "PATCH") {
-                    let body_bytes = axum::body::to_bytes(req.into_body(), 1024 * 1024)
-                        .await
-                        .unwrap_or_default();
-                    if !body_bytes.is_empty()
-                        && let Ok(json) = serde_json::from_slice::<JsonValue>(&body_bytes)
-                    {
-                        input.body = Some(json_to_dolang_value(json));
+                    let content_type = input
+                        .headers
+                        .get("content-type")
+                        .map(|s| s.as_str())
+                        .unwrap_or("");
+
+                    if content_type.starts_with("multipart/form-data") {
+                        match parse_multipart(req, upload_max_total, upload_max_file).await {
+                            Ok((file, files)) => {
+                                input.file = file;
+                                input.files = files;
+                            }
+                            Err(e) => {
+                                return (
+                                    axum::http::StatusCode::BAD_REQUEST,
+                                    axum::response::Json(serde_json::json!({"error": e})),
+                                )
+                                    .into_response();
+                            }
+                        }
+                    } else {
+                        let body_bytes = axum::body::to_bytes(req.into_body(), 1024 * 1024)
+                            .await
+                            .unwrap_or_default();
+                        if !body_bytes.is_empty()
+                            && let Ok(json) = serde_json::from_slice::<JsonValue>(&body_bytes)
+                        {
+                            input.body = Some(json_to_dolang_value(json));
+                        }
                     }
                 }
 
@@ -653,6 +678,99 @@ fn is_supported_method(method: &str) -> bool {
     )
 }
 
+async fn parse_multipart(
+    req: axum::extract::Request,
+    max_total: u64,
+    max_file: u64,
+) -> Result<(Option<DolangValue>, Option<DolangValue>), String> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static UPLOAD_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let boundary = req
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|ct| multer::parse_boundary(ct).ok())
+        .ok_or_else(|| "missing or invalid multipart boundary".to_string())?;
+
+    let stream = req.into_body().into_data_stream();
+    let constraints = multer::Constraints::new().size_limit(
+        multer::SizeLimit::new()
+            .whole_stream(max_total)
+            .per_field(max_file),
+    );
+    let mut multipart = multer::Multipart::with_constraints(stream, boundary, constraints);
+
+    let tmp_dir = std::path::Path::new("/tmp/dolang-uploads");
+    tokio::fs::create_dir_all(tmp_dir)
+        .await
+        .map_err(|e| format!("failed to create upload temp dir: {e}"))?;
+
+    let mut file_values: Vec<DolangValue> = Vec::new();
+
+    loop {
+        match multipart.next_field().await {
+            Ok(Some(field)) => {
+                let original_filename = match field.file_name() {
+                    Some(name) if !name.is_empty() => name.to_string(),
+                    _ => continue,
+                };
+                let ts = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis())
+                    .unwrap_or(0);
+                let seq = UPLOAD_COUNTER.fetch_add(1, Ordering::Relaxed);
+                let tmp_name = format!("{ts}-{seq}-{original_filename}");
+                let tmp_path = tmp_dir.join(&tmp_name);
+
+                let data = field
+                    .bytes()
+                    .await
+                    .map_err(|e| format!("failed to read upload field: {e}"))?;
+                tokio::fs::write(&tmp_path, &data)
+                    .await
+                    .map_err(|e| format!("failed to write upload temp file: {e}"))?;
+
+                file_values.push(DolangValue::File {
+                    path: tmp_path.to_string_lossy().to_string(),
+                    mode: None,
+                    filename: Some(original_filename),
+                });
+            }
+            Ok(None) => break,
+            Err(e) => return Err(format!("multipart parse error: {e}")),
+        }
+    }
+
+    if file_values.is_empty() {
+        return Ok((None, None));
+    }
+    let file = Some(file_values[0].clone());
+    let files = Some(DolangValue::List(file_values));
+    Ok((file, files))
+}
+
+fn cleanup_upload_temp_files(tmp_dir: &std::path::Path, max_age_hours: u64) {
+    if !tmp_dir.exists() {
+        return;
+    }
+    let threshold = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(max_age_hours * 3600))
+        .unwrap_or(std::time::UNIX_EPOCH);
+
+    if let Ok(entries) = std::fs::read_dir(tmp_dir) {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if let Ok(modified) = meta.modified() {
+                    if modified < threshold {
+                        let _ = std::fs::remove_file(entry.path());
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -756,6 +874,127 @@ mod tests {
         assert_eq!(resolved.methods, vec!["GET".to_string()]);
         assert_eq!(resolved.headers, vec!["Authorization".to_string()]);
         assert_eq!(warnings.len(), 2);
+    }
+
+    // ─── cleanup_upload_temp_files ─────────────────────────────────────────────
+
+    #[test]
+    fn cleanup_is_noop_when_dir_missing() {
+        let dir = std::env::temp_dir().join("dolang-test-cleanup-missing-dir");
+        // Ensure it does not exist
+        let _ = std::fs::remove_dir_all(&dir);
+        // Must not panic
+        cleanup_upload_temp_files(&dir, 24);
+    }
+
+    #[test]
+    fn cleanup_removes_files_older_than_threshold() {
+        use std::fs::FileTimes;
+        use std::time::{Duration, SystemTime};
+
+        let dir = std::env::temp_dir().join("dolang-test-cleanup-old");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file_path = dir.join("old-upload.tmp");
+        std::fs::write(&file_path, b"data").unwrap();
+
+        // Set mtime to 48 hours ago
+        let old_time = SystemTime::now()
+            .checked_sub(Duration::from_secs(48 * 3600))
+            .unwrap();
+        let f = std::fs::File::options().write(true).open(&file_path).unwrap();
+        f.set_times(FileTimes::new().set_modified(old_time)).unwrap();
+        drop(f);
+
+        cleanup_upload_temp_files(&dir, 24);
+
+        assert!(!file_path.exists(), "file older than 24h should be deleted");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn cleanup_preserves_recent_files() {
+        let dir = std::env::temp_dir().join("dolang-test-cleanup-recent");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file_path = dir.join("new-upload.tmp");
+        std::fs::write(&file_path, b"data").unwrap();
+
+        cleanup_upload_temp_files(&dir, 24);
+
+        assert!(file_path.exists(), "recently created file should be kept");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ─── parse_multipart ──────────────────────────────────────────────────────
+
+    fn make_multipart_request(
+        boundary: &str,
+        filename: &str,
+        content: &[u8],
+    ) -> axum::extract::Request {
+        let header = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n\r\n"
+        );
+        let mut bytes = header.into_bytes();
+        bytes.extend_from_slice(content);
+        bytes.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+        axum::http::Request::builder()
+            .header(
+                "content-type",
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(axum::body::Body::from(bytes))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn parse_multipart_extracts_single_file() {
+        let req = make_multipart_request("testboundary", "hello.txt", b"hello world");
+        let (file, files) = parse_multipart(req, 10 * 1024 * 1024, 5 * 1024 * 1024)
+            .await
+            .expect("parse_multipart should succeed");
+
+        let file = file.expect("file should be Some");
+        match &file {
+            DolangValue::File { filename, .. } => {
+                assert_eq!(filename.as_deref(), Some("hello.txt"));
+            }
+            other => panic!("expected File, got {:?}", other),
+        }
+
+        let files = files.expect("files should be Some");
+        match files {
+            DolangValue::List(list) => assert_eq!(list.len(), 1),
+            other => panic!("expected List, got {:?}", other),
+        }
+
+        // Clean up written temp file
+        if let DolangValue::File { path, .. } = file {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    #[tokio::test]
+    async fn parse_multipart_skips_non_file_fields() {
+        let boundary = "skipboundary";
+        // A text field without a filename
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"description\"\r\n\r\nsome text\r\n--{boundary}--\r\n"
+        );
+        let req = axum::http::Request::builder()
+            .header(
+                "content-type",
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(axum::body::Body::from(body.into_bytes()))
+            .unwrap();
+
+        let (file, files) = parse_multipart(req, 10 * 1024 * 1024, 5 * 1024 * 1024)
+            .await
+            .expect("parse_multipart should succeed");
+
+        assert!(file.is_none(), "text-only field should produce no file");
+        assert!(files.is_none(), "text-only field should produce no files");
     }
 }
 

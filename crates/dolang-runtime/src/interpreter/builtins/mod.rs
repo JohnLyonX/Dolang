@@ -3,6 +3,7 @@
 
 pub mod bool_methods;
 pub mod file;
+pub mod grpc_client;
 pub mod html;
 pub mod json;
 pub mod list;
@@ -64,6 +65,7 @@ pub fn dispatch(
             type_name, method
         ))),
         DolangValue::Connection { .. } => sql_connection::call(receiver, method, args, context),
+        DolangValue::GrpcClient { .. } => grpc_client::call(receiver, method, args, context),
         DolangValue::Null => Err(Error::Interpreter(format!(
             "cannot call method '{}' on null",
             method

@@ -5,6 +5,7 @@ mod auth_password;
 mod auth_session;
 mod env;
 mod fs;
+pub mod grpc_client;
 mod http_client;
 mod json;
 mod math;
@@ -24,6 +25,7 @@ pub fn register_stdlib_native_modules(context: &mut RuntimeContext) {
     auth_csrf::register(context);
     fs::register(context);
     env::register(context);
+    grpc_client::register(context);
     http_client::register(context);
     str::register(context);
     math::register(context);
@@ -103,6 +105,7 @@ mod tests {
 
         assert!(context.native_module("std.sqlite").is_some());
         assert!(context.native_module("std.postgres").is_some());
+        assert!(context.native_module("std.grpc").is_some());
     }
 
     #[test]

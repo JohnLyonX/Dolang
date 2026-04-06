@@ -119,6 +119,47 @@ $PATCH("/users") patch_user() -> JSON {
 }
 ```
 
+## 文件上传
+
+当请求的 `Content-Type` 为 `multipart/form-data` 时，runtime 自动解析 multipart body，并将文件注入到保留参数名：
+
+- `file` — 单个文件（`input type="file"` 未设置 `multiple`）
+- `files` — 多个文件（`input type="file" multiple`）
+
+```dol
+$mod std.fs;
+
+$POST("/upload") upload_single(file) -> JSON {
+    $ target = "tmp/" + file.filename();
+    fs.copy(file.path(), target);
+    $# { "ok": true, "filename": file.filename() };
+}
+
+$POST("/upload/multiple") upload_multiple(files) -> JSON {
+    $ result = [];
+    $for f in files {
+        fs.copy(f.path(), "tmp/" + f.filename());
+        result.push({ "filename": f.filename() });
+    }
+    $# { "ok": true, "files": result };
+}
+```
+
+文件对象支持以下方法：
+
+- `file.filename()` — 上传时的原始文件名
+- `file.path()` — 临时文件路径（位于系统 tmp 目录），可用 `fs.copy()` 移动到目标位置
+
+上传大小限制通过 `package.toml` 的 `[server]` 块配置：
+
+```toml
+[server]
+upload_max_size = 50        # 单次请求总大小（MB），默认 50
+upload_max_file_size = 10   # 单文件大小（MB），默认 10
+```
+
+超出限制时，runtime 在 handler 执行前即返回 `400 Bad Request`。
+
 ## 认证与授权入口
 
 `serve` 模式当前已经接通两类请求身份来源：

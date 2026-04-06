@@ -1,0 +1,41 @@
+$mod std.auth.password;
+$mod domains.auth.data.auth_user_queries;
+$mod domains.auth.data.auth_user_types;
+
+_$fn auth_user_from_row(row) -> AuthUser {
+    $# AuthUser {
+        user_id: row["user_id"],
+        username: row["username"],
+        email: row["email"],
+        password_hash: row["password_hash"],
+        is_active: row["is_active"]
+    };
+}
+
+$fn find_user_by_username(username) {
+    $ rows = auth_user_queries.find_auth_user_row_by_username(username);
+    $if rows.len() == 0 {
+        $# null;
+    }
+
+    $# auth_user_from_row(rows[0]);
+}
+
+$fn create_user(username, email, plain_password) -> PublicUser {
+    $ username_rows = auth_user_queries.find_auth_user_row_by_username(username);
+    $if username_rows.len() > 0 {
+        $throw "username already exists";
+    }
+
+    $ email_rows = auth_user_queries.find_auth_user_row_by_email(email);
+    $if email_rows.len() > 0 {
+        $throw "email already exists";
+    }
+
+    $ row = auth_user_queries.insert_user(username, email, password.hash(plain_password));
+    $# PublicUser {
+        user_id: row["user_id"],
+        username: row["username"],
+        email: row["email"]
+    };
+}

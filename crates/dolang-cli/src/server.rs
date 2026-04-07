@@ -43,16 +43,18 @@ pub fn run_serve(path: std::path::PathBuf, show_routertab: bool) {
     print_startup_lines(&[String::new()], Duration::ZERO);
 
     let mut state = ProgramState::new();
-    let stdout = io::stdout();
-    let mut output = StyledServeWriter::new(stdout.lock());
-    match execute_program_with_writer(&program.statements, &mut state, &mut context, &mut output) {
-        Ok(true) => {}
-        Ok(false) => process::exit(0),
-        Err(e) => {
-            eprintln!("{}", e);
-            process::exit(1);
+    {
+        let stdout = io::stdout();
+        let mut output = StyledServeWriter::new(stdout.lock());
+        match execute_program_with_writer(&program.statements, &mut state, &mut context, &mut output) {
+            Ok(true) => {}
+            Ok(false) => process::exit(0),
+            Err(e) => {
+                eprintln!("{}", e);
+                process::exit(1);
+            }
         }
-    }
+    } // stdout lock is released here before the server starts
 
     if context.routes().is_empty() {
         print_startup_lines(&["No HTTP routes registered.".to_string()], Duration::ZERO);

@@ -17,7 +17,7 @@ tower-http = { version = "0.5", features = ["cors", "fs"] }
 dolang = { package = "dolang-runtime", path = "../dolang-runtime" }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock"] }
 
 [[bin]]
 name = "dolang-cli"

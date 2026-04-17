@@ -21,7 +21,7 @@ pub fn main_entry() {
             });
         }
         cli::RunMode::Repl => {
-            println!("Dolang REPL v2026");
+            println!("Dolang REPL v0.1.0");
             repl::run_repl();
         }
     }

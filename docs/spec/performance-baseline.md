@@ -95,7 +95,7 @@ cargo bench --bench phase12_baseline --no-run
 ```md
 ## Benchmark Run
 
-- Version: 2026.0.0
+- Version: 0.1.0
 - Date: YYYY-MM-DD
 - Machine:
 - Rust:

@@ -52,7 +52,7 @@ dolang repl
 ```
 
 ```
-Dolang REPL v2026
+Dolang REPL v0.1.0
 >> $>> "Hello!";
 Hello!
 >> $ x = 1 + 2;

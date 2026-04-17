@@ -1,5 +1,0 @@
-$main() {
-    $HTTP("/").link("app.router.page_router");
-    $HTTP("/auth").link("app.router.auth_router");
-    $HTTP("/api").link("app.router.note_router");
-}

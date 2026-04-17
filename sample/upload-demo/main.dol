@@ -1,6 +1,0 @@
-$main() {
-    $>> "[INFO] upload-demo starting on :8083";
-
-    $STATIC("/files", "tmp");
-    $HTTP("/").link("app.router.upload_router");
-}

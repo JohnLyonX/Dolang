@@ -1,6 +1,0 @@
-$mod std.env;
-$mod std.postgres;
-
-$fn connect_db() {
-    $# postgres.connect(env.get("DATANEST_DATABASE_URL"));
-}

@@ -1,3 +1,0 @@
-$GET("/hello") hello() -> String {
-    $# "world";
-}

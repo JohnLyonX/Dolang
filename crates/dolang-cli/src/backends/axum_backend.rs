@@ -33,6 +33,85 @@ impl AxumBackend {
     }
 }
 
+/// Convert dolang's brace-style path params (`/users/{id}`) to axum 0.7's
+/// colon-style (`/users/:id`). Wildcard `{*name}` becomes `*name`.
+/// Idempotent for paths that already use colon syntax.
+fn dolang_path_to_axum(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    let mut chars = path.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '{' {
+            out.push(c);
+            continue;
+        }
+        // collect until '}'
+        let mut name = String::new();
+        let mut closed = false;
+        for nc in chars.by_ref() {
+            if nc == '}' {
+                closed = true;
+                break;
+            }
+            name.push(nc);
+        }
+        if !closed {
+            // malformed — emit as-is so the error is visible downstream
+            out.push('{');
+            out.push_str(&name);
+            continue;
+        }
+        if let Some(rest) = name.strip_prefix('*') {
+            out.push('*');
+            out.push_str(rest);
+        } else {
+            out.push(':');
+            out.push_str(&name);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod path_conversion_tests {
+    use super::dolang_path_to_axum;
+
+    #[test]
+    fn converts_single_param() {
+        assert_eq!(dolang_path_to_axum("/greet/{name}"), "/greet/:name");
+    }
+
+    #[test]
+    fn converts_multiple_params() {
+        assert_eq!(
+            dolang_path_to_axum("/users/{uid}/posts/{pid}"),
+            "/users/:uid/posts/:pid"
+        );
+    }
+
+    #[test]
+    fn passes_through_literal_paths() {
+        assert_eq!(dolang_path_to_axum("/health"), "/health");
+        assert_eq!(dolang_path_to_axum("/"), "/");
+    }
+
+    #[test]
+    fn converts_wildcard() {
+        assert_eq!(dolang_path_to_axum("/static/{*path}"), "/static/*path");
+    }
+
+    #[test]
+    fn idempotent_on_already_converted() {
+        assert_eq!(dolang_path_to_axum("/greet/:name"), "/greet/:name");
+    }
+
+    #[test]
+    fn tolerates_unclosed_brace() {
+        // should not panic; emits verbatim so axum gives a useful error
+        let out = dolang_path_to_axum("/broken/{name");
+        assert!(out.contains("{name"));
+    }
+}
+
 impl HttpBackend for AxumBackend {
     fn register_route(&mut self, route: HttpRoute) {
         self.routes.push(route);
@@ -229,7 +308,10 @@ fn build_router(
     let mut router = axum::Router::new();
 
     for route in routes {
-        let path_str = format!("/{}", route.path.trim_start_matches('/'));
+        // dolang source uses `/foo/{id}` (brace syntax); axum 0.7's router
+        // expects `/foo/:id`. Convert before registering.
+        let normalized = format!("/{}", route.path.trim_start_matches('/'));
+        let path_str = dolang_path_to_axum(&normalized);
         let method_str = route.method.clone();
         let handler_return_type = route.return_type.clone();
         let (resolved_cors, cors_warnings) = resolve_cors(

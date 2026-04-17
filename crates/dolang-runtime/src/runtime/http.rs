@@ -70,12 +70,24 @@ pub fn execute_http_route_in_context(
         for idx in 0..route_seg_parts.len() {
             let route_seg = route_seg_parts[idx];
             let url_seg = url_seg_parts[idx];
-            if let Some(param_name) = route_seg.strip_prefix(':') {
-                bound_http_params.insert(
-                    param_name.to_string(),
-                    DolangValue::Str(url_seg.to_string()),
-                );
+            // Accept both `/foo/:name` (legacy) and `/foo/{name}` (brace
+            // syntax used in the dolang source language). The handler's
+            // source-level parameter name must match the placeholder name.
+            let param_name = if let Some(n) = route_seg.strip_prefix(':') {
+                Some(n.to_string())
+            } else if route_seg.starts_with('{') && route_seg.ends_with('}') {
+                // strip `{` and `}`; allow `{*rest}` wildcard form too
+                let inner = &route_seg[1..route_seg.len() - 1];
+                Some(inner.trim_start_matches('*').to_string())
+            } else {
+                None
+            };
+            if let Some(name) = param_name {
+                bound_http_params.insert(name, DolangValue::Str(url_seg.to_string()));
             } else if idx < route.params.len() {
+                // Fallback: positional binding. Only used when the route
+                // segment is literal *and* the handler declared a same-position
+                // param. This is historical; consider removing once tests pass.
                 bound_http_params.insert(
                     route.params[idx].name.clone(),
                     DolangValue::Str(url_seg.to_string()),

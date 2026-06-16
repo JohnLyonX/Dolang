@@ -1,5 +1,0 @@
-$mod std.env;
-
-$fn database_url() -> String {
-    $# env.get_or("DATABASE_URL", "host=/tmp dbname=postgres user=liangzhanbo");
-}

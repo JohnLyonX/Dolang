@@ -1,8 +1,0 @@
-[project]
-name = "http-grpc-gateway"
-version = "0.1.0"
-entry = "main.dol"
-
-[server]
-host = "127.0.0.1"
-port = 8080

@@ -1,7 +1,0 @@
-[project]
-name = "project-config"
-version = "0.1.0"
-entry = "main.dol"
-
-[env]
-APP_NAME = "Dolang"

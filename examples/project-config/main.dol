@@ -1,2 +1,0 @@
-$ app = $<<CONFIG("APP_NAME");
-$>> app;

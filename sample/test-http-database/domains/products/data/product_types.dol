@@ -1,6 +1,0 @@
-$Type Product {
-    id: Int
-    name: String
-    price: Float
-    category_id: Int
-}

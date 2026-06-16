@@ -1,9 +1,0 @@
-$mod std.env;
-
-$fn app_database_url() -> String {
-    $if env.has("APP_DATABASE_URL") {
-        $# env.get("APP_DATABASE_URL");
-    }
-
-    $# env.get("SESSION_DATABASE_URL");
-}
